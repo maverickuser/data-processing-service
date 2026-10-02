@@ -22,11 +22,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.jdbc.core.simple.JdbcClient;
 
 /** The securities and daily-market-summary repositories against PostgreSQL. */
 class SecuritiesRepositoriesIT extends PostgresIntegrationTest {
@@ -41,15 +39,6 @@ class SecuritiesRepositoriesIT extends PostgresIntegrationTest {
 
   @Autowired private SecurityRepository securities;
   @Autowired private DailyMarketSummaryRepository summaries;
-  @Autowired private JdbcClient jdbc;
-
-  @BeforeEach
-  void emptyTables() {
-    jdbc.sql(
-            "TRUNCATE securities_data.security_daily_market_summaries,"
-                + " securities_data.securities CASCADE")
-        .update();
-  }
 
   @Test
   void insertMissingCreatesIsinOnlySecuritiesAndReportsThem() {
