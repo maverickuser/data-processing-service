@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.bondplatform.dataprocessing.admission.SubmissionEvents;
 import com.bondplatform.dataprocessing.persistence.PostgresIntegrationTest;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -13,6 +15,8 @@ import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
@@ -25,7 +29,10 @@ class AdmitSubmissionIT extends PostgresIntegrationTest {
 
   private static final int CONCURRENT_CALLERS = 4;
 
+  private static final long WAIT_SECONDS = 20;
+
   @Autowired private AdmitSubmission admitSubmission;
+  @Autowired private DataSource dataSource;
 
   // I-ADM-01
   @Test
@@ -174,6 +181,68 @@ class AdmitSubmissionIT extends PostgresIntegrationTest {
     assertThat(queued)
         .hasSize(CONCURRENT_CALLERS)
         .allMatch(row -> Boolean.TRUE.equals(row.get("same_order")));
+  }
+
+  @Test
+  void admissionWaitsWhileAnotherTransactionHoldsItsOrderingGroup() throws Exception {
+    try (Connection holder = dataSource.getConnection();
+        ExecutorService callers = Executors.newFixedThreadPool(2)) {
+      holder.setAutoCommit(false);
+      try (PreparedStatement lock =
+          holder.prepareStatement("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))")) {
+        lock.setString(1, "isin:INE121A07QY9");
+        lock.execute();
+      }
+
+      Future<AdmissionReceipt> sameGroup =
+          callers.submit(() -> admit(SubmissionEvents.nsdl("run_202", "INE121A07QY9")));
+      Future<AdmissionReceipt> otherGroup =
+          callers.submit(() -> admit(SubmissionEvents.nsdl("run_203", "INE002A08534")));
+
+      assertThat(otherGroup.get(WAIT_SECONDS, TimeUnit.SECONDS).runId()).isEqualTo("run_203");
+      awaitOneAdmissionWaitingForLock();
+      assertThat(sameGroup.isDone()).isFalse();
+      assertThat(count("ingestion_requests")).isEqualTo(1);
+
+      holder.commit();
+
+      assertThat(sameGroup.get(WAIT_SECONDS, TimeUnit.SECONDS).runId()).isEqualTo("run_202");
+      assertThat(count("ingestion_requests")).isEqualTo(2);
+    }
+  }
+
+  // The validator's half of this is in SubmissionValidatorTest; here: PostgreSQL really refuses it.
+  @Test
+  void textTheDatabaseCannotStoreIsRefusedByValidationNotByTheDatabase() {
+    Map<String, Object> event = SubmissionEvents.nsdl("run_202", "INE121A07QY9");
+    event.put("id", "urn:bond-platform:submission:run\0_202");
+
+    assertThatThrownBy(() -> SubmissionEvents.submissionOf(event))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("NUL");
+    assertThatThrownBy(
+            () ->
+                jdbc.sql("SELECT CAST(:json AS jsonb)")
+                    .param("json", "{\"id\":\"a\\u0000b\"}")
+                    .query()
+                    .singleRow())
+        .isInstanceOf(DataAccessException.class);
+  }
+
+  /** Polls until PostgreSQL reports exactly one session waiting for an advisory lock. */
+  private void awaitOneAdmissionWaitingForLock() {
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(WAIT_SECONDS);
+    while (System.nanoTime() < deadline) {
+      long waiting =
+          jdbc.sql("SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND NOT granted")
+              .query(Long.class)
+              .single();
+      if (waiting == 1) {
+        return;
+      }
+      Thread.onSpinWait();
+    }
+    throw new AssertionError("No admission was waiting for the ordering-group lock");
   }
 
   private AdmissionReceipt admit(Map<String, Object> event) {

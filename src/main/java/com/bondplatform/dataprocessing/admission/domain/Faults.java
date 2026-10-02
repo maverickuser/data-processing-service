@@ -87,6 +87,23 @@ final class Faults {
     return Optional.of(typed);
   }
 
+  /**
+   * Records a fault for every text value, at any depth, that contains the NUL character. PostgreSQL
+   * can store it neither as text nor inside JSON, so accepting it would end in a storage error the
+   * producer could retry forever.
+   */
+  void noNulCharacters(@Nullable Object value, String pointer) {
+    if (value instanceof String text && text.indexOf('\0') >= 0) {
+      inBody(pointer, Code.INVALID_VALUE, "Must not contain the NUL character.");
+    } else if (value instanceof Map<?, ?> map) {
+      map.forEach((name, entry) -> noNulCharacters(entry, child(pointer, String.valueOf(name))));
+    } else if (value instanceof List<?> list) {
+      for (int index = 0; index < list.size(); index++) {
+        noNulCharacters(list.get(index), pointer + "/" + index);
+      }
+    }
+  }
+
   /** Records a fault for each property outside the allowed set, in name order. */
   void onlyProperties(Map<String, Object> object, String pointer, Set<String> allowed) {
     object.keySet().stream()

@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -33,6 +34,9 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>Admission is idempotent. Presenting the same event with the same key again returns the
  * original receipt and creates nothing. Reusing a key or an event identity with different content
  * is a conflict.
+ *
+ * <p>The transaction is read committed on purpose: when another transaction stores the same
+ * submission first, the lookup that follows the refused insert must see that newly committed row.
  */
 @Service
 public class AdmitSubmission {
@@ -67,7 +71,7 @@ public class AdmitSubmission {
    * @throws IdempotencyConflictException if the key or event identity was accepted with other
    *     content
    */
-  @Transactional
+  @Transactional(isolation = Isolation.READ_COMMITTED)
   public AdmissionReceipt admit(Submission submission, Map<String, Object> event) {
     String canonicalEvent = CanonicalJson.of(event);
     String payloadHash = ContractHash.of(canonicalEvent.getBytes(StandardCharsets.UTF_8));

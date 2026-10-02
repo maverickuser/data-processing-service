@@ -25,8 +25,9 @@ import org.jspecify.annotations.Nullable;
  * <p>The input is the parsed JSON body as plain maps, lists, strings, numbers, and booleans, so
  * this class knows nothing about the JSON library. It reports every fault it can find, each with a
  * JSON Pointer or header name; the children of a missing or wrongly typed object are not reported
- * separately. It never reads S3: whether the manifest exists and agrees with the submission is
- * checked later by the worker.
+ * separately. Text containing the NUL character is rejected wherever it appears, because the
+ * database cannot store it. It never reads S3: whether the manifest exists and agrees with the
+ * submission is checked later by the worker.
  */
 public final class SubmissionValidator {
 
@@ -93,6 +94,7 @@ public final class SubmissionValidator {
    */
   public SubmissionResult validate(Map<String, Object> event, @Nullable String idempotencyKey) {
     Faults faults = new Faults();
+    faults.noNulCharacters(event, ROOT);
     Envelope envelope = envelope(event, faults);
     Optional<Payload> payload =
         faults.object(event, ROOT, "data").map(data -> payload(data, envelope, faults));
