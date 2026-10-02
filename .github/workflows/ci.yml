@@ -3,6 +3,8 @@ name: ci
 # Runs on every pull request whatever its base branch, so stacked PRs are checked too.
 on:
   pull_request:
+    # `edited` reruns the checks when a stacked PR is retargeted after its parent merges.
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
 
@@ -20,6 +22,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:

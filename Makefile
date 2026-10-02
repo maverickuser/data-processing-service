@@ -29,11 +29,12 @@ coverage-check: test-unit
 test-integration:
 	$(MVN) verify -DskipUnitTests=true -Dassembly.skipAssembly=true
 
-## check-contracts: processing contracts parse; OpenAPI YAML and JSON forms are equal
+## check-contracts: the four processing contracts are present and well formed; each OpenAPI document is equal in YAML and JSON
 check-contracts:
+	python3 scripts/test_check_contracts.py
 	ruby scripts/check_contracts.rb
 
-## check-docs: every relative Markdown link resolves
+## check-docs: every relative Markdown link (inline or reference-style) resolves
 check-docs:
 	python3 scripts/test_check_docs.py
 	python3 scripts/check_docs.py

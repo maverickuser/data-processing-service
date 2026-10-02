@@ -32,6 +32,19 @@ class CheckDocsTest(unittest.TestCase):
         self.write("README.md", "[a](https://example.com) [b](#top) [c](mailto:x@example.com)")
         self.assertEqual(check_docs.main(self.root), 0)
 
+    def test_missing_link_with_a_title_fails(self):
+        self.write("README.md", '[a](docs/missing.md "A title")')
+        self.assertEqual(check_docs.main(self.root), 1)
+
+    def test_existing_link_with_a_title_passes(self):
+        self.write("docs/a.md", "target")
+        self.write("README.md", '[a](docs/a.md "A title")')
+        self.assertEqual(check_docs.main(self.root), 0)
+
+    def test_missing_reference_style_link_fails(self):
+        self.write("README.md", "[a][ref]\n\n[ref]: docs/missing.md\n")
+        self.assertEqual(check_docs.main(self.root), 1)
+
     def test_build_directories_are_skipped(self):
         self.write("target/generated.md", "[a](missing.md)")
         self.assertEqual(check_docs.main(self.root), 0)

@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """Verify that every relative link in the repository's Markdown files points at an existing path.
 
-External links (http, https, mailto) and same-page anchors are not checked.
+Checked: inline links, with or without a title, and reference-style link definitions.
+Not checked: external links (http, https, mailto), heading anchors, and raw HTML.
 """
 
 import os
 import re
 import sys
 
-LINK = re.compile(r"\]\(([^)\s]+)\)")
+INLINE_LINK = re.compile(r"\]\(\s*<?([^)\s>]+)>?(?:\s+[^)]*)?\)")
+REFERENCE_DEFINITION = re.compile(r"^\s{0,3}\[[^\]]+\]:\s*<?(\S+?)>?(?:\s.*)?$", re.MULTILINE)
 SKIPPED_DIRECTORIES = {".git", "target", "node_modules", ".terraform"}
 EXTERNAL_PREFIXES = ("http://", "https://", "mailto:", "#")
 
@@ -27,7 +29,7 @@ def broken_links(path):
     with open(path, encoding="utf-8") as handle:
         text = handle.read()
     broken = []
-    for target in LINK.findall(text):
+    for target in INLINE_LINK.findall(text) + REFERENCE_DEFINITION.findall(text):
         if target.startswith(EXTERNAL_PREFIXES):
             continue
         resolved = os.path.normpath(os.path.join(os.path.dirname(path), target.split("#")[0]))
