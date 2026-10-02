@@ -174,7 +174,7 @@ class YamlContractLoaderTest {
 
   @Test
   void reportsMissingKeyWithItsLocation() {
-    assertRejected(MINIMAL_CSV.replace("  maxBytes: 100\n", "  other: 1\n"), "file.maxBytes");
+    assertRejected(MINIMAL_CSV.replace("file:\n  maxBytes: 100\n", "file: {}\n"), "file.maxBytes");
     assertRejected(MINIMAL_CSV.replace("version: v1\n", ""), "version");
     assertRejected(MINIMAL_CSV.replace("header: ISIN No., ", ""), "fields.isin.header");
   }
@@ -202,7 +202,106 @@ class YamlContractLoaderTest {
     assertRejected(MINIMAL_CSV.replace("urn:bond-platform:dataset:sample", "sample"), "dataset");
     assertRejected(
         MINIMAL_CSV + "rowRules:\n  - { rule: equals, left: isin, right: isin }\n",
-        "rowRules.rule");
+        "rowRules[0].rule");
+  }
+
+  @Test
+  void misspelledOrUnsupportedKeyIsRejectedWithItsLocation() {
+    assertRejected(
+        MINIMAL_CSV.replace("normalize: [trim]", "normalise: [trim]"), "fields.isin.normalise");
+    assertRejected(MINIMAL_CSV + "numericFormat:\n  decimalSeparator: ','\n", "numericFormat");
+    assertRejected(
+        MINIMAL_CSV.replace("  maxBytes: 100", "  maxBytes: 100\n  dialect: excel-tab"),
+        "file.dialect");
+    assertRejected(
+        MINIMAL_CSV.replace("  key: isin", "  key: isin\n  winner: firstRow"), "duplicates.winner");
+    assertRejected(
+        MINIMAL_CSV + "rowRules:\n  - { rule: lessThanOrEqual, left: isin, rihgt: isin }\n",
+        "rowRules[0].rihgt");
+  }
+
+  @Test
+  void unsupportedKeyInJsonContractIsRejected() {
+    String json = committed("nsdl-security-json-v1");
+
+    assertRejected(json + "types:\n  decimal: { normalize: [evaluateExpression] }\n", "types");
+    assertRejected(
+        json.replace(
+            "{ path: $.issuerName, type: text }",
+            "{ path: $.issuerName, type: text, validate: [bogus] }"),
+        "scalars.issuer_name.validate");
+    assertRejected(
+        json.replace(
+            "  maxCombinedBytes: 10485760", "  maxCombinedBytes: 10485760\n  onMalformed: ignore"),
+        "file.onMalformed");
+    assertRejected(
+        json.replace(
+            "    path: $.listingDetails[*]", "    path: $.listingDetails[*]\n    dedupe: false"),
+        "collections.listings.dedupe");
+  }
+
+  @Test
+  void unsupportedKeyInMappingContractIsRejected() {
+    String csvMapping = committed("bse-debt-bhavcopy-mapping-v1");
+    String jsonMapping = committed("nsdl-security-mapping-v1");
+
+    assertMappingRejected(csvMapping + "eligibleDisposition: FAILED\n", "eligibleDisposition");
+    assertMappingRejected(jsonMapping + "rules:\n  - { rule: bogusRule }\n", "rules");
+    assertMappingRejected(
+        jsonMapping.replace(
+            "  target: securities_data.securities",
+            "  target: securities_data.securities\n  key: { isin: identity.isin }"),
+        "security.key");
+    assertMappingRejected(
+        jsonMapping.replace(
+            "    constants: { sourceCategory: CURRENT }",
+            "    constants: { sourceCategory: CURRENT }\n    onDuplicate: overwrite"),
+        "collections.current_ratings.onDuplicate");
+  }
+
+  @Test
+  void mappingWithBothShapesIsRejected() {
+    String both =
+        committed("bse-debt-bhavcopy-mapping-v1")
+            + "security:\n  target: securities_data.securities\n  fields: { isin: isin }\n"
+            + "collections: {}\n";
+
+    assertMappingRejected(both, "target");
+  }
+
+  @Test
+  void keysMustBeText() {
+    assertRejected(MINIMAL_CSV.replace("  isin: {", "  123: {"), "fields");
+    assertRejected(MINIMAL_CSV.replace("  isin: {", "  yes: {"), "fields");
+    assertRejected(MINIMAL_CSV.replace("  isin: {", "  ~: {"), "fields");
+  }
+
+  @Test
+  void duplicateKeyIsRejectedRatherThanOverridden() {
+    String contract =
+        MINIMAL_CSV.replace(
+            "duplicates:",
+            "  isin: { header: Other, type: text, requiredValue: false }\nduplicates:");
+
+    assertThatThrownBy(() -> loader.loadSourceContract(contract))
+        .isInstanceOf(ContractFormatException.class)
+        .hasMessageContaining("not valid YAML")
+        .hasMessageContaining("isin");
+  }
+
+  @Test
+  void explicitNullListIsRejected() {
+    assertRejected(
+        MINIMAL_CSV.replace("normalize: [trim]", "normalize: ~"), "fields.isin.normalize");
+  }
+
+  @Test
+  void rowRuleProblemsNameTheRule() {
+    assertRejected(
+        MINIMAL_CSV
+            + "rowRules:\n  - { rule: lessThanOrEqual, left: isin, right: isin }\n"
+            + "  - { rule: equals, left: isin, right: isin }\n",
+        "rowRules[1].rule");
   }
 
   @Test
@@ -227,6 +326,12 @@ class YamlContractLoaderTest {
             () -> loader.loadMappingContract("id: m\nversion: v1\nsourceContract: s-v1\n"))
         .isInstanceOf(ContractFormatException.class)
         .hasMessageContaining("'target'");
+  }
+
+  private void assertMappingRejected(String yaml, String location) {
+    assertThatThrownBy(() -> loader.loadMappingContract(yaml))
+        .isInstanceOf(ContractFormatException.class)
+        .hasMessageContaining("'" + location + "'");
   }
 
   private void assertRejected(String yaml, String location) {

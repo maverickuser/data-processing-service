@@ -17,7 +17,8 @@ class DateParserTest {
     "2019-06-10, 2019-06-10",
     "29-02-2028, 2028-02-29",
     "31-12-2099, 2099-12-31",
-    "01-01-2026, 2026-01-01"
+    "01-01-2026, 2026-01-01",
+    "01-01-1900, 1900-01-01"
   })
   void acceptsBothSourceFormats(String text, LocalDate expected) {
     assertThat(DateParser.parse(text)).isEqualTo(new FieldResult.Valid<>(expected));
@@ -39,7 +40,11 @@ class DateParserTest {
         "",
         "today",
         "+2019-06-10",
-        "10-06-2019T00:00:00"
+        "10-06-2019T00:00:00",
+        "0000-01-01",
+        "01-01-0000",
+        "31-12-1899",
+        "0019-06-10"
       })
   void rejectsImpossibleDatesAndOtherFormats(String text) {
     assertThat(DateParser.parse(text))

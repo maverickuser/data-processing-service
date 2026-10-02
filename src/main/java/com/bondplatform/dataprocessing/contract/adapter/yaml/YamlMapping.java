@@ -11,27 +11,45 @@ import org.jspecify.annotations.Nullable;
 /**
  * A YAML mapping read with type checks, so that a wrongly shaped contract fails with the location
  * of the problem rather than a class-cast error.
+ *
+ * <p>Every key must be text, and a reader states which keys it understands with {@link
+ * #allowingOnly}: a misspelled or unsupported key is an error, never silently ignored.
  */
 final class YamlMapping {
 
-  private final String location;
-  private final Map<?, ?> values;
+  private static final String ROOT = "(root)";
 
-  private YamlMapping(String location, Map<?, ?> values) {
+  private final String location;
+  private final Map<String, Object> values;
+
+  private YamlMapping(String location, Map<String, Object> values) {
     this.location = location;
     this.values = values;
   }
 
   /** Wraps the root of a parsed YAML document. */
   static YamlMapping root(@Nullable Object document) {
-    return of("(root)", document);
+    return of(ROOT, document);
+  }
+
+  /**
+   * Returns this mapping after checking that it has no key outside the given set.
+   *
+   * @throws ContractFormatException naming the first key that is not allowed
+   */
+  YamlMapping allowingOnly(String... allowedKeys) {
+    Set<String> allowed = Set.of(allowedKeys);
+    for (String key : values.keySet()) {
+      if (!allowed.contains(key)) {
+        throw new ContractFormatException(at(key), "is not a supported key");
+      }
+    }
+    return this;
   }
 
   /** Returns the keys in file order. */
   Set<String> keys() {
-    Map<String, Object> ordered = new LinkedHashMap<>();
-    values.forEach((key, value) -> ordered.put(String.valueOf(key), value));
-    return ordered.keySet();
+    return values.keySet();
   }
 
   /** Returns the text at a key that must be present. Numbers and booleans are not text. */
@@ -67,11 +85,11 @@ final class YamlMapping {
 
   /** Returns the list of text at a key, or an empty list when the key is absent. */
   List<String> textList(String key) {
-    Object value = values.get(key);
-    if (value == null) {
+    if (!values.containsKey(key)) {
       return List.of();
     }
-    if (value instanceof List<?> list && list.stream().allMatch(String.class::isInstance)) {
+    if (values.get(key) instanceof List<?> list
+        && list.stream().allMatch(String.class::isInstance)) {
       return list.stream().map(String.class::cast).toList();
     }
     throw new ContractFormatException(at(key), "expected a list of text");
@@ -79,11 +97,10 @@ final class YamlMapping {
 
   /** Returns the list of mappings at a key, or an empty list when the key is absent. */
   List<YamlMapping> mappingList(String key) {
-    Object value = values.get(key);
-    if (value == null) {
+    if (!values.containsKey(key)) {
       return List.of();
     }
-    if (value instanceof List<?> list) {
+    if (values.get(key) instanceof List<?> list) {
       return IntStream.range(0, list.size())
           .mapToObj(index -> of(at(key) + "[" + index + "]", list.get(index)))
           .toList();
@@ -93,7 +110,7 @@ final class YamlMapping {
 
   /** Returns the text-to-text mapping at a key, or an empty map when the key is absent. */
   Map<String, String> textMap(String key) {
-    if (values.get(key) == null) {
+    if (!values.containsKey(key)) {
       return Map.of();
     }
     YamlMapping nested = mapping(key);
@@ -102,9 +119,14 @@ final class YamlMapping {
     return result;
   }
 
-  /** Returns whether the key is present with a non-null value. */
+  /** Returns whether the key is present, whatever its value. */
   boolean has(String key) {
-    return values.get(key) != null;
+    return values.containsKey(key);
+  }
+
+  /** Returns where this mapping is in the contract, for error messages. */
+  String location() {
+    return location;
   }
 
   private Object required(String key) {
@@ -116,13 +138,21 @@ final class YamlMapping {
   }
 
   private String at(String key) {
-    return location.equals("(root)") ? key : location + "." + key;
+    return location.equals(ROOT) ? key : location + "." + key;
   }
 
   private static YamlMapping of(String location, @Nullable Object value) {
-    if (value instanceof Map<?, ?> map) {
-      return new YamlMapping(location, map);
+    if (!(value instanceof Map<?, ?> map)) {
+      throw new ContractFormatException(location, "expected a mapping");
     }
-    throw new ContractFormatException(location, "expected a mapping");
+    Map<String, Object> values = new LinkedHashMap<>();
+    for (Map.Entry<?, ?> entry : map.entrySet()) {
+      if (!(entry.getKey() instanceof String key)) {
+        throw new ContractFormatException(
+            location, "has the key '" + entry.getKey() + "', which is not text");
+      }
+      values.put(key, entry.getValue());
+    }
+    return new YamlMapping(location, values);
   }
 }

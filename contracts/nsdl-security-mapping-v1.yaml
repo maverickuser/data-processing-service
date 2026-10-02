@@ -1,12 +1,17 @@
 # Stage 2 (canonical -> internal model) for NSDL security data.
 # Consumes validated canonical values only; performs no parsing or normalization.
+#
+# This file holds only what the service reads from it; an unknown key fails startup.
+# Fixed in code and specified in the LLD: a scalar changes only when its value differs, no-value
+# inputs erase nothing, and competing values in one request are resolved by S3 LastModified then
+# object key (section 13.5); collections are append-only and deduplicated on all mapped fields
+# (section 13.6); an Unsecured status clears coverage and suppresses assets (section 15.2).
 id: nsdl-security-mapping
 version: v1
 sourceContract: nsdl-security-json-v1
 
 security:
   target: securities_data.securities
-  key: { isin: identity.isin }
   fields:
     issuer_name: issuerName
     issuer_ownership_type: issuerOwnershipType
@@ -20,11 +25,6 @@ security:
     coupon_rate: couponRate                # { value, unit: PERCENT }
     coupon_type: couponType
     listing_status: listingStatus
-  persistence:
-    update: onlyWhenValueDiffers           # unchanged value leaves row and updatedAt untouched
-    noValueErasesExisting: false
-    competingValuesInRequest: latestS3LastModifiedThenObjectKey
-    lineage: fieldSources
 
 collections:
   cash_flows:
@@ -51,16 +51,3 @@ collections:
   collateral_assets:
     target: securities_data.security_collateral_assets
     fields: { asset_type: assetType, collateral_description: collateralDescription, remarks: remarks }
-
-collectionPersistence:
-  action: appendOnly
-  identity: [isin, constants, allMappedFields]   # empty values compare equal
-  onDuplicate: skip
-  lineage: canonicalRecordReference
-
-rules:
-  - rule: unsecuredClearsCollateral
-    when: { field: collateralStatus, equals: Unsecured }
-    clearCurrent: [assetCoverageBasis, assetCoverage]
-    suppressAppend: [collateral_assets]
-    onConflictingValues: { error: CONFLICTING_COLLATERAL_DATA }

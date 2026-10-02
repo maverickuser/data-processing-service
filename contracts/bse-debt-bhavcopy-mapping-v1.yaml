@@ -1,12 +1,16 @@
 # Stage 2 (canonical -> internal model) for BSE debt bhavcopy rows.
 # Consumes validated canonical rows only; performs no parsing or normalization.
+#
+# This file holds only what the service reads from it; an unknown key fails startup.
+# Fixed in code and specified in the LLD: only accepted rows are mapped, trade date and exchange
+# come from the manifest, rows are upserted on (isin, tradeDate, exchangeName) with nulls
+# overwriting (section 7), and a trade for an unknown ISIN creates the security and emits one
+# security-details event (section 14).
 id: bse-debt-bhavcopy-mapping
 version: v1
 sourceContract: bse-debt-bhavcopy-csv-v1
 
 target: securities_data.security_daily_market_summaries
-eligibleDisposition: ACCEPTED
-context: { tradeDate: tradeDate, exchangeName: exchangeName }
 fields:
   security_code: securityCode
   open_price: openPrice
@@ -18,11 +22,3 @@ fields:
   turnover: turnover
   face_value: faceValue
   isin: isin
-persistence:
-  key: [isin, tradeDate, exchangeName]
-  action: upsert
-  onMatch: replaceAllMappedValues
-  optionalNulls: overwriteExistingValues
-  missingIsins: leaveExistingUnchanged
-onNewIsin: { createSecurity: isinOnly, emitEvent: com.bondplatform.data.pull.requested.v1 }
-lineage: { canonicalRowReference: required }

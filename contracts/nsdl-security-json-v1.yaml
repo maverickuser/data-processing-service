@@ -3,37 +3,21 @@
 # One contract for every JSON file listed in an NSDL manifest. Each path is applied to
 # every file; a path that is absent in a file is "no update". Filenames never select paths.
 # Stage 2 (canonical -> internal model) is nsdl-security-mapping-v1.yaml.
+#
+# This file holds only what the service reads from it; an unknown key fails startup.
+# Behaviour that is the same for every JSON dataset is fixed in code and specified in the LLD:
+# the ISIN comes from each filename (section 13.1); missing, null, blank, "-" and "N.A." mean
+# "no update"; text accepts JSON strings only; dates accept DD-MM-YYYY and YYYY-MM-DD; decimals
+# and percents accept numbers or numeric strings and must not be negative (section 13.4);
+# malformed files and wrongly typed sections are handled as in section 13.7.
+# {isin}_redemptions.json is listed by the fetch service but has no selected paths in v1.
 id: nsdl-security-json
 version: v1
 dataset: urn:bond-platform:dataset:nsdl-security
 format: json
 
 file:
-  encoding: UTF-8
-  acceptBom: true
   maxCombinedBytes: 10485760
-  duplicateProperties: rejectFile
-  onMalformed: skipFile
-  onChecksumMismatch: skipFile          # CHECKSUM_MISMATCH
-
-identity:
-  isin:
-    from: filename                      # text before the first underscore, or before .json
-    normalize: [trim, uppercase]
-    required: true
-    onMissing: failRequest              # INVALID_SOURCE_FILENAME
-    onMixedAcrossFiles: failRequest
-  payloadIsinPath: $.isin               # optional; mismatch is a warning log only
-
-types:
-  text:    { accept: [string], normalize: [trim] }
-  date:    { accept: [string], formats: [DD-MM-YYYY, YYYY-MM-DD], output: ISO_DATE }
-  decimal: { accept: [number, string], normalize: [trim, normalizeGroupedNumber], validate: [nonNegative], rounding: forbidden }
-  percent: { accept: [number, string], normalize: [trim, stripTrailingPercent], validate: [nonNegative], unit: PERCENT }
-
-presence:
-  noValue: [missing, "null", blank, "-", "N.A."]   # recorded as no-update, never an error
-  onInvalidValue: quarantineField
 
 scalars:
   issuer_name:            { path: $.issuerName, type: text }
@@ -83,10 +67,3 @@ collections:
       asset_type:             { path: assetType, type: text }
       collateral_description: { path: securityDetails, type: text }
       remarks:                { path: remarks, type: text }
-
-collectionRules:
-  wrongContainerType: quarantineCollection
-  skipEntryWhenNoValidValue: true
-
-unmappedFiles:
-  note: "{isin}_redemptions.json is listed by the fetch service but has no selected paths in v1."
