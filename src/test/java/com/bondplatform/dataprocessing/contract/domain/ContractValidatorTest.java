@@ -17,7 +17,8 @@ class ContractValidatorTest {
 
   private static final DatasetUrn DATASET = new DatasetUrn("urn:bond-platform:dataset:sample");
   private static final CsvField ISIN =
-      new CsvField("isin", "ISIN No.", FieldType.TEXT, true, List.of("trim"), List.of());
+      new CsvField(
+          "isin", "ISIN No.", FieldType.TEXT, true, List.of("trim", "uppercase"), List.of());
 
   private final ContractValidator validator = new ContractValidator(RuleRegistry.standard());
 

@@ -15,6 +15,17 @@ import org.junit.jupiter.api.Test;
  */
 class ContractPairValidationTest {
 
+  private static final String NUMBER_RULES =
+      "normalize: [trim, normalizeGroupedNumber], validate: [nonNegative]";
+  private static final String ISIN_FIELD =
+      "isin: { header: ISIN No., type: text, requiredValue: true, normalize: [trim, uppercase] }";
+  private static final String OPEN_FIELD =
+      "open_price: { header: Open Price, type: decimal, requiredValue: false, "
+          + NUMBER_RULES
+          + " }";
+  private static final String LOW_FIELD =
+      "low_price: { header: Low Price, type: decimal, requiredValue: false, " + NUMBER_RULES + " }";
+
   private static final String CSV_SOURCE =
       """
       id: sample-csv
@@ -24,14 +35,15 @@ class ContractPairValidationTest {
       file:
         maxBytes: 100
       fields:
-        isin: { header: ISIN No., type: text, requiredValue: true, normalize: [trim, uppercase] }
-        open_price: { header: Open Price, type: decimal, requiredValue: false, normalize: [trim, normalizeGroupedNumber], validate: [nonNegative] }
-        low_price: { header: Low Price, type: decimal, requiredValue: false, normalize: [trim, normalizeGroupedNumber] }
+        %s
+        %s
+        %s
       rowRules:
         - { rule: greaterThanOrEqual, left: open_price, right: low_price }
       duplicates:
         key: isin
-      """;
+      """
+          .formatted(ISIN_FIELD, OPEN_FIELD, LOW_FIELD);
 
   private static final String CSV_MAPPING =
       """
@@ -94,36 +106,57 @@ class ContractPairValidationTest {
 
   @Test
   void unknownNormalizerIsReported() {
-    assertThat(sourceProblems(CSV_SOURCE.replace("[trim, uppercase]", "[trim, runScript]")))
+    assertThat(sourceProblems(isinWith("normalize: [trim, uppercase, runScript]")))
         .containsExactly("field 'isin': No normalizer named 'runScript'");
   }
 
   @Test
   void unknownValidatorIsReported() {
-    assertThat(sourceProblems(CSV_SOURCE.replace("[nonNegative]", "[belowLimit]")))
-        .containsExactly("field 'open_price': No number validator named 'belowLimit'");
+    String rules = "normalize: [trim, normalizeGroupedNumber], validate: [nonNegative, belowLimit]";
+
+    assertThat(sourceProblems(lowPriceWith(rules)))
+        .containsExactly("field 'low_price': No number validator named 'belowLimit'");
   }
 
   @Test
-  void rulesMustFitTheFieldType() {
-    assertThat(
-            sourceProblems(
-                CSV_SOURCE.replace(
-                    "normalize: [trim, uppercase] }",
-                    "normalize: [trim], validate: [nonNegative] }")))
+  void textFieldCannotUseNumberRules() {
+    assertThat(sourceProblems(isinWith("normalize: [trim, uppercase], validate: [nonNegative]")))
         .containsExactly("field 'isin' has number validators but is not a number");
-    assertThat(
-            sourceProblems(
-                CSV_SOURCE.replace("[trim, uppercase]", "[trim, normalizeGroupedNumber]")))
+    assertThat(sourceProblems(isinWith("normalize: [trim, uppercase, normalizeGroupedNumber]")))
         .containsExactly(
             "field 'isin' is not a number but is normalized with normalizeGroupedNumber");
+  }
+
+  @Test
+  void numberFieldMustBeTrimmedGroupedAndNonNegative() {
+    assertThat(
+            sourceProblems(lowPriceWith("normalize: [trim, uppercase], validate: [nonNegative]")))
+        .containsExactly(
+            "field 'low_price' is a number and must be normalized with"
+                + " normalizeGroupedNumber last");
     assertThat(
             sourceProblems(
-                CSV_SOURCE.replace(
-                    "normalize: [trim, normalizeGroupedNumber] }",
-                    "normalize: [trim, uppercase] }")))
+                lowPriceWith("normalize: [normalizeGroupedNumber, trim], validate: [nonNegative]")))
         .containsExactly(
-            "field 'low_price' is a number and must be normalized with normalizeGroupedNumber");
+            "field 'low_price' must be normalized with trim first",
+            "field 'low_price' is a number and must be normalized with"
+                + " normalizeGroupedNumber last");
+    assertThat(sourceProblems(lowPriceWith("normalize: [trim, normalizeGroupedNumber]")))
+        .containsExactly("field 'low_price' is a number and must be validated with nonNegative");
+    assertThat(
+            sourceProblems(
+                lowPriceWith(
+                    "normalize: [trim, stripTrailingPercent, normalizeGroupedNumber],"
+                        + " validate: [nonNegative]")))
+        .containsExactly(
+            "field 'low_price' is normalized with stripTrailingPercent,"
+                + " which CSV does not support");
+  }
+
+  @Test
+  void everyFieldMustBeTrimmedFirst() {
+    assertThat(sourceProblems(isinWith("normalize: [uppercase, trim]")))
+        .containsExactly("field 'isin' must be normalized with trim first");
   }
 
   @Test
@@ -149,7 +182,7 @@ class ContractPairValidationTest {
   }
 
   @Test
-  void duplicateKeyMustBeRequiredTextField() {
+  void duplicateKeyMustBeRequiredUppercasedTextField() {
     assertThat(sourceProblems(CSV_SOURCE.replace("key: isin", "key: security")))
         .containsExactly("duplicates.key 'security' is not a declared field");
     assertThat(sourceProblems(CSV_SOURCE.replace("key: isin", "key: open_price")))
@@ -157,6 +190,8 @@ class ContractPairValidationTest {
             "duplicates.key 'open_price' must be a text field with requiredValue true");
     assertThat(sourceProblems(CSV_SOURCE.replace("requiredValue: true", "requiredValue: false")))
         .containsExactly("duplicates.key 'isin' must be a text field with requiredValue true");
+    assertThat(sourceProblems(isinWith("normalize: [trim]")))
+        .containsExactly("duplicates.key 'isin' must be normalized with uppercase");
   }
 
   @Test
@@ -222,11 +257,56 @@ class ContractPairValidationTest {
   void internalFieldsMustExistInTheTargetTable() {
     assertThat(mappingProblems(CSV_MAPPING.replace("openPrice", "openPrise"), CSV_SOURCE))
         .containsExactly("fields maps to unknown internal field 'openPrise'");
-    assertThat(mappingProblems(CSV_MAPPING.replace("isin: isin", "isin: securityCode"), CSV_SOURCE))
-        .containsExactly("fields must map 'isin' to 'isin'");
     assertThat(
             mappingProblems(JSON_MAPPING.replace("rating: rating", "rating: grade"), JSON_SOURCE))
         .containsExactly("collections.ratings maps to unknown internal field 'grade'");
+  }
+
+  @Test
+  void canonicalTypeMustMatchTheInternalField() {
+    assertThat(
+            mappingProblems(
+                CSV_MAPPING,
+                CSV_SOURCE.replace("Open Price, type: decimal", "Open Price, type: integer")))
+        .containsExactly(
+            "fields maps 'open_price' of type integer to 'openPrice', which holds decimal");
+    assertThat(
+            mappingProblems(
+                CSV_MAPPING
+                    .replace("isin: isin", "isin: openPrice")
+                    .replace("open_price: openPrice", "open_price: isin"),
+                CSV_SOURCE))
+        .contains(
+            "fields maps 'isin' of type text to 'openPrice', which holds decimal",
+            "fields maps 'open_price' of type decimal to 'isin', which holds text");
+    assertThat(mappingProblems(JSON_MAPPING, JSON_SOURCE.replace("type: percent", "type: decimal")))
+        .containsExactly(
+            "fields maps 'coupon_rate' of type decimal to 'couponRate', which holds percent");
+    assertThat(
+            mappingProblems(
+                JSON_MAPPING.replace("issuer_name: issuerName", "issuer_name: allotmentDate"),
+                JSON_SOURCE))
+        .containsExactly(
+            "fields maps 'issuer_name' of type text to 'allotmentDate', which holds date");
+    assertThat(
+            mappingProblems(
+                JSON_MAPPING,
+                JSON_SOURCE.replace(
+                    "creditRatingDate, type: date", "creditRatingDate, type: text")))
+        .containsExactly(
+            "collections.ratings maps 'rating_date' of type text to 'ratingDate',"
+                + " which holds date");
+  }
+
+  @Test
+  void duplicateKeyMustMapToIsin() {
+    String codeField =
+        "code: { header: Code, type: text, requiredValue: false, normalize: [trim] }";
+    String source = CSV_SOURCE.replace(LOW_FIELD, LOW_FIELD + "\n  " + codeField);
+    String mapping = CSV_MAPPING.replace("isin: isin", "isin: securityCode") + "  code: isin\n";
+
+    assertThat(mappingProblems(mapping, source))
+        .containsExactly("fields must map 'isin' to 'isin'");
   }
 
   @Test
@@ -293,8 +373,35 @@ class ContractPairValidationTest {
   }
 
   @Test
+  void twoCollectionsCannotWriteTheSameTargetWithTheSameConstants() {
+    String earlierCollection =
+        """
+          earlier:
+            path: $.earlierRatings[*]
+            fields:
+              rating: { path: currentRating, type: text }
+              rating_date: { path: creditRatingDate, type: date }
+        """;
+    String source = JSON_SOURCE + earlierCollection;
+    String earlierMapping =
+        """
+          earlier:
+            target: securities_data.security_ratings
+            constants: { sourceCategory: %s }
+            fields: { rating: rating, rating_date: ratingDate }
+        """;
+
+    assertThat(mappingProblems(JSON_MAPPING + earlierMapping.formatted("CURRENT"), source))
+        .containsExactly(
+            "duplicate collection target and constants"
+                + " 'securities_data.security_ratings {sourceCategory=CURRENT}'");
+    assertThat(mappingProblems(JSON_MAPPING + earlierMapping.formatted("EARLIER"), source))
+        .isEmpty();
+  }
+
+  @Test
   void requireValidListsEveryProblemOfBothContracts() {
-    String source = CSV_SOURCE.replace("[nonNegative]", "[belowLimit]");
+    String source = isinWith("normalize: [trim, uppercase, runScript]");
     String mapping = CSV_MAPPING.replace("openPrice", "openPrise");
 
     assertThatThrownBy(
@@ -306,7 +413,7 @@ class ContractPairValidationTest {
             exception ->
                 assertThat(exception.problems())
                     .containsExactly(
-                        "sample-csv-v1: field 'open_price': No number validator named 'belowLimit'",
+                        "sample-csv-v1: field 'isin': No normalizer named 'runScript'",
                         "sample-mapping-v1: fields maps to unknown internal field 'openPrise'"))
         .hasMessageContaining("sample-csv-v1 with sample-mapping-v1");
   }
@@ -317,6 +424,16 @@ class ContractPairValidationTest {
         loader.loadSourceContract(CSV_SOURCE), loader.loadMappingContract(CSV_MAPPING));
     validator.requireValid(
         loader.loadSourceContract(JSON_SOURCE), loader.loadMappingContract(JSON_MAPPING));
+  }
+
+  /** Returns the CSV contract with the isin field's rules replaced. */
+  private static String isinWith(String rules) {
+    return CSV_SOURCE.replace("normalize: [trim, uppercase] }", rules + " }");
+  }
+
+  /** Returns the CSV contract with the low_price field's rules replaced. */
+  private static String lowPriceWith(String rules) {
+    return CSV_SOURCE.replace(LOW_FIELD, LOW_FIELD.replace(NUMBER_RULES, rules));
   }
 
   private List<String> sourceProblems(String sourceYaml) {

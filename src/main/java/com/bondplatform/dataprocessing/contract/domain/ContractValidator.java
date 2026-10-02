@@ -32,9 +32,11 @@ import java.util.stream.Stream;
  */
 public final class ContractValidator {
 
+  private static final String TRIM = "trim";
+  private static final String UPPERCASE = "uppercase";
   private static final String GROUPED_NUMBER = "normalizeGroupedNumber";
-  private static final Set<String> NUMBER_NORMALIZERS =
-      Set.of(GROUPED_NUMBER, "stripTrailingPercent");
+  private static final String PERCENT_NORMALIZER = "stripTrailingPercent";
+  private static final String NON_NEGATIVE = "nonNegative";
   private static final Set<FieldType> CSV_TYPES =
       Set.of(FieldType.TEXT, FieldType.DECIMAL, FieldType.INTEGER);
   private static final Set<FieldType> JSON_TYPES =
@@ -112,6 +114,8 @@ public final class ContractValidator {
     } else if (key.type() != FieldType.TEXT || !key.requiredValue()) {
       problems.add(
           "duplicates.key '" + key.name() + "' must be a text field with requiredValue true");
+    } else if (!key.normalize().contains(UPPERCASE)) {
+      problems.add("duplicates.key '" + key.name() + "' must be normalized with " + UPPERCASE);
     }
     return problems;
   }
@@ -128,13 +132,24 @@ public final class ContractValidator {
     unknownRule(() -> rules.numberValidatorFor(field.validate()))
         .ifPresent(e -> problems.add(at + ": " + e));
     boolean numeric = NUMERIC_TYPES.contains(field.type());
-    if (numeric && !field.normalize().contains(GROUPED_NUMBER)) {
-      problems.add(at + " is a number and must be normalized with " + GROUPED_NUMBER);
+    List<String> normalize = field.normalize();
+    if (normalize.isEmpty() || !normalize.get(0).equals(TRIM)) {
+      problems.add(at + " must be normalized with " + TRIM + " first");
+    }
+    if (normalize.contains(PERCENT_NORMALIZER)) {
+      problems.add(
+          at + " is normalized with " + PERCENT_NORMALIZER + ", which CSV does not support");
+    }
+    if (numeric && (normalize.isEmpty() || !normalize.getLast().equals(GROUPED_NUMBER))) {
+      problems.add(at + " is a number and must be normalized with " + GROUPED_NUMBER + " last");
+    }
+    if (numeric && !field.validate().contains(NON_NEGATIVE)) {
+      problems.add(at + " is a number and must be validated with " + NON_NEGATIVE);
     }
     if (!numeric) {
-      field.normalize().stream()
-          .filter(NUMBER_NORMALIZERS::contains)
-          .forEach(rule -> problems.add(at + " is not a number but is normalized with " + rule));
+      if (normalize.contains(GROUPED_NUMBER)) {
+        problems.add(at + " is not a number but is normalized with " + GROUPED_NUMBER);
+      }
       if (!field.validate().isEmpty()) {
         problems.add(at + " has number validators but is not a number");
       }
@@ -216,7 +231,7 @@ public final class ContractValidator {
         recordProblems(
             mapping.primary(),
             InternalModel.DAILY_MARKET_SUMMARIES,
-            names(source.fields(), CsvField::name)));
+            types(source.fields(), CsvField::name, CsvField::type)));
     String keyTarget = mapping.primary().fields().get(source.duplicateKey());
     if (keyTarget != null && !keyTarget.equals("isin")) {
       problems.add("fields must map '" + source.duplicateKey() + "' to 'isin'");
@@ -234,11 +249,20 @@ public final class ContractValidator {
     List<String> problems = new ArrayList<>();
     problems.addAll(
         recordProblems(
-            mapping.primary(), InternalModel.SECURITIES, names(source.scalars(), JsonField::name)));
+            mapping.primary(),
+            InternalModel.SECURITIES,
+            types(source.scalars(), JsonField::name, JsonField::type)));
     Map<String, JsonCollection> declared = byName(source.collections(), JsonCollection::name);
     problems.addAll(
         duplicates(
             "collection mapping", mapping.collections().stream().map(CollectionMapping::name)));
+    problems.addAll(
+        duplicates(
+            "collection target and constants",
+            mapping.collections().stream()
+                .map(
+                    collection ->
+                        collection.target() + " " + new TreeMap<>(collection.constants()))));
     for (CollectionMapping collection : mapping.collections()) {
       JsonCollection declaredCollection = declared.get(collection.name());
       if (declaredCollection == null) {
@@ -246,10 +270,12 @@ public final class ContractValidator {
             "collection '" + collection.name() + "' is not declared by the source contract");
       } else {
         problems.addAll(
-            collectionProblems(collection, names(declaredCollection.fields(), JsonField::name)));
+            collectionProblems(
+                collection, types(declaredCollection.fields(), JsonField::name, JsonField::type)));
       }
     }
-    Set<String> mapped = names(mapping.collections(), CollectionMapping::name);
+    Set<String> mapped =
+        mapping.collections().stream().map(CollectionMapping::name).collect(Collectors.toSet());
     declared.keySet().stream()
         .filter(name -> !mapped.contains(name))
         .sorted()
@@ -261,57 +287,59 @@ public final class ContractValidator {
   }
 
   private static List<String> recordProblems(
-      RecordMapping mapping, String requiredTarget, Set<String> canonicalFields) {
-    List<String> problems = new ArrayList<>();
+      RecordMapping mapping, String requiredTarget, Map<String, FieldType> canonicalTypes) {
     if (!mapping.target().equals(requiredTarget)) {
-      problems.add(
+      return List.of(
           "fields target must be " + requiredTarget + " but is '" + mapping.target() + "'");
-      return problems;
     }
     Target target = InternalModel.target(requiredTarget).orElseThrow();
-    problems.addAll(
-        fieldMappingProblems("fields", mapping.fields(), Map.of(), canonicalFields, target));
-    return problems;
+    return fieldMappingProblems("fields", mapping.fields(), Map.of(), canonicalTypes, target);
   }
 
   private static List<String> collectionProblems(
-      CollectionMapping collection, Set<String> canonicalFields) {
+      CollectionMapping collection, Map<String, FieldType> canonicalTypes) {
     String at = "collections." + collection.name();
     Optional<Target> target = InternalModel.target(collection.target()).filter(Target::appendOnly);
     if (target.isEmpty()) {
       return List.of(at + " target '" + collection.target() + "' is not a collection table");
     }
     return fieldMappingProblems(
-        at, collection.fields(), collection.constants(), canonicalFields, target.get());
+        at, collection.fields(), collection.constants(), canonicalTypes, target.get());
   }
 
   private static List<String> fieldMappingProblems(
       String at,
       Map<String, String> fields,
       Map<String, String> constants,
-      Set<String> canonicalFields,
+      Map<String, FieldType> canonicalTypes,
       Target target) {
     List<String> problems = new ArrayList<>();
-    new TreeSet<>(fields.keySet())
-        .stream()
-            .filter(canonical -> !canonicalFields.contains(canonical))
-            .forEach(
-                canonical ->
-                    problems.add(
-                        at
-                            + " maps '"
-                            + canonical
-                            + "', which the source contract does not declare"));
-    new TreeSet<>(canonicalFields)
+    for (Map.Entry<String, String> mapped : new TreeMap<>(fields).entrySet()) {
+      String canonical = mapped.getKey();
+      String internal = mapped.getValue();
+      FieldType canonicalType = canonicalTypes.get(canonical);
+      FieldType internalType = target.fields().get(internal);
+      if (canonicalType == null) {
+        problems.add(at + " maps '" + canonical + "', which the source contract does not declare");
+      }
+      if (internalType == null) {
+        problems.add(at + " maps to unknown internal field '" + internal + "'");
+      }
+      if (canonicalType != null && internalType != null && canonicalType != internalType) {
+        problems.add(
+            "%s maps '%s' of type %s to '%s', which holds %s"
+                .formatted(
+                    at,
+                    canonical,
+                    canonicalType.contractName(),
+                    internal,
+                    internalType.contractName()));
+      }
+    }
+    new TreeSet<>(canonicalTypes.keySet())
         .stream()
             .filter(canonical -> !fields.containsKey(canonical))
             .forEach(canonical -> problems.add(at + " does not map '" + canonical + "'"));
-    new TreeSet<>(fields.values())
-        .stream()
-            .filter(internal -> !target.fields().contains(internal))
-            .forEach(
-                internal ->
-                    problems.add(at + " maps to unknown internal field '" + internal + "'"));
     problems.addAll(
         duplicates(
             at + " internal field",
@@ -333,13 +361,14 @@ public final class ContractValidator {
     return problems;
   }
 
+  private static <T> Map<String, FieldType> types(
+      Collection<T> items, Function<T, String> name, Function<T, FieldType> type) {
+    return items.stream().collect(Collectors.toMap(name, type, (first, second) -> first));
+  }
+
   private static <T> Map<String, T> byName(Collection<T> items, Function<T, String> name) {
     return items.stream()
         .collect(Collectors.toMap(name, Function.identity(), (first, second) -> first));
-  }
-
-  private static <T> Set<String> names(Collection<T> items, Function<T, String> name) {
-    return items.stream().map(name).collect(Collectors.toSet());
   }
 
   private static List<String> duplicates(String what, Stream<String> values) {
