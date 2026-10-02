@@ -1,5 +1,6 @@
 name: ci
 
+# Continuous integration only: nothing here deploys or uses AWS credentials.
 # Runs on every pull request whatever its base branch, so stacked PRs are checked too.
 on:
   pull_request:
@@ -15,44 +16,150 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  JAVA_VERSION: '25'
+  JAVA_DISTRIBUTION: temurin
+
+# Stages run in this order; a later stage starts only when the stages it needs have passed.
+#
+#   compile ─┬─ static-analysis ───────────────┐
+#            ├─ unit-test ── integration-test ─┼─ package ─┐
+#            └─ contracts-and-docs ────────────┴───────────┴─ ci-passed
 jobs:
-  quality:
-    name: quality gates
+  compile:
+    name: 1 · compile
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+      - name: Compile main and test sources (Error Prone and NullAway)
+        run: make compile
+
+  static-analysis:
+    name: 2 · static analysis
+    needs: compile
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+      - name: Formatting, Checkstyle, and architecture rules
+        run: make lint
+
+  unit-test:
+    name: 3 · unit tests and coverage
+    needs: compile
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+      - name: Unit tests and the strict 95% coverage gate
+        run: make coverage-check COVERAGE_ALLOW_EMPTY=--allow-empty
+      - name: Upload unit test and coverage reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: unit-test-reports
+          if-no-files-found: ignore
+          path: |
+            target/surefire-reports/
+            target/site/jacoco/
+
+  integration-test:
+    name: 4 · integration tests
+    needs: unit-test
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
-          distribution: temurin
-          java-version: '25'
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: ${{ env.JAVA_VERSION }}
           cache: maven
-
-      - name: Lint (format, Checkstyle, Error Prone, architecture rules)
-        run: make lint
-
-      - name: Unit tests and coverage gate
-        run: make coverage-check COVERAGE_ALLOW_EMPTY=--allow-empty
-
       - name: Integration tests
         run: make test-integration
-
-      - name: Package the Lambda artifact
-        run: make build
-
-      - name: Contract and documentation checks
-        run: make check-contracts check-docs
-
-      - name: Upload test and coverage reports
+      - name: Upload integration test reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: reports
+          name: integration-test-reports
           if-no-files-found: ignore
-          path: |
-            target/surefire-reports/
-            target/failsafe-reports/
-            target/site/jacoco/
+          path: target/failsafe-reports/
+
+  contracts-and-docs:
+    name: 5 · contracts and documentation
+    needs: compile
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Processing contracts, OpenAPI documents, and documentation links
+        run: make check-contracts check-docs
+
+  package:
+    name: 6 · package
+    needs: [static-analysis, integration-test, contracts-and-docs]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+      - name: Build the Lambda deployment artifact
+        run: make package
+      - name: Upload the Lambda deployment artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: lambda-package
+          if-no-files-found: error
+          retention-days: 7
+          path: target/data-processing-service-lambda.zip
+
+  # The single check to require on `main`: passes only when every stage passed.
+  ci-passed:
+    name: ci passed
+    if: always()
+    needs: [compile, static-analysis, unit-test, integration-test, contracts-and-docs, package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Fail unless every stage succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Stage results: $RESULTS"
+          for result in $RESULTS; do
+            if [ "$result" != "success" ]; then
+              exit 1
+            fi
+          done

@@ -2,7 +2,11 @@
 MVN := ./mvnw --batch-mode --no-transfer-progress
 COVERAGE_REPORT := target/site/jacoco/jacoco.csv
 
-.PHONY: fmt lint build test-unit coverage-check test-integration check-contracts check-docs
+.PHONY: compile package fmt lint build test-unit coverage-check test-integration check-contracts check-docs
+
+## compile: compile main and test sources; Error Prone and NullAway findings fail it
+compile:
+	$(MVN) test-compile
 
 ## fmt: format Java sources with google-java-format
 fmt:
@@ -15,6 +19,10 @@ lint:
 ## build: compile, run all tests, and package the Lambda deployment artifact (target/data-processing-service-lambda.zip)
 build:
 	$(MVN) verify
+
+## package: build the Lambda deployment artifact without running tests (CI runs them in earlier stages)
+package:
+	$(MVN) package -DskipUnitTests=true
 
 ## test-unit: run unit tests only (*Test) and write the unit coverage report; no Spring context, Docker, or network
 test-unit:
