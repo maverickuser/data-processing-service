@@ -170,7 +170,7 @@ LLD sections 6, 13.1, 13.4, 17, 22.
 | 10 | `b/10-schema-securities` | Flyway migration for `securities_data` exactly as LLD 22.1 | I-DB-01 (securities part), I-DB-02..04 | Automated column comparison against LLD 22.1 |
 | 11 | `b/11-schema-processing` | Flyway migration for `data_processing` exactly as LLD 22.2 | I-DB-01 (processing part) | Automated column comparison against LLD 22.2 |
 | 12 | `b/12-securities-repositories` | Repositories for the six business tables; `ON CONFLICT` inserts; security insert returning new ISINs | Repository integration tests | Duplicate append-only insert stores one row |
-| 13 | `b/13-processing-repositories` | Repositories for the six processing tables | Repository integration tests | — |
+| 13 | — | Not a separate PR (changed 2026-10-02). Each processing-table repository is written in the PR that introduces the use case needing it: ingestion requests and outbox events in PRs 15 and 17, processing runs in PR 18, source files in PR 20, rejected records and validation issues in PR 26. Every repository still gets a mocked-JDBC unit test and a database integration test | — | — |
 
 ## Stack C — Admission and job engine
 
