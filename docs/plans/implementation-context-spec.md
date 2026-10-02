@@ -43,10 +43,10 @@ Versions marked assumed must be checked against the current stable releases and 
 | Coverage | JaCoCo 0.8.15 report, gate in `scripts/check_coverage.py` | known: pinned in PR 02 |
 | Tests | JUnit 5, AssertJ, Mockito (sparingly), Testcontainers (PostgreSQL 16, LocalStack) | assumed |
 | CSV parsing | Apache Commons CSV | assumed |
-| JSON | Jackson with strict duplicate detection and `BigDecimal` numbers | assumed |
+| JSON | Jackson 3 (`tools.jackson`, managed by Spring Boot) with `BigDecimal` numbers; strict duplicate detection is added with the JSON reader in PR 30 | known |
 | AWS access | AWS SDK for Java v2 (S3, SQS) | assumed |
 | Lambda runtime | `java25`, with SnapStart (supported for Java 11 and later) | known: listed in the AWS Lambda runtimes documentation on 2026-10-02; availability in `ap-south-1` is confirmed at first deployment |
-| Spring on Lambda adapter | `com.amazonaws.serverless:aws-serverless-java-container-springboot4` 3.0.2 | known: published on Maven Central; added to the build in PR 05 |
+| Spring on Lambda adapter | `com.amazonaws.serverless:aws-serverless-java-container-springboot4` 3.0.2 | known: in the build since PR 05; an API Gateway HTTP API event round-trips through it in `ApiGatewayHandlerIT` |
 | Database access | Spring `JdbcClient`, Flyway | known (Flyway agreed in LLD 21) |
 | Terraform | 1.16.4, `required_version = "~> 1.16.4"` | assumed: same pin as data-fetch-service |
 | AWS provider | `hashicorp/aws` 6.61.0 with committed lock file | assumed: same pin as data-fetch-service |

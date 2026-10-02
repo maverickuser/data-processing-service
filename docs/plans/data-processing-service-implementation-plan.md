@@ -93,7 +93,7 @@ flowchart LR
 
 | Workflow | Trigger | What it does | AWS credentials |
 |---|---|---|---|
-| `ci.yml` | Every pull request, whatever its base branch, and pushes to `main` | Format check, lint, build, unit tests, coverage gate, integration tests with Docker service containers, contract and docs checks, Terraform `fmt`/`validate`/`test` once `infra/` exists. Uploads test and coverage reports, also on failure | None |
+| `ci.yml` | Every pull request, whatever its base branch, and pushes to `main` | Staged jobs: 1 compile (Error Prone, NullAway); 2 static analysis (format, Checkstyle, architecture rules); 3 unit tests and the coverage gate; 4 integration tests; 5 contracts and documentation; 6 package (uploads the Lambda zip). A later stage runs only when the stages it needs passed. `ci passed` aggregates them and is the required check on `main`. Test and coverage reports are uploaded even on failure. Terraform `fmt`/`validate`/`test` join as a stage once `infra/` exists | None |
 | `package.yml` | Called by `deploy.yml` | Builds the Lambda deployment artifact and uploads it to the artifact bucket, keyed by commit SHA | OIDC role |
 | `deploy.yml` | Push to `main` after PR 47 merges, and manual dispatch | Applies Terraform roots in order (bootstrap → network → persistent → application), publishes new function versions, invokes the migration function and stops on failure, then moves the live alias | OIDC role |
 | `smoke.yml` | After a successful `deploy.yml`, and manual dispatch | Runs smoke cases S-01..05 against the deployed service | OIDC role |
@@ -105,7 +105,7 @@ Rules:
 - AWS access is by OIDC only: the workflow assumes the role in repository secret `AWS_ROLE_TO_ASSUME`, with `permissions: id-token: write`. Region comes from repository variable `aws_region`. No long-lived keys.
 - Workflows that use credentials never run code from an unmerged pull request.
 - Third-party actions are pinned to a commit SHA.
-- Required status checks on `main` are the `ci.yml` jobs. Workflow YAML alone is not branch protection; configure the required checks in repository settings in PR 03.
+- The required status check on `main` is the `ci passed` job of `ci.yml`. Workflow YAML alone is not branch protection; configure the required checks in repository settings in PR 03.
 - One deployment at a time: `deploy.yml` uses a concurrency group and does not cancel a run in progress.
 
 ## Required checks on every PR
@@ -122,7 +122,7 @@ Base package `com.bondplatform.dataprocessing`. Each feature has `domain`, `appl
 
 | Package | Principal types |
 |---|---|
-| `shared` | `Isin`, `TradeDate`, `ExchangeName`, `Percent`, `JobId`, `IdSupplier`, `ErrorCode`, `ProblemDetailFactory` |
+| `shared` | `Isin`, `TradeDate`, `ExchangeName`, `Percent`, `JobId`, `IdSupplier`, `ProblemType`, `ProblemDetailFactory`, `GlobalExceptionHandler` |
 | `contract` | `SourceContract`, `MappingContract`, `ContractLoader`, `ContractValidator`, `ContractRegistry`, `ContractVersion`, `DatasetUrn`, `RuleRegistry`, `Normalizer`, `Validator` |
 | `admission` | `SubmissionController`, `SubmissionEvent`, `SubmissionValidator`, `AdmitSubmission`, `AdmissionReceipt` |
 | `job` | `IngestionRequest`, `ProcessingRun`, `JobStatus`, `RunOutcome`, `OrderingGroup`, `RunJob`, `DatasetHandler`, `RetryPolicy`, `IngestionRequestRepository`, `ProcessingRunRepository` |
@@ -155,7 +155,7 @@ LLD sections 1, 15.
 | 02 | `a/02-quality-gates` | Spotless/google-java-format, Checkstyle, Error Prone with NullAway and JSpecify, JaCoCo strict >95% rule, ArchUnit suite; `make fmt lint coverage-check` | U-ARCH-01..03 | A seeded violation of each gate fails it; coverage fixture proves 95.0% fails |
 | 03 | `a/03-ci-workflow` | `.github/workflows/ci.yml`, `scripts/check_docs`, `scripts/check_contracts`, `make check-docs check-contracts test-integration`, Testcontainers base; required checks configured | — | CI green on a stacked PR whose base is not `main`; reports uploaded on a forced failure |
 | 04 | `a/04-value-types` | `Isin`, `TradeDate`, `ExchangeName`, `Percent`, `JobId`, clock and `IdSupplier` | U-VAL-01..02 | — |
-| 05 | `a/05-web-baseline` | `ErrorCode`, `ProblemDetailFactory`, one `@RestControllerAdvice`, exact-decimal and UTC JSON configuration, `ApiGatewayHandler` translating API Gateway HTTP API events to the Spring web layer | I-READ-08 (serialisation part) | An API Gateway event fixture for an unknown route returns a `404` problem response through the handler |
+| 05 | `a/05-web-baseline` | `ProblemType`, `ProblemDetailFactory`, one `@RestControllerAdvice`, exact-decimal and UTC JSON configuration, `ApiGatewayHandler` translating API Gateway HTTP API events to the Spring web layer | I-READ-08 (serialisation part) | An API Gateway event fixture for an unknown route returns a `404` problem response through the handler |
 
 ## Stack B — Contracts and schema
 
@@ -202,7 +202,7 @@ LLD sections 4, 5, 7, 8.1, 14; both BSE contracts.
 | PR | Branch | Scope | Test cases | Exit evidence |
 |---|---|---|---|---|
 | 23 | `e/23-csv-structure` | `CsvHeaderResolver` and structural checks over Apache Commons CSV: headers, BOM, blank lines, malformed records | U-CSV-01..07 | — |
-| 24 | `e/24-csv-row-validation` | `CsvRowValidator`, `PriceConsistencyRule`, `CanonicalRecord` and `ValidationIssue` | U-CSV-08..11 | Every applicable error on a row is reported |
+| 24 | `e/24-csv-row-validation` | `CsvRowValidator`, `PriceConsistencyRule`, `CanonicalRecord`, `ValidationIssue`, and the validation `ErrorCode` enum (moved here from PR 05: this is the first PR that produces validation issues) | U-CSV-08..11 | Every applicable error on a row is reported |
 | 25 | `e/25-duplicate-resolution` | `DuplicateIsinResolver`, dispositions, counts; `CsvCanonicalizer` assembling stage 1 | U-DUP-01..03, U-CSV-12 | Golden bhavcopy yields the golden canonical records |
 | 26 | `e/26-canonical-storage` | `S3CanonicalFileWriter` (JSON Lines per run), rejected-record and issue persistence in bounded batches | I-CSV-02 (storage part) | Accepted rows are in S3 only; rejected rows are in both |
 | 27 | `e/27-summary-mapper` | `DailyMarketSummaryMapper` driven by the mapping contract, including `faceValue` | U-MAP-01..02, U-OUT-01 | — |
