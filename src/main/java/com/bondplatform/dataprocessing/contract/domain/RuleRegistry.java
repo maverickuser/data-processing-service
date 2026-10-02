@@ -14,9 +14,12 @@ public final class RuleRegistry {
   private static final Normalizer IDENTITY = FieldResult.Valid::new;
 
   private final Map<String, Normalizer> normalizers;
+  private final Map<String, NumberValidator> numberValidators;
 
-  private RuleRegistry(Map<String, Normalizer> normalizers) {
+  private RuleRegistry(
+      Map<String, Normalizer> normalizers, Map<String, NumberValidator> numberValidators) {
     this.normalizers = Map.copyOf(normalizers);
+    this.numberValidators = Map.copyOf(numberValidators);
   }
 
   /** Returns the registry holding every rule this service implements. */
@@ -25,7 +28,10 @@ public final class RuleRegistry {
         Map.of(
             "trim", TextNormalizers.TRIM,
             "blankToNull", TextNormalizers.BLANK_TO_NULL,
-            "uppercase", TextNormalizers.UPPERCASE));
+            "uppercase", TextNormalizers.UPPERCASE,
+            "normalizeGroupedNumber", NumberNormalizers.GROUPED_NUMBER,
+            "stripTrailingPercent", NumberNormalizers.STRIP_TRAILING_PERCENT),
+        Map.of("nonNegative", NumberValidators.NON_NEGATIVE));
   }
 
   /**
@@ -41,10 +47,32 @@ public final class RuleRegistry {
     return chain;
   }
 
+  /**
+   * Returns one validator that applies every named rule and reports every violation, not only the
+   * first.
+   *
+   * @throws UnknownRuleException if any name is not a registered number validator
+   */
+  public NumberValidator numberValidatorFor(List<String> ruleNames) {
+    List<NumberValidator> validators = ruleNames.stream().map(this::numberValidator).toList();
+    return value ->
+        validators.stream().flatMap(validator -> validator.validate(value).stream()).toList();
+  }
+
+  private NumberValidator numberValidator(String ruleName) {
+    NumberValidator validator = numberValidators.get(ruleName);
+    if (validator == null) {
+      throw new UnknownRuleException(
+          "number validator", ruleName, normalizers.containsKey(ruleName));
+    }
+    return validator;
+  }
+
   private Normalizer normalizer(String ruleName) {
     Normalizer normalizer = normalizers.get(ruleName);
     if (normalizer == null) {
-      throw new UnknownRuleException("normalizer", ruleName, false);
+      throw new UnknownRuleException(
+          "normalizer", ruleName, numberValidators.containsKey(ruleName));
     }
     return normalizer;
   }
