@@ -60,6 +60,19 @@ class PercentTest {
     assertThatIllegalArgumentException().isThrownBy(() -> Percent.of(new BigDecimal("-0.01")));
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = {"1e999999999", "1e31", "1e-31", "-1e999999999"})
+  void rejectsNumbersTooLongToPrint(String number) {
+    assertThatIllegalArgumentException().isThrownBy(() -> Percent.of(new BigDecimal(number)));
+  }
+
+  @Test
+  void acceptsThirtyDigitsOnEachSideOfThePoint() {
+    String number = "9".repeat(30) + "." + "9".repeat(30);
+
+    assertThat(Percent.parse(number)).hasToString(number + " PERCENT");
+  }
+
   @Test
   void keepsEveryDigitWithoutRounding() {
     assertThat(Percent.parse("8.123456789012345678901234567890").value())

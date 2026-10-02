@@ -17,6 +17,8 @@ public final class Percent {
 
   private static final Pattern PLAIN_DECIMAL = Pattern.compile("[0-9]+(\\.[0-9]+)?");
 
+  private static final int MAX_DIGITS_EACH_SIDE_OF_THE_POINT = 30;
+
   private final BigDecimal value;
 
   private Percent(BigDecimal value) {
@@ -26,11 +28,20 @@ public final class Percent {
   /**
    * Creates a percentage from an exact number.
    *
-   * @throws IllegalArgumentException if the number is negative
+   * <p>The number may have at most 30 digits before and 30 after the decimal point. The bound has
+   * no business meaning; it stops a value such as {@code 1e999999999}, which is tiny to write and
+   * enormous to print, from being accepted.
+   *
+   * @throws IllegalArgumentException if the number is negative or outside that bound
    */
   public static Percent of(BigDecimal value) {
     if (value.signum() < 0) {
-      throw new IllegalArgumentException("Percent must not be negative: " + value.toPlainString());
+      throw new IllegalArgumentException("Percent must not be negative: " + value);
+    }
+    long integerDigits = (long) value.precision() - value.scale();
+    if (integerDigits > MAX_DIGITS_EACH_SIDE_OF_THE_POINT
+        || value.scale() > MAX_DIGITS_EACH_SIDE_OF_THE_POINT) {
+      throw new IllegalArgumentException("Percent has too many digits: " + value);
     }
     return new Percent(value);
   }
