@@ -1,6 +1,7 @@
 package com.bondplatform.dataprocessing.admission.domain;
 
 import com.bondplatform.dataprocessing.contract.domain.DatasetUrn;
+import com.bondplatform.dataprocessing.job.domain.OrderingGroup;
 import com.bondplatform.dataprocessing.shared.domain.ExchangeName;
 import com.bondplatform.dataprocessing.shared.domain.Isin;
 import com.bondplatform.dataprocessing.shared.domain.TradeDate;
