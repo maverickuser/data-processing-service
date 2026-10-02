@@ -18,6 +18,7 @@ spring:
         # PostgreSQL driver timeouts, in seconds: opening the connection, and waiting on a reply.
         connectTimeout: 10
         socketTimeout: 60
+        # Do not add reWriteBatchedInserts: repositories rely on a row count per batched insert.
   flyway:
     # Migrations are run by the migration function during deployment, never at application start.
     enabled: false
