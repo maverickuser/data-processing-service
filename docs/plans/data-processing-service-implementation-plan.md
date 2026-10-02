@@ -179,7 +179,9 @@ LLD sections 2.1, 8, 21; submission OpenAPI.
 | PR | Branch | Scope | Test cases | Exit evidence |
 |---|---|---|---|---|
 | 14 | `c/14-submission-event` | `SubmissionEvent` model and `SubmissionValidator` for BSE and NSDL inputs; `OrderingGroup` | U-ADM-01, U-ADM-03..04 | — |
-| 15 | `c/15-admit-submission` | `AdmitSubmission`: idempotency by key and payload hash; one transaction for request, pinned contracts, receipt, and `FILE_PROCESSING` outbox row | U-ADM-02, I-ADM-01..03, I-ADM-05 | Concurrent identical submissions create one request |
+| 15a | `c/15a-ingestion-requests` | `JobStatus`, `IngestionRequest`, `IngestionRequestRepository` and its JDBC adapter | Repository unit and integration tests | A second insert with the same key or event identity stores nothing |
+| 15b | `c/15b-outbox-store` | `OutboxEvent`, `OutboxEventStore` (append) and its JDBC adapter | Repository unit and integration tests | — |
+| 15c | `c/15c-admit-submission` | `AdmitSubmission`: idempotency by key and payload hash; one transaction for request, pinned contracts, receipt, and `FILE_PROCESSING` outbox row | U-ADM-02, I-ADM-01..03, I-ADM-05 | Concurrent identical submissions create one request |
 | 16 | `c/16-submission-endpoint` | `POST /v1/event-ingestions` through `ApiGatewayHandler`, size and content-type limits, problem responses, OpenAPI response validation. IAM authorization is enforced by API Gateway, not by application code | I-ADM-04, I-ADM-06 | Every documented response matches the OpenAPI file |
 | 17 | `c/17-outbox-dispatcher` | `OutboxEventStore`, `OutboxDispatcher`, `BackoffPolicy`, `SqsQueuePublisher` for the FIFO queue; dispatch immediately after commit when no older event is pending in the group; LocalStack SQS | U-OBX-02, U-OBX-03 | A failed send leaves the `202` intact and the event pending |
 | 18 | `c/18-queue-handler` | `ProcessingQueueHandler` (SQS event, batch size 1), `RunJob`, `DatasetHandler` port with a test fake, processing-run records, success reported only after commit | U-JOB-02, I-OPS-03 | Redelivery after a terminal state does nothing |

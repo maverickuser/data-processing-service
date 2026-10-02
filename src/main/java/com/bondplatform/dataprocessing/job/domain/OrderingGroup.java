@@ -1,4 +1,4 @@
-package com.bondplatform.dataprocessing.admission.domain;
+package com.bondplatform.dataprocessing.job.domain;
 
 import com.bondplatform.dataprocessing.shared.domain.Isin;
 import com.bondplatform.dataprocessing.shared.domain.TradeDate;
