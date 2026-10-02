@@ -1,6 +1,7 @@
 package com.bondplatform.dataprocessing.admission.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.tuple;
 
 import com.bondplatform.dataprocessing.admission.domain.Submission.Inputs;
@@ -220,8 +221,8 @@ class SubmissionValidatorTest {
     Map<String, Object> longRun = nsdlEvent();
     data(longRun).put("run_id", "r".repeat(129));
     assertThat(errors(longRun, "r".repeat(129)))
-        .extracting(SubmissionError::pointer)
-        .containsExactly("/data/run_id");
+        .extracting(error -> error.pointer() == null ? error.header() : error.pointer())
+        .containsExactly("/data/run_id", "Idempotency-Key");
   }
 
   // U-ADM-03
@@ -294,6 +295,172 @@ class SubmissionValidatorTest {
         .extracting(error -> error.pointer() == null ? error.header() : error.pointer())
         .containsExactlyInAnyOrder(
             "/id", "/time", "/data/schema_version", "/data/manifest/key", "Idempotency-Key");
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"run 202", "run/202", "rün_202", "run_202\n", "run_202 "})
+  void idempotencyKeyMayContainOnlyTheAllowedCharacters(String key) {
+    Map<String, Object> event = nsdlEvent();
+    data(event).put("run_id", key);
+
+    assertThat(errors(event, key))
+        .extracting(error -> error.pointer() == null ? error.header() : error.pointer())
+        .containsExactly("/data/run_id", "Idempotency-Key");
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "2026-09-27T14:30Z",
+        "2026-09-27T14:30:00+05",
+        "2026-09-27T14:30:00+05:30:15",
+        "+12026-09-27T14:30:00Z",
+        "-0001-09-27T14:30:00Z",
+        "2026-09-27",
+        "2026-09-27 14:30:00Z",
+        "2026-13-27T14:30:00Z",
+        "2026-09-27T25:30:00Z"
+      })
+  void timeMustBeRfc3339(String time) {
+    assertThat(errorsOf(nsdlEvent(), event -> event.put("time", time)))
+        .containsExactly(
+            SubmissionError.inBody("/time", Code.INVALID_VALUE, "Expected an RFC 3339 timestamp."));
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "2026-09-27T14:30:00.123456Z",
+        "2026-09-27t14:30:00z",
+        "2026-09-27T20:00:00+05:30"
+      })
+  void timeAcceptsFractionsLowercaseAndOffsets(String time) {
+    accepted(with(nsdlEvent(), event -> event.put("time", time)), "run_202");
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "isin/ INE121A07QY9",
+        "isin/INE121A07QY9 ",
+        "isin/INE121A07QY9\n",
+        "isin/INE121\u00A0A07QY9",
+        "ISIN/INE121A07QY9",
+        "INE121A07QY9"
+      })
+  void nsdlSubjectMustBeIsinSlashIsinWithoutSpaces(String subject) {
+    assertThat(errorsOf(nsdlEvent(), event -> event.put("subject", subject)))
+        .extracting(SubmissionError::pointer, SubmissionError::code)
+        .containsExactly(tuple("/subject", Code.MISMATCH));
+  }
+
+  @Test
+  void isinOfOnlyInvisibleCharactersIsInvalid() {
+    assertThat(errorsOf(nsdlEvent(), event -> inputs(event).put("isin_code", "\u00A0")))
+        .extracting(SubmissionError::pointer, SubmissionError::code)
+        .containsExactly(tuple("/data/inputs/isin_code", Code.INVALID_VALUE));
+  }
+
+  @Test
+  void pointersEscapeTildeAndSlash() {
+    assertThat(errorsOf(nsdlEvent(), event -> data(event).put("x/y~z", 1)))
+        .extracting(SubmissionError::pointer)
+        .containsExactly("/data/x~1y~0z");
+    assertThat(errorsOf(nsdlEvent(), event -> event.put("a/b", "v")))
+        .extracting(SubmissionError::pointer)
+        .containsExactly("/a~1b");
+  }
+
+  @Test
+  void missingParentIsOneFaultNotOnePerChild() {
+    assertThat(errorsOf(nsdlEvent(), event -> event.remove("data")))
+        .containsExactly(SubmissionError.inBody("/data", Code.REQUIRED, "Is required."));
+    assertThat(errorsOf(nsdlEvent(), event -> data(event).remove("inputs")))
+        .containsExactly(SubmissionError.inBody("/data/inputs", Code.REQUIRED, "Is required."));
+    assertThat(errorsOf(nsdlEvent(), event -> data(event).remove("manifest")))
+        .containsExactly(SubmissionError.inBody("/data/manifest", Code.REQUIRED, "Is required."));
+  }
+
+  @Test
+  void eventTypeAndInputsAreStillRequiredWhenTheDatasetIsUnsupported() {
+    Map<String, Object> event = nsdlEvent();
+    event.put("dataschema", "urn:bond-platform:dataset:other");
+    data(event).remove("event_type");
+    data(event).remove("inputs");
+
+    assertThat(errors(event, "run_202"))
+        .extracting(SubmissionError::pointer)
+        .containsExactly("/dataschema", "/data/event_type", "/data/inputs");
+  }
+
+  @Test
+  void nonFiniteNumbersAreNotWholeNumbers() {
+    assertThat(errorsOf(nsdlEvent(), event -> data(event).put("schema_version", nonFiniteNumber())))
+        .extracting(SubmissionError::pointer)
+        .containsExactly("/data/schema_version");
+    assertThat(errorsOf(nsdlEvent(), event -> event.put("ratio", nonFiniteNumber())))
+        .extracting(SubmissionError::pointer)
+        .containsExactly("/ratio");
+  }
+
+  @Test
+  void explicitNullIsInvalidRatherThanMissing() {
+    assertThat(errorsOf(nsdlEvent(), event -> manifest(event).put("version_id", null)))
+        .containsExactly(
+            SubmissionError.inBody(
+                "/data/manifest/version_id", Code.INVALID_VALUE, "Must not be null."));
+  }
+
+  @Test
+  void faultsInExtensionAttributesAreReportedInNameOrder() {
+    Map<String, Object> event = nsdlEvent();
+    event.put("Zeta", "v");
+    event.put("Alpha", "v");
+
+    assertThat(errors(event, "run_202"))
+        .extracting(SubmissionError::pointer)
+        .containsExactly("/Alpha", "/Zeta");
+  }
+
+  @Test
+  void datasetWithoutAdmissionRulesCannotBeSupported() {
+    Set<DatasetUrn> withUnknown = Set.of(BSE, new DatasetUrn("urn:bond-platform:dataset:third"));
+
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> new SubmissionValidator(withUnknown))
+        .withMessageContaining("urn:bond-platform:dataset:third");
+  }
+
+  /** A value a JSON parser cannot produce but a caller could pass; held as a Number. */
+  private static Number nonFiniteNumber() {
+    return new Number() {
+      private static final long serialVersionUID = 1L;
+
+      @Override
+      public int intValue() {
+        return 0;
+      }
+
+      @Override
+      public long longValue() {
+        return 0;
+      }
+
+      @Override
+      public float floatValue() {
+        return 0;
+      }
+
+      @Override
+      public double doubleValue() {
+        return 0;
+      }
+
+      @Override
+      public String toString() {
+        return "NaN";
+      }
+    };
   }
 
   private Submission accepted(Map<String, Object> event, String idempotencyKey) {
