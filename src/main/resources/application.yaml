@@ -3,6 +3,21 @@ spring:
     name: data-processing-service
   main:
     banner-mode: off
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/data_processing}
+    username: ${DATABASE_USERNAME:data_processing}
+    password: ${DATABASE_PASSWORD:}
+    hikari:
+      # One connection per Lambda execution environment (LLD section 23.5), opened on first use.
+      maximum-pool-size: 1
+      minimum-idle: 0
+      initialization-fail-timeout: -1
+  flyway:
+    # Migrations are run by the migration function during deployment, never at application start.
+    enabled: false
+    default-schema: data_processing
+    schemas: data_processing,securities_data
+    locations: classpath:db/migration
 
 data-processing:
   # One entry per dataset: the stage-1 and stage-2 contract files, without the .yaml extension.
