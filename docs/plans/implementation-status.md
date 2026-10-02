@@ -52,7 +52,7 @@ Last updated: 2026-10-02.
 | 41 | H Operations | `h/41-sweeper` | not started | — | — | |
 | 42 | H Operations | `h/42-observability` | not started | — | — | |
 | 43 | I Infrastructure and release | `i/43-lambda-package` | not started | — | — | |
-| 44 | I Infrastructure and release | `i/44-network` | not started | — | — | |
+| 44 | I Infrastructure and release | `i/44-bootstrap` | not started | — | — | |
 | 45 | I Infrastructure and release | `i/45-persistent` | not started | — | — | |
 | 46 | I Infrastructure and release | `i/46-application` | not started | — | — | |
 | 47 | I Infrastructure and release | `i/47-deploy-workflows` | not started | — | — | |
