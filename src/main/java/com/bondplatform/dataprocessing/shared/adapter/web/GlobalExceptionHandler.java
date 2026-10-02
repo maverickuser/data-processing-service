@@ -26,6 +26,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
   private static final Logger LOG = LoggerFactory.getLogger(GlobalExceptionHandler.class);
   private static final String UNEXPECTED_FAILURE_DETAIL = "The request could not be completed.";
   private static final String UNKNOWN_ROUTE_DETAIL = "No resource exists at this path.";
+  private static final String FRAMEWORK_PACKAGE_PREFIX = "org.springframework.";
 
   private final ProblemDetailFactory problems;
 
@@ -72,14 +73,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
   /**
    * Returns the framework's own caller-safe explanation, or the type's title when it has none.
    *
-   * <p>Only the web framework raises {@link ErrorResponse} exceptions here: an architecture rule
-   * forbids application code from throwing them, so their detail never carries internal text.
+   * <p>Only exceptions defined by the web framework are trusted to carry caller-safe text. An
+   * {@link ErrorResponse} defined anywhere else gets the title, so internal text cannot leak.
    */
   private static String detailOf(Exception exception, ProblemType type) {
     if (type == ProblemType.NOT_FOUND) {
       return UNKNOWN_ROUTE_DETAIL;
     }
-    if (exception instanceof ErrorResponse errorResponse) {
+    boolean definedByFramework =
+        exception.getClass().getName().startsWith(FRAMEWORK_PACKAGE_PREFIX);
+    if (definedByFramework && exception instanceof ErrorResponse errorResponse) {
       String detail = errorResponse.getBody().getDetail();
       if (detail != null && !detail.isBlank()) {
         return detail;

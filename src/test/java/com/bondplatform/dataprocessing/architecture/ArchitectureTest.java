@@ -79,7 +79,9 @@ class ArchitectureTest {
             "crossfeature",
             "AlphaAdapterUsingBetaAdapter",
             "AlphaAdapterUsingBetaInternal",
-            "AlphaUseCaseUsingBetaInternal"),
+            "AlphaUseCaseUsingBetaInternal",
+            "AlphaUseCaseUsingSharedInternal",
+            "EntryPointUsingBetaInternal"),
         violation(
             "package cycle",
             ArchitectureRules.packagesAreFreeOfCycles(FIXTURES + "cycle"),
