@@ -80,7 +80,7 @@ A name that needs `And` or `Or` describes a class or method with two jobs. Split
 
 - `BigDecimal` and `BigInteger` for every source number. `float` and `double` are banned in production code (enforced by an ArchUnit/Error Prone rule). Construct from strings, never from floating-point literals.
 - Compare decimals with `compareTo`, never `equals`, unless scale matters.
-- `LocalDate` for business dates, `Instant` for recorded times. Time comes from an injected `java.time.Clock`; never call `Instant.now()` directly.
+- `LocalDate` for business dates, `Instant` for recorded times. Response models never carry `OffsetDateTime` or `ZonedDateTime`: `Instant` is always serialised in UTC, the others keep their own offset. Time comes from an injected `java.time.Clock`; never call `Instant.now()` directly.
 - Locale-independent case conversion: `toUpperCase(Locale.ROOT)`.
 - UUIDs come from an injected supplier so tests are deterministic.
 
@@ -124,7 +124,7 @@ A name that needs `And` or `Or` describes a class or method with two jobs. Split
 | Spotless + google-java-format | Formatting | Build fails on unformatted code |
 | Checkstyle (Google checks, with project suppressions listed in one file) | Style | Build fails |
 | Error Prone + NullAway | Bug patterns, null safety | Compile fails |
-| ArchUnit | Layering, banned types (`float`, `double`, `Instant.now()`), no cycles | Unit test fails |
+| ArchUnit | Layering, feature privacy, no cycles, null-marked packages, banned floating point, system clock, and random IDs. It inspects fields, signatures, and calls; the types of local variables are not visible to it | Unit test fails |
 | JaCoCo | Unit line coverage | Strictly greater than 95% |
 | OWASP Dependency-Check and secret scanning | Supply chain | Findings triaged with a recorded reason |
 

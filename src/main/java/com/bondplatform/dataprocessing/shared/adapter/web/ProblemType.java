@@ -12,6 +12,8 @@ import java.util.Locale;
 public enum ProblemType {
   INVALID_REQUEST(400, "Invalid Request"),
   NOT_FOUND(404, "Not Found"),
+  METHOD_NOT_ALLOWED(405, "Method Not Allowed"),
+  NOT_ACCEPTABLE(406, "Not Acceptable"),
   IDEMPOTENCY_CONFLICT(409, "Idempotency Conflict"),
   REQUEST_TOO_LARGE(413, "Request Too Large"),
   UNSUPPORTED_MEDIA_TYPE(415, "Unsupported Media Type"),
@@ -27,6 +29,26 @@ public enum ProblemType {
   ProblemType(int status, String title) {
     this.status = status;
     this.title = title;
+  }
+
+  /**
+   * Returns the problem type for an error status raised by the web framework itself, such as a
+   * missing parameter or an unsupported method.
+   *
+   * <p>A status with no dedicated type becomes {@link #INVALID_REQUEST} when it is a client error
+   * and {@link #INTERNAL_ERROR} otherwise, so the caller always receives a documented type.
+   * Statuses that only application code decides (conflict, rate limiting) are never inferred here.
+   */
+  public static ProblemType forFrameworkStatus(int status) {
+    return switch (status) {
+      case 404 -> NOT_FOUND;
+      case 405 -> METHOD_NOT_ALLOWED;
+      case 406 -> NOT_ACCEPTABLE;
+      case 413 -> REQUEST_TOO_LARGE;
+      case 415 -> UNSUPPORTED_MEDIA_TYPE;
+      case 503 -> SERVICE_UNAVAILABLE;
+      default -> status >= 400 && status < 500 ? INVALID_REQUEST : INTERNAL_ERROR;
+    };
   }
 
   /** Returns the HTTP status code. */

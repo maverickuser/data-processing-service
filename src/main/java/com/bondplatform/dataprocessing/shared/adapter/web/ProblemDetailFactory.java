@@ -2,6 +2,7 @@ package com.bondplatform.dataprocessing.shared.adapter.web;
 
 import com.bondplatform.dataprocessing.shared.supplier.IdSupplier;
 import java.net.URI;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.ProblemDetail;
 import org.springframework.stereotype.Component;
@@ -10,10 +11,12 @@ import org.springframework.stereotype.Component;
  * Builds the problem-details body used for every HTTP error.
  *
  * <p>Each problem gets a fresh correlation identifier, exposed both as {@code correlationId} and as
- * the {@code instance} URI, so one occurrence can be found in the logs.
+ * the {@code instance} URI. Server-side failures are logged with the same identifier.
  */
 @Component
 public class ProblemDetailFactory {
+
+  private static final String CORRELATION_ID = "correlationId";
 
   private final IdSupplier idSupplier;
 
@@ -36,7 +39,17 @@ public class ProblemDetailFactory {
     problem.setDetail(detail);
     problem.setInstance(URI.create("urn:uuid:" + correlationId));
     problem.setProperty("code", type.code());
-    problem.setProperty("correlationId", correlationId.toString());
+    problem.setProperty(CORRELATION_ID, correlationId.toString());
     return problem;
+  }
+
+  /** Returns the correlation identifier of a problem created by this factory. */
+  public static String correlationIdOf(ProblemDetail problem) {
+    Map<String, Object> properties = problem.getProperties();
+    Object correlationId = properties == null ? null : properties.get(CORRELATION_ID);
+    if (correlationId == null) {
+      throw new IllegalArgumentException("Problem was not created by ProblemDetailFactory");
+    }
+    return correlationId.toString();
   }
 }

@@ -40,6 +40,7 @@ class ArchitectureTest {
             ArchitectureRules.featuresKeepTheirInternalsPrivate(BASE_PACKAGE)),
         rule(
             "features are free of cycles", ArchitectureRules.packagesAreFreeOfCycles(BASE_PACKAGE)),
+        rule("lambda types stay at the edge", ArchitectureRules.LAMBDA_TYPES_STAY_AT_THE_EDGE),
         rule("no floating-point fields", ArchitectureRules.NO_FLOATING_POINT_FIELDS),
         rule("no floating-point signatures", ArchitectureRules.NO_FLOATING_POINT_SIGNATURES),
         rule("no floating-point conversions", ArchitectureRules.NO_FLOATING_POINT_CONVERSIONS),
@@ -59,7 +60,7 @@ class ArchitectureTest {
             "framework type in domain",
             ArchitectureRules.DOMAIN_IS_FRAMEWORK_FREE,
             "frameworkdomain",
-            "SpringAnnotatedValue"),
+            "SpringDependentValue"),
         violation(
             "domain using application and adapter",
             ArchitectureRules.DOMAIN_DEPENDS_ON_NO_OUTER_LAYER,
@@ -84,6 +85,11 @@ class ArchitectureTest {
             "cycle",
             "First",
             "Second"),
+        violation(
+            "lambda type in a use case",
+            ArchitectureRules.LAMBDA_TYPES_STAY_AT_THE_EDGE,
+            "lambdaedge",
+            "UseCaseWithLambdaType"),
         violation(
             "floating-point fields",
             ArchitectureRules.NO_FLOATING_POINT_FIELDS,
