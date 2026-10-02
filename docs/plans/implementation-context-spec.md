@@ -33,9 +33,10 @@ Versions marked assumed must be checked against the current stable releases and 
 
 | Input | Value | Status |
 |---|---|---|
-| Java | 25 (LTS) | known (confirmed 2026-10-02); pin the exact release in PR 01 |
-| Spring Boot | Latest stable 4.x | known (confirmed 2026-10-02); pin the exact release in PR 01 |
-| Build | Maven with wrapper (`./mvnw`), wrapped by `make` | known (confirmed 2026-10-02) |
+| Java | 25 (LTS); `java.version` 25 in `pom.xml` | known: pinned in PR 01 |
+| Spring Boot | 4.1.1 (parent POM) | known: pinned in PR 01 |
+| Build | Maven with wrapper (`./mvnw`), wrapped by `make`. A JDK 25 must be on `PATH` or in `JAVA_HOME` | known |
+| Lambda artifact | `target/data-processing-service-lambda.zip`: classes at the root, dependencies under `lib/` | known: built in PR 01 |
 | Formatting | Spotless with google-java-format | assumed |
 | Static analysis | Checkstyle (Google checks), Error Prone, NullAway, JSpecify | assumed |
 | Architecture tests | ArchUnit | assumed |
@@ -44,8 +45,8 @@ Versions marked assumed must be checked against the current stable releases and 
 | CSV parsing | Apache Commons CSV | assumed |
 | JSON | Jackson with strict duplicate detection and `BigDecimal` numbers | assumed |
 | AWS access | AWS SDK for Java v2 (S3, SQS) | assumed |
-| Lambda runtime for the pinned Java version, with SnapStart on arm64 | Must exist in `ap-south-1` | assumed: verify in PR 01; if Java 25 is not available as a managed runtime, pin the newest supported LTS and record it here |
-| Spring on Lambda adapter | AWS Serverless Java Container for Spring Boot | assumed: verify it supports the pinned Spring Boot in PR 01; the fallback is Spring Cloud Function's AWS adapter |
+| Lambda runtime | `java25`, with SnapStart (supported for Java 11 and later) | known: listed in the AWS Lambda runtimes documentation on 2026-10-02; availability in `ap-south-1` is confirmed at first deployment |
+| Spring on Lambda adapter | `com.amazonaws.serverless:aws-serverless-java-container-springboot4` 3.0.2 | known: published on Maven Central; added to the build in PR 05 |
 | Database access | Spring `JdbcClient`, Flyway | known (Flyway agreed in LLD 21) |
 | Terraform | 1.16.4, `required_version = "~> 1.16.4"` | assumed: same pin as data-fetch-service |
 | AWS provider | `hashicorp/aws` 6.61.0 with committed lock file | assumed: same pin as data-fetch-service |
