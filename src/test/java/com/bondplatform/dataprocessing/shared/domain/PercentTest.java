@@ -35,9 +35,29 @@ class PercentTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"", "%", "abc", "8.94%%", "eight"})
+  @ValueSource(
+      strings = {
+        "",
+        "%",
+        "abc",
+        "8.94%%",
+        "eight",
+        "1e2",
+        "1E+3%",
+        "+5",
+        ".5",
+        "5.",
+        "1,234.5",
+        "٨.٩٤",
+        "1e999999999"
+      })
   void rejectsNonNumericText(String text) {
     assertThatIllegalArgumentException().isThrownBy(() -> Percent.parse(text));
+  }
+
+  @Test
+  void rejectsNegativeNumber() {
+    assertThatIllegalArgumentException().isThrownBy(() -> Percent.of(new BigDecimal("-0.01")));
   }
 
   @Test
