@@ -15,6 +15,8 @@ public enum ErrorCode {
   NOT_WHOLE_NUMBER,
   /** A number that must not be negative is below zero. */
   NEGATIVE_VALUE,
+  /** Text that should be a date is not a real calendar date in an accepted format. */
+  INVALID_DATE,
   /** A selected field holds a JSON value of the wrong kind, such as a number where text is due. */
   INVALID_TYPE
 }
