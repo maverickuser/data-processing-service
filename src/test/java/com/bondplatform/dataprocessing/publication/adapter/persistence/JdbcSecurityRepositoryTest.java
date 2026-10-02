@@ -9,8 +9,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.bondplatform.dataprocessing.shared.domain.Isin;
-import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -43,8 +43,8 @@ class JdbcSecurityRepositoryTest {
             eq(JdbcSecurityRepository.INSERT_MISSING), eq(String.class), arguments.capture());
     Object[] sent = arguments.getValue();
     assertThat(sent).hasSize(3);
-    assertThat(sent[0]).isEqualTo(Timestamp.from(RECORDED_AT));
-    assertThat(sent[1]).isEqualTo(Timestamp.from(RECORDED_AT));
+    assertThat(sent[0]).isEqualTo(RECORDED_AT.atOffset(ZoneOffset.UTC));
+    assertThat(sent[1]).isEqualTo(RECORDED_AT.atOffset(ZoneOffset.UTC));
     assertThat((String[]) sent[2]).containsExactly("INE0KH208019", "INE0K0Y08011");
   }
 

@@ -12,15 +12,15 @@ import com.bondplatform.dataprocessing.publication.domain.DailyMarketSummary;
 import com.bondplatform.dataprocessing.publication.domain.SourceReference;
 import com.bondplatform.dataprocessing.shared.domain.ExchangeName;
 import com.bondplatform.dataprocessing.shared.domain.Isin;
+import com.bondplatform.dataprocessing.shared.domain.JobId;
 import com.bondplatform.dataprocessing.shared.domain.TradeDate;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcOperations;
@@ -33,7 +33,7 @@ import org.springframework.jdbc.core.namedparam.SqlParameterSource;
 class JdbcDailyMarketSummaryRepositoryTest {
 
   private static final Instant RECORDED_AT = Instant.parse("2026-01-01T15:00:00Z");
-  private static final UUID REQUEST = UUID.fromString("0b6f0a52-6b1e-4d0c-9f43-2f3a5d1c7e10");
+  private static final JobId REQUEST = JobId.parse("0b6f0a52-6b1e-4d0c-9f43-2f3a5d1c7e10");
 
   private final NamedParameterJdbcOperations jdbc = mock(NamedParameterJdbcOperations.class);
   private final JdbcDailyMarketSummaryRepository repository =
@@ -72,10 +72,10 @@ class JdbcDailyMarketSummaryRepositoryTest {
     assertThat(bound.getValue("numberOfTrades")).isEqualTo(new BigDecimal("1"));
     assertThat(bound.getValue("turnover")).isEqualTo(new BigDecimal("1598800.00"));
     assertThat(bound.getValue("faceValue")).isEqualTo(new BigDecimal("100000.00"));
-    assertThat(bound.getValue("sourceRequestId")).isEqualTo(REQUEST);
+    assertThat(bound.getValue("sourceRequestId")).isEqualTo(REQUEST.value());
     assertThat(bound.getValue("sourceFile")).isEqualTo("BSE_fgroup01012026.csv");
     assertThat(bound.getValue("sourceLocation")).isEqualTo("2");
-    assertThat(bound.getValue("recordedAt")).isEqualTo(Timestamp.from(RECORDED_AT));
+    assertThat(bound.getValue("recordedAt")).isEqualTo(RECORDED_AT.atOffset(ZoneOffset.UTC));
   }
 
   @Test
@@ -115,7 +115,17 @@ class JdbcDailyMarketSummaryRepositoryTest {
     assertThat(batches.getAllValues())
         .extracting(batch -> batch.length)
         .containsExactly(500, 500, 201);
-    assertThat(batches.getAllValues().get(2)[200].getValue("sourceLocation")).isEqualTo("1202");
+    assertThat(batches.getAllValues().get(2)[200].getValue("isin")).isEqualTo("TEST00001200");
+  }
+
+  @Test
+  void writesRowsInKeyOrderKeepingTheCallerOrderForEqualKeys() {
+    repository.upsertAll(List.of(identityOnly(2), identityOnly(1), identityOnly(1)), RECORDED_AT);
+
+    SqlParameterSource[] batch = singleBatch();
+    assertThat(batch)
+        .extracting(bound -> bound.getValue("isin"))
+        .containsExactly("TEST00000001", "TEST00000001", "TEST00000002");
   }
 
   @Test

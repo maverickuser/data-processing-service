@@ -4,9 +4,11 @@ import com.bondplatform.dataprocessing.publication.application.DailyMarketSummar
 import com.bondplatform.dataprocessing.publication.domain.DailyMarketSummary;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -47,6 +49,16 @@ public class JdbcDailyMarketSummaryRepository implements DailyMarketSummaryRepos
         updated_at = EXCLUDED.updated_at
       """;
 
+  /**
+   * Rows are written in key order, so two transactions that touch the same rows lock them in the
+   * same order and cannot deadlock. The sort is stable: summaries with the same key keep the
+   * caller's order.
+   */
+  private static final Comparator<DailyMarketSummary> KEY_ORDER =
+      Comparator.comparing((DailyMarketSummary summary) -> summary.isin().value())
+          .thenComparing(summary -> summary.tradeDate().value())
+          .thenComparing(summary -> summary.exchangeName().value());
+
   private final NamedParameterJdbcOperations jdbc;
 
   /** Creates the repository. */
@@ -56,8 +68,8 @@ public class JdbcDailyMarketSummaryRepository implements DailyMarketSummaryRepos
 
   @Override
   public void upsertAll(Collection<DailyMarketSummary> summaries, Instant recordedAt) {
-    Timestamp timestamp = Timestamp.from(recordedAt);
-    List<DailyMarketSummary> ordered = List.copyOf(summaries);
+    OffsetDateTime timestamp = recordedAt.atOffset(ZoneOffset.UTC);
+    List<DailyMarketSummary> ordered = summaries.stream().sorted(KEY_ORDER).toList();
     for (int start = 0; start < ordered.size(); start += BATCH_SIZE) {
       List<DailyMarketSummary> batch =
           ordered.subList(start, Math.min(start + BATCH_SIZE, ordered.size()));
@@ -69,7 +81,8 @@ public class JdbcDailyMarketSummaryRepository implements DailyMarketSummaryRepos
     }
   }
 
-  private static SqlParameterSource parametersOf(DailyMarketSummary summary, Timestamp recordedAt) {
+  private static SqlParameterSource parametersOf(
+      DailyMarketSummary summary, OffsetDateTime recordedAt) {
     return new MapSqlParameterSource()
         .addValue("isin", summary.isin().value())
         .addValue("tradeDate", summary.tradeDate().value())
@@ -83,7 +96,7 @@ public class JdbcDailyMarketSummaryRepository implements DailyMarketSummaryRepos
         .addValue("numberOfTrades", decimalOf(summary.numberOfTrades()))
         .addValue("turnover", summary.turnover())
         .addValue("faceValue", summary.faceValue())
-        .addValue("sourceRequestId", summary.source().requestId())
+        .addValue("sourceRequestId", summary.source().jobId().value())
         .addValue("sourceFile", summary.source().sourceFile())
         .addValue("sourceLocation", summary.source().location())
         .addValue("recordedAt", recordedAt);

@@ -10,6 +10,7 @@ import com.bondplatform.dataprocessing.publication.domain.DailyMarketSummary;
 import com.bondplatform.dataprocessing.publication.domain.SourceReference;
 import com.bondplatform.dataprocessing.shared.domain.ExchangeName;
 import com.bondplatform.dataprocessing.shared.domain.Isin;
+import com.bondplatform.dataprocessing.shared.domain.JobId;
 import com.bondplatform.dataprocessing.shared.domain.TradeDate;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -20,7 +21,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,7 +35,7 @@ class SecuritiesRepositoriesIT extends PostgresIntegrationTest {
   private static final ExchangeName BSE = ExchangeName.of("BSE");
   private static final Instant FIRST = Instant.parse("2026-01-01T15:00:00Z");
   private static final Instant LATER = Instant.parse("2026-01-02T15:00:00Z");
-  private static final UUID REQUEST = UUID.fromString("0b6f0a52-6b1e-4d0c-9f43-2f3a5d1c7e10");
+  private static final JobId REQUEST = JobId.parse("0b6f0a52-6b1e-4d0c-9f43-2f3a5d1c7e10");
 
   @Autowired private SecurityRepository securities;
   @Autowired private DailyMarketSummaryRepository summaries;
@@ -88,7 +88,7 @@ class SecuritiesRepositoriesIT extends PostgresIntegrationTest {
     assertThat(decimal(row, "traded_volume")).isEqualByComparingTo("14");
     assertThat(decimal(row, "face_value")).isEqualByComparingTo("100000.00");
     assertThat(row.get("security_code")).isEqualTo("976009");
-    assertThat(row.get("source_request_id")).isEqualTo(REQUEST);
+    assertThat(row.get("source_request_id")).isEqualTo(REQUEST.value());
     assertThat(row.get("source_file")).isEqualTo("BSE_fgroup01012026.csv");
     assertThat(row.get("source_location")).isEqualTo("2");
     assertThat(instantOf(row, "created_at")).isEqualTo(FIRST);
@@ -109,6 +109,30 @@ class SecuritiesRepositoriesIT extends PostgresIntegrationTest {
     assertThat(row.get("source_location")).isEqualTo("7");
     assertThat(instantOf(row, "created_at")).isEqualTo(FIRST);
     assertThat(instantOf(row, "updated_at")).isEqualTo(LATER);
+    assertThat(countSummaries()).isEqualTo(1);
+  }
+
+  @Test
+  void everyColumnIsStoredInItsOwnPlaceOnInsertAndOnReplace() {
+    securities.insertMissing(List.of(KNOWN), FIRST);
+
+    summaries.upsertAll(List.of(distinctValues(100)), FIRST);
+    assertEveryColumn(storedSummary(KNOWN), 100);
+
+    summaries.upsertAll(List.of(distinctValues(200)), LATER);
+    assertEveryColumn(storedSummary(KNOWN), 200);
+  }
+
+  @Test
+  void laterSummaryWithTheSameKeyInOneCallWins() {
+    securities.insertMissing(List.of(KNOWN), FIRST);
+
+    summaries.upsertAll(
+        List.of(summary(KNOWN, "1.00", 1, "1000", "2"), summary(KNOWN, "2.00", 2, "1000", "9")),
+        FIRST);
+
+    assertThat(decimal(storedSummary(KNOWN), "open_price")).isEqualByComparingTo("2.00");
+    assertThat(storedSummary(KNOWN).get("source_location")).isEqualTo("9");
     assertThat(countSummaries()).isEqualTo(1);
   }
 
@@ -169,6 +193,41 @@ class SecuritiesRepositoriesIT extends PostgresIntegrationTest {
         null,
         faceValue == null ? null : new BigDecimal(faceValue),
         new SourceReference(REQUEST, "BSE_fgroup01012026.csv", recordNumber));
+  }
+
+  /** A summary whose every optional value is different, derived from one base number. */
+  private static DailyMarketSummary distinctValues(int base) {
+    return new DailyMarketSummary(
+        KNOWN,
+        DATE,
+        BSE,
+        "code-" + base,
+        BigDecimal.valueOf(base + 1),
+        BigDecimal.valueOf(base + 2),
+        BigDecimal.valueOf(base + 3),
+        BigDecimal.valueOf(base + 4),
+        BigInteger.valueOf(base + 5),
+        BigInteger.valueOf(base + 6),
+        BigDecimal.valueOf(base + 7),
+        BigDecimal.valueOf(base + 8),
+        new SourceReference(REQUEST, "file-" + base + ".csv", String.valueOf(base + 9)));
+  }
+
+  private static void assertEveryColumn(Map<String, Object> row, int base) {
+    assertThat(row.get("security_code")).isEqualTo("code-" + base);
+    assertThat(decimal(row, "open_price")).isEqualByComparingTo(BigDecimal.valueOf(base + 1));
+    assertThat(decimal(row, "high_price")).isEqualByComparingTo(BigDecimal.valueOf(base + 2));
+    assertThat(decimal(row, "low_price")).isEqualByComparingTo(BigDecimal.valueOf(base + 3));
+    assertThat(decimal(row, "close_price")).isEqualByComparingTo(BigDecimal.valueOf(base + 4));
+    assertThat(decimal(row, "traded_volume")).isEqualByComparingTo(BigDecimal.valueOf(base + 5));
+    assertThat(decimal(row, "number_of_trades")).isEqualByComparingTo(BigDecimal.valueOf(base + 6));
+    assertThat(decimal(row, "turnover")).isEqualByComparingTo(BigDecimal.valueOf(base + 7));
+    assertThat(decimal(row, "face_value")).isEqualByComparingTo(BigDecimal.valueOf(base + 8));
+    assertThat(row.get("source_request_id")).isEqualTo(REQUEST.value());
+    assertThat(row.get("source_file")).isEqualTo("file-" + base + ".csv");
+    assertThat(row.get("source_location")).isEqualTo(String.valueOf(base + 9));
+    assertThat(row.get("trade_date")).hasToString("2026-01-01");
+    assertThat(row.get("exchange_name")).isEqualTo("BSE");
   }
 
   private Map<String, Object> storedSummary(Isin isin) {

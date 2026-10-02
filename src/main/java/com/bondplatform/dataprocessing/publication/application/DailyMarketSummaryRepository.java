@@ -13,6 +13,7 @@ public interface DailyMarketSummaryRepository {
    *
    * <p>A replacement overwrites every value, including with {@code null}, and updates the source
    * reference. The creation time of an existing summary is kept. Every security must already exist.
+   * If two summaries in one call have the same key, the later one in the collection wins.
    *
    * @param recordedAt stored as the creation time of new summaries and the update time of all
    */

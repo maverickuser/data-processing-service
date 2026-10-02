@@ -2,8 +2,9 @@ package com.bondplatform.dataprocessing.publication.adapter.persistence;
 
 import com.bondplatform.dataprocessing.publication.application.SecurityRepository;
 import com.bondplatform.dataprocessing.shared.domain.Isin;
-import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Collection;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -42,7 +43,7 @@ public class JdbcSecurityRepository implements SecurityRepository {
       return Set.of();
     }
     String[] values = isins.stream().map(Isin::value).distinct().toArray(String[]::new);
-    Timestamp timestamp = Timestamp.from(recordedAt);
+    OffsetDateTime timestamp = recordedAt.atOffset(ZoneOffset.UTC);
     return jdbc.queryForList(INSERT_MISSING, String.class, timestamp, timestamp, values).stream()
         .map(Isin::new)
         .collect(Collectors.toUnmodifiableSet());

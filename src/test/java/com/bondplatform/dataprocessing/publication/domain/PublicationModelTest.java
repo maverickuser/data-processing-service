@@ -6,13 +6,13 @@ import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
 import com.bondplatform.dataprocessing.shared.domain.ExchangeName;
 import com.bondplatform.dataprocessing.shared.domain.Isin;
+import com.bondplatform.dataprocessing.shared.domain.JobId;
 import com.bondplatform.dataprocessing.shared.domain.TradeDate;
-import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class PublicationModelTest {
 
-  private static final UUID REQUEST = UUID.fromString("0b6f0a52-6b1e-4d0c-9f43-2f3a5d1c7e10");
+  private static final JobId REQUEST = JobId.parse("0b6f0a52-6b1e-4d0c-9f43-2f3a5d1c7e10");
   private static final SourceReference SOURCE =
       new SourceReference(REQUEST, "BSE_fgroup01012026.csv", "2");
 
