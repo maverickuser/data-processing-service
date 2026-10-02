@@ -15,6 +15,11 @@ spring:
   flyway:
     # Migrations are run by the migration function during deployment, never at application start.
     enabled: false
+    # Migrations use their own connections rather than the application's one-connection pool:
+    # Flyway holds two at once (one for its history-table lock, one to run the migration).
+    url: ${spring.datasource.url}
+    user: ${spring.datasource.username}
+    password: ${spring.datasource.password}
     default-schema: data_processing
     schemas: data_processing,securities_data
     locations: classpath:db/migration
