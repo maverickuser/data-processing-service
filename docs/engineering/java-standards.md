@@ -42,7 +42,7 @@ SourceObject → CanonicalRecord (stage 1) → MappedRecord (stage 2) → Public
 
 A stage does not know what comes before or after it. This is what makes each stage unit-testable without mocks.
 
-**Rules are a closed set.** Each normalization and validation rule named in a contract (`trim`, `normalizeGroupedNumber`, `nonNegative`, …) is one small class implementing one interface, registered by name. Adding a rule means adding a class and a test, not editing a switch statement.
+**Rules are a closed set.** Each normalization and validation rule named in a contract (`trim`, `normalizeGroupedNumber`, `nonNegative`, …) is one small function implementing one interface (`Normalizer`, `NumberValidator`), registered by name in `RuleRegistry`. Rules of a family sit together as named constants in one holder class (`TextNormalizers`, `NumberNormalizers`, `NumberValidators`) and are tested through the registry by the name contracts use, in one test class per family (`RuleRegistryTest`, `NumberRulesTest`). A rule that grows beyond a few lines or needs its own state becomes a class of its own. Adding a rule means adding a function, a registry entry, and tests, never editing a switch statement. (Amended 2026-10-02: the first version of this rule required one class per rule, which for one-line rules produced more ceremony than clarity.)
 
 ## Naming
 

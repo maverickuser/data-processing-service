@@ -33,6 +33,12 @@ class FieldPresenceTest {
   }
 
   @Test
+  void noBreakSpaceAndByteOrderMarkAreNotWhitespace() {
+    assertThat(FieldPresence.of(new SourceValue.Text("\u00A0"))).isEqualTo(FieldPresence.PRESENT);
+    assertThat(FieldPresence.of(new SourceValue.Text("\uFEFF-"))).isEqualTo(FieldPresence.PRESENT);
+  }
+
+  @Test
   void numbersBooleansObjectsAndArraysArePresent() {
     assertThat(FieldPresence.of(new SourceValue.Decimal(BigDecimal.ZERO)))
         .isEqualTo(FieldPresence.PRESENT);

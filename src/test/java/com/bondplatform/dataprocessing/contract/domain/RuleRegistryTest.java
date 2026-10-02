@@ -71,8 +71,7 @@ class RuleRegistryTest {
   void rejectsRuleNameThatIsNotRegistered() {
     assertThatThrownBy(() -> registry.normalizerFor(List.of("trim", "evaluateExpression")))
         .isInstanceOf(UnknownRuleException.class)
-        .hasMessageContaining("UNKNOWN_RULE")
-        .hasMessageContaining("evaluateExpression");
+        .hasMessage("No normalizer named 'evaluateExpression'");
   }
 
   @Test

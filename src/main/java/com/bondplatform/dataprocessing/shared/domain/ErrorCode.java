@@ -8,7 +8,5 @@ package com.bondplatform.dataprocessing.shared.domain;
  */
 public enum ErrorCode {
   /** A selected field holds a JSON value of the wrong kind, such as a number where text is due. */
-  INVALID_TYPE,
-  /** A contract names a normalization or validation rule that does not exist. */
-  UNKNOWN_RULE
+  INVALID_TYPE
 }

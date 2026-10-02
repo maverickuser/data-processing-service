@@ -44,7 +44,7 @@ public final class RuleRegistry {
   private Normalizer normalizer(String ruleName) {
     Normalizer normalizer = normalizers.get(ruleName);
     if (normalizer == null) {
-      throw new UnknownRuleException(ruleName);
+      throw new UnknownRuleException("normalizer", ruleName, false);
     }
     return normalizer;
   }
