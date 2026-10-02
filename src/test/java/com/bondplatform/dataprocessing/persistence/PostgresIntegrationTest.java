@@ -19,10 +19,18 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * is emptied before each test, so no test sees another's rows. The container is removed when the
  * test JVM exits.
  *
+ * <p>The connection pool holds four connections here, not the one a Lambda has, so that a test can
+ * run several transactions at once.
+ *
  * <p>Without Docker these tests are skipped; {@link DockerAvailabilityIT} makes sure that never
  * happens unnoticed in CI.
  */
-@SpringBootTest(properties = "spring.flyway.enabled=true")
+@SpringBootTest(
+    properties = {
+      "spring.flyway.enabled=true",
+      // More than the one connection a Lambda has, so tests can run transactions side by side.
+      "spring.datasource.hikari.maximum-pool-size=4"
+    })
 @Testcontainers(disabledWithoutDocker = true)
 public abstract class PostgresIntegrationTest {
 

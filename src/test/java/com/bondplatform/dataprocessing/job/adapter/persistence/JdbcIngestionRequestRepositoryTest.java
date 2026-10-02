@@ -93,6 +93,22 @@ class JdbcIngestionRequestRepositoryTest {
   }
 
   @Test
+  void locksTheOrderingGroupUntilTheTransactionEnds() {
+    repository.lockOrderingGroup(new OrderingGroup("isin:INE121A07QY9"));
+
+    ArgumentCaptor<SqlParameterSource> parameters =
+        ArgumentCaptor.forClass(SqlParameterSource.class);
+    verify(jdbc)
+        .query(
+            eq(JdbcIngestionRequestRepository.LOCK_ORDERING_GROUP),
+            parameters.capture(),
+            any(RowMapper.class));
+    assertThat(parameters.getValue().getValue("orderingGroup")).isEqualTo("isin:INE121A07QY9");
+    assertThat(JdbcIngestionRequestRepository.LOCK_ORDERING_GROUP)
+        .contains("pg_advisory_xact_lock", ":orderingGroup");
+  }
+
+  @Test
   void findsByKeyOrEventIdentity() {
     queryReturns(List.of(STORED));
 
