@@ -60,6 +60,8 @@ A documented command must never be a placeholder that returns success. Commands 
 
 | Command | Purpose | Implemented |
 |---|---|---|
+| `make compile` | Compile main and test sources; Error Prone and NullAway findings fail it | yes |
+| `make package` | Build the Lambda artifact without running tests (CI runs them in earlier stages) | yes |
 | `make fmt` | Format Java with google-java-format (Spotless) | yes |
 | `make lint` | Checkstyle, Error Prone with NullAway, ArchUnit rules | yes |
 | `make test-unit` | Unit tests only, no Docker, with a unit-only coverage report | yes |
@@ -117,7 +119,7 @@ Work is 48 small PRs in nine stacks, managed with GitHub Stacked PRs. Install th
 
 ## CI and CD
 
-GitHub Actions only. `ci.yml` runs every gate on every pull request, whatever its base branch, without AWS credentials. Deployment (`deploy.yml`), smoke tests (`smoke.yml`), and application teardown (`destroy-application.yml`) run from `main` and assume an AWS role through OIDC using the `AWS_ROLE_TO_ASSUME` secret. No PR before plan PR 47 applies Terraform or touches real AWS.
+GitHub Actions only. `ci.yml` runs on every pull request, whatever its base branch, without AWS credentials, as staged jobs: compile, then static analysis, unit tests and coverage, and contracts and documentation; integration tests after unit tests; package last. The `ci passed` job succeeds only when every stage did and is the check required on `main`. Deployment (`deploy.yml`), smoke tests (`smoke.yml`), and application teardown (`destroy-application.yml`) run from `main` and assume an AWS role through OIDC using the `AWS_ROLE_TO_ASSUME` secret. No PR before plan PR 47 applies Terraform or touches real AWS.
 
 ## Keeping guidance current
 

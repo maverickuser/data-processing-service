@@ -91,6 +91,18 @@ final class ArchitectureRules {
           .resideInAPackage("com.amazonaws..")
           .allowEmptyShould(true);
 
+  /**
+   * HTTP errors raised by application code go through {@code ProblemDetailFactory}. Throwing the
+   * framework's status exceptions would bypass the documented problem types and could expose
+   * internal text as the response detail.
+   */
+  static final ArchRule NO_FRAMEWORK_STATUS_EXCEPTIONS =
+      noClasses()
+          .should()
+          .dependOnClassesThat()
+          .areAssignableTo("org.springframework.web.ErrorResponseException")
+          .allowEmptyShould(true);
+
   /** U-ARCH-03: no field holds a floating-point value, directly, in an array, or in a generic. */
   static final ArchRule NO_FLOATING_POINT_FIELDS =
       fields().should(notHoldFloatingPoint()).allowEmptyShould(true);

@@ -93,7 +93,7 @@ flowchart LR
 
 | Workflow | Trigger | What it does | AWS credentials |
 |---|---|---|---|
-| `ci.yml` | Every pull request, whatever its base branch, and pushes to `main` | Format check, lint, build, unit tests, coverage gate, integration tests with Docker service containers, contract and docs checks, Terraform `fmt`/`validate`/`test` once `infra/` exists. Uploads test and coverage reports, also on failure | None |
+| `ci.yml` | Every pull request, whatever its base branch, and pushes to `main` | Staged jobs: 1 compile (Error Prone, NullAway); 2 static analysis (format, Checkstyle, architecture rules); 3 unit tests and the coverage gate; 4 integration tests; 5 contracts and documentation; 6 package (uploads the Lambda zip). A later stage runs only when the stages it needs passed. `ci passed` aggregates them and is the required check on `main`. Test and coverage reports are uploaded even on failure. Terraform `fmt`/`validate`/`test` join as a stage once `infra/` exists | None |
 | `package.yml` | Called by `deploy.yml` | Builds the Lambda deployment artifact and uploads it to the artifact bucket, keyed by commit SHA | OIDC role |
 | `deploy.yml` | Push to `main` after PR 47 merges, and manual dispatch | Applies Terraform roots in order (bootstrap → network → persistent → application), publishes new function versions, invokes the migration function and stops on failure, then moves the live alias | OIDC role |
 | `smoke.yml` | After a successful `deploy.yml`, and manual dispatch | Runs smoke cases S-01..05 against the deployed service | OIDC role |
@@ -105,7 +105,7 @@ Rules:
 - AWS access is by OIDC only: the workflow assumes the role in repository secret `AWS_ROLE_TO_ASSUME`, with `permissions: id-token: write`. Region comes from repository variable `aws_region`. No long-lived keys.
 - Workflows that use credentials never run code from an unmerged pull request.
 - Third-party actions are pinned to a commit SHA.
-- Required status checks on `main` are the `ci.yml` jobs. Workflow YAML alone is not branch protection; configure the required checks in repository settings in PR 03.
+- The required status check on `main` is the `ci passed` job of `ci.yml`. Workflow YAML alone is not branch protection; configure the required checks in repository settings in PR 03.
 - One deployment at a time: `deploy.yml` uses a concurrency group and does not cancel a run in progress.
 
 ## Required checks on every PR

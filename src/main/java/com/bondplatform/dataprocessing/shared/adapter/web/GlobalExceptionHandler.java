@@ -25,6 +25,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
   private static final Logger LOG = LoggerFactory.getLogger(GlobalExceptionHandler.class);
   private static final String UNEXPECTED_FAILURE_DETAIL = "The request could not be completed.";
+  private static final String UNKNOWN_ROUTE_DETAIL = "No resource exists at this path.";
 
   private final ProblemDetailFactory problems;
 
@@ -68,8 +69,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     return ResponseEntity.status(type.status()).headers(headers).body(problem);
   }
 
-  /** Returns the framework's own caller-safe explanation, or the type's title when it has none. */
+  /**
+   * Returns the framework's own caller-safe explanation, or the type's title when it has none.
+   *
+   * <p>Only the web framework raises {@link ErrorResponse} exceptions here: an architecture rule
+   * forbids application code from throwing them, so their detail never carries internal text.
+   */
   private static String detailOf(Exception exception, ProblemType type) {
+    if (type == ProblemType.NOT_FOUND) {
+      return UNKNOWN_ROUTE_DETAIL;
+    }
     if (exception instanceof ErrorResponse errorResponse) {
       String detail = errorResponse.getBody().getDetail();
       if (detail != null && !detail.isBlank()) {

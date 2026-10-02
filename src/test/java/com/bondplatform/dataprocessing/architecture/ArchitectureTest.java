@@ -41,6 +41,7 @@ class ArchitectureTest {
         rule(
             "features are free of cycles", ArchitectureRules.packagesAreFreeOfCycles(BASE_PACKAGE)),
         rule("lambda types stay at the edge", ArchitectureRules.LAMBDA_TYPES_STAY_AT_THE_EDGE),
+        rule("no framework status exceptions", ArchitectureRules.NO_FRAMEWORK_STATUS_EXCEPTIONS),
         rule("no floating-point fields", ArchitectureRules.NO_FLOATING_POINT_FIELDS),
         rule("no floating-point signatures", ArchitectureRules.NO_FLOATING_POINT_SIGNATURES),
         rule("no floating-point conversions", ArchitectureRules.NO_FLOATING_POINT_CONVERSIONS),
@@ -90,6 +91,11 @@ class ArchitectureTest {
             ArchitectureRules.LAMBDA_TYPES_STAY_AT_THE_EDGE,
             "lambdaedge",
             "UseCaseWithLambdaType"),
+        violation(
+            "framework status exception",
+            ArchitectureRules.NO_FRAMEWORK_STATUS_EXCEPTIONS,
+            "statusexception",
+            "ThrowsResponseStatusException"),
         violation(
             "floating-point fields",
             ArchitectureRules.NO_FLOATING_POINT_FIELDS,

@@ -68,6 +68,8 @@ class HttpErrorResponsesIT {
     JsonNode response = send(event);
 
     assertThat(response.get("statusCode").asInt()).isEqualTo(status);
+    assertThat(response.get("headers").get("Content-Type").asString())
+        .startsWith("application/problem+json");
     JsonNode problem = JSON.readTree(response.get("body").asString());
     assertThat(problem.get("status").asInt()).isEqualTo(status);
     assertThat(problem.get("code").asString()).isEqualTo(code);
@@ -76,6 +78,21 @@ class HttpErrorResponsesIT {
     assertThat(problem.get("detail").asString()).isNotBlank().doesNotContain("secret");
     assertThat(problem.get("instance").asString()).startsWith("urn:uuid:");
     assertThat(problem.get("correlationId").asString()).isNotBlank();
+  }
+
+  @Test
+  void wrongMethodResponseNamesTheAllowedMethod() throws IOException {
+    JsonNode response = send(HttpApiEvent.post("/test-probe/dated"));
+
+    assertThat(response.get("headers").get("Allow").asString()).isEqualTo("GET");
+  }
+
+  @Test
+  void unknownRouteDetailDoesNotEchoFrameworkInternals() throws IOException {
+    JsonNode response = send(HttpApiEvent.get("/v1/unknown"));
+
+    assertThat(JSON.readTree(response.get("body").asString()).get("detail").asString())
+        .isEqualTo("No resource exists at this path.");
   }
 
   @Test

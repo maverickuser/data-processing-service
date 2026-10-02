@@ -22,6 +22,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 class GlobalExceptionHandlerTest {
 
@@ -85,6 +86,19 @@ class GlobalExceptionHandlerTest {
         .containsEntry("correlationId", CORRELATION_ID.toString());
     assertThat(problem.getDetail()).contains("POST");
     assertThat(log.list).isEmpty();
+  }
+
+  @Test
+  void unknownRouteHasFixedExplanation() {
+    NoResourceFoundException exception =
+        new NoResourceFoundException(HttpMethod.GET, "/v1/unknown", "v1/unknown");
+
+    ResponseEntity<Object> response =
+        handler.handleExceptionInternal(
+            exception, null, HttpHeaders.EMPTY, HttpStatus.NOT_FOUND, request);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    assertThat(problemOf(response).getDetail()).isEqualTo("No resource exists at this path.");
   }
 
   @Test
