@@ -17,7 +17,7 @@ Following Google's small/medium/large split:
 ## Rules
 
 - Test behaviour through the public surface of a class or use case. Do not assert on private state or call order unless the order is the behaviour (for example transaction boundaries).
-- Prefer hand-written in-memory fakes of ports over mocks. Use Mockito only to inject a failure that a fake cannot express simply.
+- Prefer hand-written in-memory fakes of ports over mocks. Use Mockito only to inject a failure that a fake cannot express simply. The one standing exception is JDBC repositories: their unit tests mock Spring's JDBC operations interface and assert the SQL and bound parameters, and every repository method also has a database integration test.
 - Time and IDs are injected. Tests use a fixed `Clock` and a deterministic ID supplier.
 - One behaviour per test. Method names are sentences: `keepsLastValidRowWhenIsinRepeats`.
 - Table-driven cases use JUnit 5 `@ParameterizedTest`. Each row is a named case.

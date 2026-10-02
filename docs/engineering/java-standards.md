@@ -100,6 +100,7 @@ A name that needs `And` or `Or` describes a class or method with two jobs. Split
 - A transaction is opened by the application-layer use case that needs atomicity, with `@Transactional` on that one method. Repositories do not open transactions.
 - Schema changes are Flyway migrations only. A merged migration is never edited; add a new one.
 - Batch writes in bounded chunks inside the single publication transaction.
+- A repository class holds SQL and parameter binding only, no decisions. It depends on Spring's JDBC operations interfaces (`JdbcOperations`, `NamedParameterJdbcOperations`), not the concrete templates, and has two kinds of test (decided 2026-10-02): a unit test with the JDBC interface mocked, which checks the statement text, every bound parameter, batching, and that nothing is sent for empty input, and counts towards the unit coverage gate; and a database integration test, which is what proves the SQL works. The unit test never replaces the integration test.
 
 ## Concurrency and resources
 
