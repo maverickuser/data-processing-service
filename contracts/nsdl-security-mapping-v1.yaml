@@ -1,0 +1,66 @@
+# Stage 2 (canonical -> internal model) for NSDL security data.
+# Consumes validated canonical values only; performs no parsing or normalization.
+id: nsdl-security-mapping
+version: v1
+sourceContract: nsdl-security-json-v1
+
+security:
+  target: securities_data.securities
+  key: { isin: identity.isin }
+  fields:
+    issuer_name: issuerName
+    issuer_ownership_type: issuerOwnershipType
+    instrument_type: instrumentType
+    allotment_date: allotmentDate
+    redemption_date: redemptionDate
+    original_face_value: originalFaceValue
+    collateral_status: collateralStatus
+    asset_coverage_basis: assetCoverageBasis
+    asset_coverage: assetCoverage          # { value, unit: PERCENT }
+    coupon_rate: couponRate                # { value, unit: PERCENT }
+    coupon_type: couponType
+    listing_status: listingStatus
+  persistence:
+    update: onlyWhenValueDiffers           # unchanged value leaves row and updatedAt untouched
+    noValueErasesExisting: false
+    competingValuesInRequest: latestS3LastModifiedThenObjectKey
+    lineage: fieldSources
+
+collections:
+  cash_flows:
+    target: securities_data.security_cash_flows
+    fields: { event_type: eventType, record_date: recordDate, due_date: dueDate, amount_payable: amountPayable, payment_date: paymentDate, new_face_value: newFaceValue }
+  listings:
+    target: securities_data.security_listings
+    fields: { exchange_name: exchangeName, listing_date: listingDate }
+  current_ratings:
+    target: securities_data.security_ratings
+    constants: { sourceCategory: CURRENT }
+    fields: &ratingMap
+      rating_agency_name: ratingAgencyName
+      rating: rating
+      outlook: outlook
+      rating_action: ratingAction
+      rating_date: ratingDate
+      rating_change_date: ratingChangeDate
+      verification_date: verificationDate
+  earlier_ratings:
+    target: securities_data.security_ratings
+    constants: { sourceCategory: EARLIER }
+    fields: *ratingMap
+  collateral_assets:
+    target: securities_data.security_collateral_assets
+    fields: { asset_type: assetType, collateral_description: collateralDescription, remarks: remarks }
+
+collectionPersistence:
+  action: appendOnly
+  identity: [isin, constants, allMappedFields]   # empty values compare equal
+  onDuplicate: skip
+  lineage: canonicalRecordReference
+
+rules:
+  - rule: unsecuredClearsCollateral
+    when: { field: collateralStatus, equals: Unsecured }
+    clearCurrent: [assetCoverageBasis, assetCoverage]
+    suppressAppend: [collateral_assets]
+    onConflictingValues: { error: CONFLICTING_COLLATERAL_DATA }

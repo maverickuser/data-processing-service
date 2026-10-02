@@ -1,0 +1,29 @@
+{
+  "redemptionType": "Full Redemption",
+  "totalQuantity": "-",
+  "netQuantity": "500",
+  "earlyRedemptionDetails": "-",
+  "redemptionPremiumDetails": "N.A.",
+  "maturityType": null,
+  "reasonForRedemption": null,
+  "putIndicator": null,
+  "callIndicator": null,
+  "defaultedRedemption": "Not applicable",
+  "redemption": [],
+  "putOption": {
+    "specifiedDates": "N.A.",
+    "discount": null,
+    "deadlineDate": null,
+    "notificationTime": null,
+    "redemptionDate": "-",
+    "additionalDetails": "-"
+  },
+  "callOption": {
+    "specifiedDates": "N.A.",
+    "discount": null,
+    "deadlineDate": null,
+    "notificationTime": null,
+    "redemptionDate": "-",
+    "additionalDetails": "-"
+  }
+}

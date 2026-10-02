@@ -1,0 +1,1053 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Data Processing Service — Public Read API",
+    "version": "1.0.0",
+    "description": "Design contract, not evidence of deployment. Public, unauthenticated, read-only endpoints for job status, error review, securities and daily market summaries. Responses never expose S3 buckets, keys, version IDs, presigned URLs or upstream source URLs. The upstream submission endpoint is defined separately in data-processing-service-openapi.yaml."
+  },
+  "servers": [
+    {
+      "url": "https://processing.kagent.app"
+    }
+  ],
+  "security": [
+
+  ],
+  "paths": {
+    "/v1/processing-jobs/{jobId}": {
+      "get": {
+        "operationId": "getProcessingJob",
+        "summary": "Job status, counts and a preview of at most five errors",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessingJob"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/v1/processing-jobs/{jobId}/errors": {
+      "get": {
+        "operationId": "listProcessingJobErrors",
+        "summary": "All errors of the job's final attempt, 50 per page",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/JobId"
+          },
+          {
+            "name": "isin",
+            "in": "query",
+            "description": "Optional filter; trimmed and uppercased before matching.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/PageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of errors",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/v1/securities/{isin}": {
+      "get": {
+        "operationId": "getSecurity",
+        "summary": "Combined view of one security",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Isin"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Security found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Security"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/v1/securities/{isin}/daily-market-summaries": {
+      "get": {
+        "operationId": "listSecurityDailyMarketSummaries",
+        "summary": "Daily market summaries for one ISIN, newest trade date first",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Isin"
+          },
+          {
+            "name": "fromDate",
+            "in": "query",
+            "description": "Inclusive lower bound.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "toDate",
+            "in": "query",
+            "description": "Inclusive upper bound.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/PageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of summaries; empty items when none match",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyMarketSummaryPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/v1/daily-market-summaries": {
+      "get": {
+        "operationId": "listDailyMarketSummaries",
+        "summary": "All summaries for one trade date, ordered by ISIN",
+        "parameters": [
+          {
+            "name": "tradeDate",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "exchangeName",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/PageToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of summaries; empty items when none match",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyMarketSummaryPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "JobId": {
+        "name": "jobId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "Isin": {
+        "name": "isin",
+        "in": "path",
+        "required": true,
+        "description": "Trimmed and uppercased before lookup.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "PageToken": {
+        "name": "pageToken",
+        "in": "query",
+        "description": "Opaque cursor from a previous response's nextToken; may expire.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Malformed parameter or invalid page token",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Resource does not exist",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "ServerError": {
+        "description": "Unexpected failure",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Problem": {
+        "type": "object",
+        "description": "RFC 9457 problem details.",
+        "required": [
+          "type",
+          "title",
+          "status"
+        ],
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "string"
+          }
+        }
+      },
+      "Percent": {
+        "type": "object",
+        "required": [
+          "value",
+          "unit"
+        ],
+        "properties": {
+          "value": {
+            "type": "number"
+          },
+          "unit": {
+            "type": "string",
+            "const": "PERCENT"
+          }
+        }
+      },
+      "JobStatus": {
+        "type": "string",
+        "enum": [
+          "QUEUED",
+          "PROCESSING",
+          "RETRY_PENDING",
+          "COMPLETED",
+          "COMPLETED_WITH_ERRORS",
+          "FAILED"
+        ]
+      },
+      "CsvCounts": {
+        "type": "object",
+        "required": [
+          "sourceRecords",
+          "acceptedRows",
+          "invalidRows",
+          "supersededRows"
+        ],
+        "properties": {
+          "sourceRecords": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "acceptedRows": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "invalidRows": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "supersededRows": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        }
+      },
+      "JsonCounts": {
+        "type": "object",
+        "required": [
+          "filesListed",
+          "filesProcessed",
+          "filesSkipped",
+          "scalarFieldsChanged",
+          "collectionEntriesAppended",
+          "fieldsRejected"
+        ],
+        "properties": {
+          "filesListed": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "filesProcessed": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "filesSkipped": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "scalarFieldsChanged": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "collectionEntriesAppended": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "fieldsRejected": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        }
+      },
+      "JobError": {
+        "type": "object",
+        "required": [
+          "errorId",
+          "code",
+          "message",
+          "rawValueTruncated"
+        ],
+        "properties": {
+          "errorId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "examples": [
+              "INVALID_DECIMAL",
+              "CHECKSUM_MISMATCH",
+              "DUPLICATE_ISIN_SUPERSEDED"
+            ]
+          },
+          "isin": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sourceFile": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Basename only."
+          },
+          "recordNumber": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "One-based CSV record number",
+            "header is 1.": null
+          },
+          "field": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "path": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "JSONPath for JSON sources."
+          },
+          "rawValue": {
+            "description": "Original value before normalization, at most 1,000 characters; omitted when no source value exists."
+          },
+          "rawValueTruncated": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "actionTaken": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ProcessingJob": {
+        "type": "object",
+        "required": [
+          "jobId",
+          "dataset",
+          "status",
+          "subject",
+          "attemptCount",
+          "submittedAt",
+          "startedAt",
+          "completedAt",
+          "counts",
+          "errorCount",
+          "errors",
+          "hasMoreErrors",
+          "errorsUrl"
+        ],
+        "properties": {
+          "jobId": {
+            "type": "string"
+          },
+          "dataset": {
+            "type": "string",
+            "examples": [
+              "urn:bond-platform:dataset:bse-debt-trades"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus"
+          },
+          "subject": {
+            "type": "string",
+            "examples": [
+              "exchange/BSE/trade-date/2026-01-01",
+              "isin/INE831R08076"
+            ]
+          },
+          "attemptCount": {
+            "type": "integer"
+          },
+          "submittedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "startedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "counts": {
+            "description": "Null until the job reaches a terminal status.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CsvCounts"
+              },
+              {
+                "$ref": "#/components/schemas/JsonCounts"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "errorCount": {
+            "type": "integer",
+            "description": "Errors of the final attempt; excludes warnings."
+          },
+          "errors": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "$ref": "#/components/schemas/JobError"
+            }
+          },
+          "hasMoreErrors": {
+            "type": "boolean"
+          },
+          "errorsUrl": {
+            "type": "string"
+          }
+        }
+      },
+      "ErrorPage": {
+        "type": "object",
+        "required": [
+          "items",
+          "nextToken"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/JobError"
+            }
+          },
+          "nextToken": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "Rating": {
+        "type": "object",
+        "required": [
+          "ratingAgencyName",
+          "rating",
+          "outlook",
+          "ratingAction",
+          "ratingDate",
+          "ratingChangeDate",
+          "verificationDate",
+          "firstRecordedAt"
+        ],
+        "properties": {
+          "ratingAgencyName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rating": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "outlook": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ratingAction": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ratingDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "ratingChangeDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "verificationDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "firstRecordedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Listing": {
+        "type": "object",
+        "required": [
+          "exchangeName",
+          "listingDate",
+          "firstRecordedAt"
+        ],
+        "properties": {
+          "exchangeName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "listingDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "firstRecordedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CashFlow": {
+        "type": "object",
+        "required": [
+          "eventType",
+          "recordDate",
+          "dueDate",
+          "amountPayable",
+          "paymentDate",
+          "newFaceValue",
+          "firstRecordedAt"
+        ],
+        "properties": {
+          "eventType": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "recordDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "dueDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "amountPayable": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "paymentDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "newFaceValue": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Face value after this event; supplied by NSDL on Partial Redemption events."
+          },
+          "firstRecordedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CollateralAsset": {
+        "type": "object",
+        "required": [
+          "assetType",
+          "collateralDescription",
+          "remarks",
+          "firstRecordedAt"
+        ],
+        "properties": {
+          "assetType": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "collateralDescription": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "remarks": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "firstRecordedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Security": {
+        "type": "object",
+        "required": [
+          "isin",
+          "issuerName",
+          "issuerOwnershipType",
+          "instrumentType",
+          "allotmentDate",
+          "redemptionDate",
+          "originalFaceValue",
+          "couponRate",
+          "couponType",
+          "listingStatus",
+          "collateralStatus",
+          "assetCoverageBasis",
+          "assetCoverage",
+          "collateralAssets",
+          "currentRatings",
+          "ratingHistory",
+          "listings",
+          "cashFlows",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "isin": {
+            "type": "string"
+          },
+          "issuerName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issuerOwnershipType": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "instrumentType": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "allotmentDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "redemptionDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "originalFaceValue": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "NSDL instrument issuePrice."
+          },
+          "couponRate": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Percent"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "couponType": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "listingStatus": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "collateralStatus": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "assetCoverageBasis": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "assetCoverage": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Percent"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "collateralAssets": {
+            "type": "array",
+            "description": "All recorded assets while collateralStatus is Secured; empty while Unsecured.",
+            "items": {
+              "$ref": "#/components/schemas/CollateralAsset"
+            }
+          },
+          "currentRatings": {
+            "type": "array",
+            "description": "One per agency — the CURRENT observation with the latest ratingDate.",
+            "items": {
+              "$ref": "#/components/schemas/Rating"
+            }
+          },
+          "ratingHistory": {
+            "type": "array",
+            "description": "Every other rating observation, newest ratingDate first.",
+            "items": {
+              "$ref": "#/components/schemas/Rating"
+            }
+          },
+          "listings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Listing"
+            }
+          },
+          "cashFlows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CashFlow"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DailyMarketSummary": {
+        "type": "object",
+        "required": [
+          "isin",
+          "tradeDate",
+          "exchangeName",
+          "securityCode",
+          "openPrice",
+          "highPrice",
+          "lowPrice",
+          "closePrice",
+          "tradedVolume",
+          "numberOfTrades",
+          "turnover",
+          "faceValue",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "isin": {
+            "type": "string"
+          },
+          "tradeDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "exchangeName": {
+            "type": "string"
+          },
+          "securityCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "openPrice": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "highPrice": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "lowPrice": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "closePrice": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "tradedVolume": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "numberOfTrades": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "turnover": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "faceValue": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Face value reported by the exchange for that trade date."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DailyMarketSummaryPage": {
+        "type": "object",
+        "required": [
+          "items",
+          "nextToken"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/DailyMarketSummary"
+            }
+          },
+          "nextToken": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

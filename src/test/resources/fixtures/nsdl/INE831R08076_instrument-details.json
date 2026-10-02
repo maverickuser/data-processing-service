@@ -1,0 +1,102 @@
+{
+  "instrumentsVo": {
+    "instruments": {
+      "instrumentDesc": "8.94% UNSECURED   RATED LISTED REDEEMABLE NON CONVERTIBLE SUBORDINATE TIER II DEBENTURES ABHFL SUB DEBT SERIES SD C1 FY2019-20. DATE OF MATURITY 08/06/2029.",
+      "faceValue": 1000000,
+      "issuePrice": 1000000,
+      "totalIssueSize": "200",
+      "amountRaised": null,
+      "greenShoeOption": "No",
+      "totalAllotmentQuantity": 500,
+      "allotmentDate": "10-06-2019",
+      "perpetualInNature": "No",
+      "redemptionDate": "08-06-2029",
+      "tenureYears": "9",
+      "tenureMonths": "11",
+      "tenureDays": "29",
+      "category": "-",
+      "modeOfIssue": "Private Placement",
+      "series": "SD C1 FY2019-20",
+      "trancheNumber": "-",
+      "principalProtected": null,
+      "secured": "Unsecured",
+      "natureOfInstrument": "-",
+      "seniorityRepayment": "Subordinate Tier 1",
+      "securedDetails": "N.A.",
+      "taxFree": "No",
+      "incomeTaxSection": null,
+      "infrastructureCategory": "No",
+      "objectOfIssue": null,
+      "scheduledOpeningDate": "-",
+      "scheduledClosingDate": "-",
+      "actualClosingDate": "-",
+      "intrumentTypeOther": "-"
+    },
+    "creditEnhancement": {
+      "creditEnhancementAvailed": "-",
+      "guarantee": "Not guaranteed",
+      "creditEnhanceDetails": [
+        {
+          "creditEnhancementDetails": "-",
+          "creditEnhancementNature": "-",
+          "creditEnhancementAmount": "-"
+        }
+      ],
+      "guaranteeDetails": [
+        {
+          "guaranteedBy": null,
+          "guaranteeNature": null,
+          "otherDetails": null,
+          "guaranteePercent": null
+        }
+      ]
+    },
+    "furtherIssue": {
+      "furtherIssueVo": [
+        {
+          "serialNo": "-",
+          "allotmentDate": "10-06-2019",
+          "allotmentQuantity": 500,
+          "cumulativeQuantity": 500,
+          "issuePriceRs": "1000000.000",
+          "issueSizeRsCrs": "2000000000",
+          "cummIssueSizeRsCrs": "2000000000",
+          "totalAmountRaisedRsCrs": "-",
+          "cummAmountRaisedRsCrs": "-"
+        }
+      ]
+    },
+    "convertability": {
+      "typeConvertibleA": "Non Convertible",
+      "typeConvertibleB": "Not Applicable",
+      "convertabilityList": [
+        {
+          "conversionInstrumentName": null,
+          "conversionRatio": null,
+          "otherDetails": "N.A."
+        }
+      ]
+    },
+    "assetCover": {
+      "securedFlag": "Unsecured",
+      "assetCvge": null,
+      "assetCvrPercent": null,
+      "assetList": []
+    },
+    "tradePrice": {
+      "tradeList": [
+        {
+          "exchange": "-",
+          "tradeDate": "-",
+          "lastTradedPrice": "-",
+          "avgWeightedPrice": "-",
+          "avgWeightedYield": "-",
+          "turnoverLacs": "-",
+          "dataChart": "-",
+          "fromDate": "-",
+          "toDate": "-"
+        }
+      ]
+    }
+  }
+}

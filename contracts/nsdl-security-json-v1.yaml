@@ -1,0 +1,92 @@
+# Stage 1 (source -> canonical) for urn:bond-platform:dataset:nsdl-security
+# Extracts, normalizes and validates selected values into canonical records.
+# One contract for every JSON file listed in an NSDL manifest. Each path is applied to
+# every file; a path that is absent in a file is "no update". Filenames never select paths.
+# Stage 2 (canonical -> internal model) is nsdl-security-mapping-v1.yaml.
+id: nsdl-security-json
+version: v1
+dataset: urn:bond-platform:dataset:nsdl-security
+format: json
+
+file:
+  encoding: UTF-8
+  acceptBom: true
+  maxCombinedBytes: 10485760
+  duplicateProperties: rejectFile
+  onMalformed: skipFile
+  onChecksumMismatch: skipFile          # CHECKSUM_MISMATCH
+
+identity:
+  isin:
+    from: filename                      # text before the first underscore, or before .json
+    normalize: [trim, uppercase]
+    required: true
+    onMissing: failRequest              # INVALID_SOURCE_FILENAME
+    onMixedAcrossFiles: failRequest
+  payloadIsinPath: $.isin               # optional; mismatch is a warning log only
+
+types:
+  text:    { accept: [string], normalize: [trim] }
+  date:    { accept: [string], formats: [DD-MM-YYYY, YYYY-MM-DD], output: ISO_DATE }
+  decimal: { accept: [number, string], normalize: [trim, normalizeGroupedNumber], validate: [nonNegative], rounding: forbidden }
+  percent: { accept: [number, string], normalize: [trim, stripTrailingPercent], validate: [nonNegative], unit: PERCENT }
+
+presence:
+  noValue: [missing, "null", blank, "-", "N.A."]   # recorded as no-update, never an error
+  onInvalidValue: quarantineField
+
+scalars:
+  issuer_name:            { path: $.issuerName, type: text }
+  issuer_ownership_type:  { path: $.issuerTypeOwner, type: text }
+  instrument_type:        { path: $.instrumentType, type: text }
+  allotment_date:         { path: $.instrumentsVo.instruments.allotmentDate, type: date }
+  redemption_date:        { path: $.instrumentsVo.instruments.redemptionDate, type: date }
+  original_face_value:    { path: $.instrumentsVo.instruments.issuePrice, type: decimal }
+  collateral_status:      { path: $.instrumentsVo.assetCover.securedFlag, type: text }
+  asset_coverage_basis:   { path: $.instrumentsVo.assetCover.assetCvge, type: text }
+  asset_coverage:         { path: $.instrumentsVo.assetCover.assetCvrPercent, type: percent }
+  coupon_rate:            { path: $.coupensVo.couponDetails.couponRate, type: percent }
+  coupon_type:            { path: $.coupensVo.couponDetails.couponType, type: text }
+  listing_status:         { path: $.listingStatus, type: text }
+
+collections:
+  cash_flows:
+    path: $.coupensVo.cashFlowScheduleDetails.cashFlowSchedule[*]
+    fields:
+      event_type:     { path: cashFlowsEvent, type: text }
+      record_date:    { path: recordDate, type: date }
+      due_date:       { path: dueDate, type: date }
+      amount_payable: { path: amountPayable, type: decimal }
+      payment_date:   { path: paymentDate, type: date }
+      new_face_value: { path: newFaceVal, type: decimal }   # populated on Partial Redemption events
+  listings:
+    path: $.listingDetails[*]
+    fields:
+      exchange_name: { path: exchangeName, type: text }
+      listing_date:  { path: listingDate, type: date }
+  current_ratings:
+    path: $.currentRatings[*]
+    fields: &ratingFields
+      rating_agency_name:  { path: creditRatingAgencyName, type: text }
+      rating:              { path: currentRating, type: text }
+      outlook:             { path: outlook, type: text }
+      rating_action:       { path: ratingAction, type: text }
+      rating_date:         { path: creditRatingDate, type: date }
+      rating_change_date:  { path: ratingChangeDate, type: date }
+      verification_date:   { path: dateOfVerification, type: date }
+  earlier_ratings:
+    path: $.earlierRatings[*]
+    fields: *ratingFields
+  collateral_assets:
+    path: $.instrumentsVo.assetCover.assetList[*]
+    fields:
+      asset_type:             { path: assetType, type: text }
+      collateral_description: { path: securityDetails, type: text }
+      remarks:                { path: remarks, type: text }
+
+collectionRules:
+  wrongContainerType: quarantineCollection
+  skipEntryWhenNoValidValue: true
+
+unmappedFiles:
+  note: "{isin}_redemptions.json is listed by the fetch service but has no selected paths in v1."

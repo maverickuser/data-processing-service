@@ -1,0 +1,24 @@
+{
+  "listingStatus": "Listed",
+  "listingDetails": [
+    {
+      "listingDate": "14-06-2019",
+      "listingQuantity": "-",
+      "termSheetLink": "https://www1.nseindia.com/corporates/corporateHome.html?id=recentissues",
+      "listingNotification": "-",
+      "issueType": "-",
+      "exchangeName": "NSE",
+      "allotmentDate": "-"
+    },
+    {
+      "listingDate": "13-06-2019",
+      "listingQuantity": "-",
+      "termSheetLink": "-",
+      "listingNotification": "-",
+      "issueType": "-",
+      "exchangeName": "BSE",
+      "allotmentDate": "-"
+    }
+  ],
+  "earlierListingDetails": []
+}
