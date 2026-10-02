@@ -1,12 +1,12 @@
 package com.bondplatform.dataprocessing.admission.domain;
 
 import com.bondplatform.dataprocessing.contract.domain.DatasetUrn;
+import com.bondplatform.dataprocessing.job.domain.ManifestLocation;
 import com.bondplatform.dataprocessing.job.domain.OrderingGroup;
 import com.bondplatform.dataprocessing.shared.domain.ExchangeName;
 import com.bondplatform.dataprocessing.shared.domain.Isin;
 import com.bondplatform.dataprocessing.shared.domain.TradeDate;
 import java.time.Instant;
-import org.jspecify.annotations.Nullable;
 
 /**
  * A submission that has passed every admission rule: the CloudEvent a producer sent, in typed form.
@@ -31,7 +31,7 @@ public record Submission(
     String runId,
     String fetchEventId,
     Inputs inputs,
-    ManifestReference manifest,
+    ManifestLocation manifest,
     String datasetFingerprint) {
 
   /** Returns the group this submission's job runs in. */
@@ -51,11 +51,4 @@ public record Submission(
     /** The details of one security. */
     record Nsdl(Isin isin) implements Inputs {}
   }
-
-  /**
-   * The exact, immutable S3 object holding the manifest; never a prefix.
-   *
-   * @param versionId the S3 version to read, when the producer pinned one
-   */
-  public record ManifestReference(String bucket, String key, @Nullable String versionId) {}
 }

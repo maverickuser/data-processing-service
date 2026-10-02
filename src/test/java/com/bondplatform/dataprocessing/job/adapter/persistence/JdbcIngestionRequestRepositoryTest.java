@@ -7,7 +7,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.bondplatform.dataprocessing.job.domain.IngestionRequest;
+import com.bondplatform.dataprocessing.job.domain.AcceptedRequest;
 import com.bondplatform.dataprocessing.job.domain.JobStatus;
 import com.bondplatform.dataprocessing.job.domain.OrderingGroup;
 import com.bondplatform.dataprocessing.shared.domain.JobId;
@@ -30,8 +30,8 @@ import org.springframework.jdbc.core.namedparam.SqlParameterSource;
 class JdbcIngestionRequestRepositoryTest {
 
   private static final UUID ID = UUID.fromString("0b6f0a52-6b1e-4d0c-9f43-2f3a5d1c7e10");
-  private static final IngestionRequest STORED =
-      new IngestionRequest(
+  private static final AcceptedRequest STORED =
+      new AcceptedRequest(
           new JobId(ID),
           "run_202",
           "sha256:payload-run_202",
@@ -76,7 +76,7 @@ class JdbcIngestionRequestRepositoryTest {
     assertThat(bound.getValue("sourceContractVersion")).isEqualTo("v1");
     assertThat(bound.getValue("sourceContractHash")).isEqualTo("sha256:source");
     assertThat(bound.getValue("mappingContractId")).isEqualTo("nsdl-security-mapping");
-    assertThat(bound.getValue("mappingContractVersion")).isEqualTo("v1");
+    assertThat(bound.getValue("mappingContractVersion")).isEqualTo("v2");
     assertThat(bound.getValue("mappingContractHash")).isEqualTo("sha256:mapping");
     assertThat(bound.getValue("submittedAt"))
         .isEqualTo(IngestionRequests.SUBMITTED_AT.atOffset(ZoneOffset.UTC));
@@ -96,7 +96,7 @@ class JdbcIngestionRequestRepositoryTest {
   void findsByKeyOrEventIdentity() {
     queryReturns(List.of(STORED));
 
-    List<IngestionRequest> found =
+    List<AcceptedRequest> found =
         repository.findByIdempotencyKeyOrEvent("run_202", "source", "event-1");
 
     SqlParameterSource bound = boundTo(JdbcIngestionRequestRepository.FIND_BY_KEY_OR_EVENT);
@@ -136,7 +136,7 @@ class JdbcIngestionRequestRepositoryTest {
         .contains("event_source = :eventSource AND event_id = :eventId");
   }
 
-  private void queryReturns(List<IngestionRequest> rows) {
+  private void queryReturns(List<AcceptedRequest> rows) {
     when(jdbc.query(any(String.class), any(SqlParameterSource.class), anyRowMapper()))
         .thenReturn(rows);
   }
@@ -149,14 +149,14 @@ class JdbcIngestionRequestRepositoryTest {
   }
 
   @SuppressWarnings("unchecked")
-  private RowMapper<IngestionRequest> capturedRowMapper() {
-    ArgumentCaptor<RowMapper<IngestionRequest>> mapper = ArgumentCaptor.forClass(RowMapper.class);
+  private RowMapper<AcceptedRequest> capturedRowMapper() {
+    ArgumentCaptor<RowMapper<AcceptedRequest>> mapper = ArgumentCaptor.forClass(RowMapper.class);
     verify(jdbc).query(any(String.class), any(SqlParameterSource.class), mapper.capture());
     return mapper.getValue();
   }
 
   @SuppressWarnings("unchecked")
-  private static RowMapper<IngestionRequest> anyRowMapper() {
+  private static RowMapper<AcceptedRequest> anyRowMapper() {
     return any(RowMapper.class);
   }
 }

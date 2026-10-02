@@ -1,7 +1,7 @@
 package com.bondplatform.dataprocessing.job.adapter.persistence;
 
 import com.bondplatform.dataprocessing.job.application.IngestionRequestRepository;
-import com.bondplatform.dataprocessing.job.domain.IngestionRequest;
+import com.bondplatform.dataprocessing.job.domain.AcceptedRequest;
 import com.bondplatform.dataprocessing.job.domain.JobStatus;
 import com.bondplatform.dataprocessing.job.domain.NewIngestionRequest;
 import com.bondplatform.dataprocessing.job.domain.OrderingGroup;
@@ -52,7 +52,7 @@ public class JdbcIngestionRequestRepository implements IngestionRequestRepositor
       ORDER BY acceptance_sequence
       """;
 
-  private static final RowMapper<IngestionRequest> ROW_MAPPER = JdbcIngestionRequestRepository::map;
+  private static final RowMapper<AcceptedRequest> ROW_MAPPER = JdbcIngestionRequestRepository::map;
 
   private final NamedParameterJdbcOperations jdbc;
 
@@ -62,7 +62,7 @@ public class JdbcIngestionRequestRepository implements IngestionRequestRepositor
   }
 
   @Override
-  public Optional<IngestionRequest> insertIfAbsent(NewIngestionRequest request) {
+  public Optional<AcceptedRequest> insertIfAbsent(NewIngestionRequest request) {
     MapSqlParameterSource parameters =
         new MapSqlParameterSource()
             .addValue("id", request.id().value())
@@ -91,7 +91,7 @@ public class JdbcIngestionRequestRepository implements IngestionRequestRepositor
   }
 
   @Override
-  public List<IngestionRequest> findByIdempotencyKeyOrEvent(
+  public List<AcceptedRequest> findByIdempotencyKeyOrEvent(
       String idempotencyKey, String eventSource, String eventId) {
     MapSqlParameterSource parameters =
         new MapSqlParameterSource()
@@ -101,8 +101,8 @@ public class JdbcIngestionRequestRepository implements IngestionRequestRepositor
     return jdbc.query(FIND_BY_KEY_OR_EVENT, parameters, ROW_MAPPER);
   }
 
-  private static IngestionRequest map(ResultSet row, int rowNumber) throws SQLException {
-    return new IngestionRequest(
+  private static AcceptedRequest map(ResultSet row, int rowNumber) throws SQLException {
+    return new AcceptedRequest(
         new JobId(row.getObject("id", UUID.class)),
         row.getString("idempotency_key"),
         row.getString("payload_hash"),

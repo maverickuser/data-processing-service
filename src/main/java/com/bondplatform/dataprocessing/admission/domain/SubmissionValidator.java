@@ -1,9 +1,9 @@
 package com.bondplatform.dataprocessing.admission.domain;
 
 import com.bondplatform.dataprocessing.admission.domain.Submission.Inputs;
-import com.bondplatform.dataprocessing.admission.domain.Submission.ManifestReference;
 import com.bondplatform.dataprocessing.admission.domain.SubmissionError.Code;
 import com.bondplatform.dataprocessing.contract.domain.DatasetUrn;
+import com.bondplatform.dataprocessing.job.domain.ManifestLocation;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -234,7 +234,7 @@ public final class SubmissionValidator {
         .orElse(null);
   }
 
-  private static @Nullable ManifestReference manifest(Map<String, Object> manifest, Faults faults) {
+  private static @Nullable ManifestLocation manifest(Map<String, Object> manifest, Faults faults) {
     faults.onlyProperties(manifest, MANIFEST, Set.of("bucket", "key", "version_id"));
     String bucket = faults.text(manifest, MANIFEST, "bucket");
     if (bucket != null && (bucket.length() < 3 || bucket.length() > 63)) {
@@ -246,7 +246,7 @@ public final class SubmissionValidator {
     }
     String versionId =
         manifest.containsKey("version_id") ? faults.text(manifest, MANIFEST, "version_id") : null;
-    return bucket == null || key == null ? null : new ManifestReference(bucket, key, versionId);
+    return bucket == null || key == null ? null : new ManifestLocation(bucket, key, versionId);
   }
 
   private static void idempotencyKey(
@@ -284,6 +284,6 @@ public final class SubmissionValidator {
       @Nullable String runId,
       @Nullable String fetchEventId,
       @Nullable Inputs inputs,
-      @Nullable ManifestReference manifest,
+      @Nullable ManifestLocation manifest,
       @Nullable String fingerprint) {}
 }

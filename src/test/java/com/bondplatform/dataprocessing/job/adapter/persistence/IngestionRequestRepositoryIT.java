@@ -3,7 +3,7 @@ package com.bondplatform.dataprocessing.job.adapter.persistence;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.bondplatform.dataprocessing.job.application.IngestionRequestRepository;
-import com.bondplatform.dataprocessing.job.domain.IngestionRequest;
+import com.bondplatform.dataprocessing.job.domain.AcceptedRequest;
 import com.bondplatform.dataprocessing.job.domain.JobStatus;
 import com.bondplatform.dataprocessing.job.domain.NewIngestionRequest;
 import com.bondplatform.dataprocessing.persistence.PostgresIntegrationTest;
@@ -24,11 +24,11 @@ class IngestionRequestRepositoryIT extends PostgresIntegrationTest {
   void storesEveryColumnAndReturnsTheQueuedRequest() {
     UUID id = UUID.randomUUID();
 
-    Optional<IngestionRequest> stored =
+    Optional<AcceptedRequest> stored =
         requests.insertIfAbsent(IngestionRequests.nsdl(id, "run_202", "event-202"));
 
     assertThat(stored).isPresent();
-    IngestionRequest request = stored.orElseThrow();
+    AcceptedRequest request = stored.orElseThrow();
     assertThat(request.id().value()).isEqualTo(id);
     assertThat(request.idempotencyKey()).isEqualTo("run_202");
     assertThat(request.payloadHash()).isEqualTo("sha256:payload-run_202");
@@ -65,7 +65,7 @@ class IngestionRequestRepositoryIT extends PostgresIntegrationTest {
         .containsEntry("source_contract_version", "v1")
         .containsEntry("source_contract_hash", "sha256:source")
         .containsEntry("mapping_contract_id", "nsdl-security-mapping")
-        .containsEntry("mapping_contract_version", "v1")
+        .containsEntry("mapping_contract_version", "v2")
         .containsEntry("mapping_contract_hash", "sha256:mapping")
         .containsEntry("attempt_count", 0)
         .containsEntry("error_count", 0);
@@ -73,8 +73,8 @@ class IngestionRequestRepositoryIT extends PostgresIntegrationTest {
 
   @Test
   void laterRequestsHaveLargerAcceptanceSequence() {
-    IngestionRequest first = insert("run_1", "event-1");
-    IngestionRequest second = insert("run_2", "event-2");
+    AcceptedRequest first = insert("run_1", "event-1");
+    AcceptedRequest second = insert("run_2", "event-2");
 
     assertThat(second.acceptanceSequence()).isGreaterThan(first.acceptanceSequence());
   }
@@ -97,8 +97,8 @@ class IngestionRequestRepositoryIT extends PostgresIntegrationTest {
 
   @Test
   void findsNothingOneOrTwoRequestsByKeyOrEvent() {
-    IngestionRequest first = insert("run_1", "event-1");
-    IngestionRequest second = insert("run_2", "event-2");
+    AcceptedRequest first = insert("run_1", "event-1");
+    AcceptedRequest second = insert("run_2", "event-2");
 
     assertThat(requests.findByIdempotencyKeyOrEvent("run_9", SOURCE, "event-9")).isEmpty();
     assertThat(requests.findByIdempotencyKeyOrEvent("run_1", SOURCE, "event-1"))
@@ -108,7 +108,7 @@ class IngestionRequestRepositoryIT extends PostgresIntegrationTest {
     assertThat(requests.findByIdempotencyKeyOrEvent("run_9", "other-source", "event-1")).isEmpty();
   }
 
-  private IngestionRequest insert(String idempotencyKey, String eventId) {
+  private AcceptedRequest insert(String idempotencyKey, String eventId) {
     return requests.insertIfAbsent(request(idempotencyKey, eventId)).orElseThrow();
   }
 

@@ -2,8 +2,8 @@ package com.bondplatform.dataprocessing.job.adapter.persistence;
 
 import com.bondplatform.dataprocessing.contract.domain.ContractId;
 import com.bondplatform.dataprocessing.contract.domain.DatasetUrn;
+import com.bondplatform.dataprocessing.job.domain.ManifestLocation;
 import com.bondplatform.dataprocessing.job.domain.NewIngestionRequest;
-import com.bondplatform.dataprocessing.job.domain.NewIngestionRequest.ManifestLocation;
 import com.bondplatform.dataprocessing.job.domain.NewIngestionRequest.PinnedContractVersions;
 import com.bondplatform.dataprocessing.job.domain.OrderingGroup;
 import com.bondplatform.dataprocessing.shared.domain.Isin;
@@ -37,7 +37,7 @@ final class IngestionRequests {
         new PinnedContractVersions(
             new ContractId("nsdl-security-json", "v1"),
             "sha256:source",
-            new ContractId("nsdl-security-mapping", "v1"),
+            new ContractId("nsdl-security-mapping", "v2"),
             "sha256:mapping"),
         SUBMITTED_AT);
   }

@@ -1,6 +1,6 @@
 package com.bondplatform.dataprocessing.job.application;
 
-import com.bondplatform.dataprocessing.job.domain.IngestionRequest;
+import com.bondplatform.dataprocessing.job.domain.AcceptedRequest;
 import com.bondplatform.dataprocessing.job.domain.NewIngestionRequest;
 import java.util.List;
 import java.util.Optional;
@@ -17,12 +17,12 @@ public interface IngestionRequestRepository {
    *
    * @return the stored request with its acceptance sequence, or empty if one already existed
    */
-  Optional<IngestionRequest> insertIfAbsent(NewIngestionRequest request);
+  Optional<AcceptedRequest> insertIfAbsent(NewIngestionRequest request);
 
   /**
    * Returns the requests that share the idempotency key or the event identity: none, one, or, when
    * a key and an event identity belong to different earlier submissions, two.
    */
-  List<IngestionRequest> findByIdempotencyKeyOrEvent(
+  List<AcceptedRequest> findByIdempotencyKeyOrEvent(
       String idempotencyKey, String eventSource, String eventId);
 }

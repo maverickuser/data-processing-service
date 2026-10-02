@@ -4,7 +4,6 @@ import com.bondplatform.dataprocessing.contract.domain.ContractId;
 import com.bondplatform.dataprocessing.contract.domain.DatasetUrn;
 import com.bondplatform.dataprocessing.shared.domain.JobId;
 import java.time.Instant;
-import org.jspecify.annotations.Nullable;
 
 /**
  * Everything recorded when a submission is accepted.
@@ -33,13 +32,6 @@ public record NewIngestionRequest(
     String submissionEventJson,
     PinnedContractVersions contracts,
     Instant submittedAt) {
-
-  /**
-   * The exact S3 object holding the manifest.
-   *
-   * @param versionId the S3 version to read, when the producer pinned one
-   */
-  public record ManifestLocation(String bucket, String key, @Nullable String versionId) {}
 
   /**
    * The source and mapping contract versions pinned at admission, with their content hashes.
