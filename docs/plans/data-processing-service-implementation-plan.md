@@ -163,7 +163,7 @@ LLD sections 6, 13.1, 13.4, 17, 22.
 
 | PR | Branch | Scope | Test cases | Exit evidence |
 |---|---|---|---|---|
-| 06 | `b/06-text-rules` | `Normalizer`, `Validator`, `RuleRegistry`; `trim`, `blankToNull`, `uppercase`; presence classification; JSON text type check | U-PRES-01, U-TEXT-01 | Unknown rule name is rejected |
+| 06 | `b/06-text-rules` | `Normalizer`, `RuleRegistry`; `trim`, `blankToNull`, `uppercase`; `SourceValue`, `FieldPresence`, `FieldResult`, `TextFieldReader`; the `ErrorCode` enum. `Validator` arrives with the first validation rules in PR 07 | U-PRES-01, U-TEXT-01 | Unknown rule name is rejected |
 | 07 | `b/07-numeric-rules` | Grouped-number normalizer, exact decimal and whole-number parsing, `nonNegative`, `stripTrailingPercent` | U-NUM-01..05 | — |
 | 08 | `b/08-date-rule-and-contract-model` | Strict date parsing; typed `SourceContract` and `MappingContract`; `ContractLoader` | U-DATE-01, U-CON-01 | The four committed contracts load |
 | 09 | `b/09-contract-registry` | `ContractValidator`, `ContractRegistry`, `DatasetUrn`, content hash | U-CON-02..04 | Each invalid-contract fixture fails startup with a specific message |
@@ -202,7 +202,7 @@ LLD sections 4, 5, 7, 8.1, 14; both BSE contracts.
 | PR | Branch | Scope | Test cases | Exit evidence |
 |---|---|---|---|---|
 | 23 | `e/23-csv-structure` | `CsvHeaderResolver` and structural checks over Apache Commons CSV: headers, BOM, blank lines, malformed records | U-CSV-01..07 | — |
-| 24 | `e/24-csv-row-validation` | `CsvRowValidator`, `PriceConsistencyRule`, `CanonicalRecord`, `ValidationIssue`, and the validation `ErrorCode` enum (moved here from PR 05: this is the first PR that produces validation issues) | U-CSV-08..11 | Every applicable error on a row is reported |
+| 24 | `e/24-csv-row-validation` | `CsvRowValidator`, `PriceConsistencyRule`, `CanonicalRecord`, `ValidationIssue`, and the CSV codes of the `ErrorCode` enum (the enum itself starts in PR 06 and each PR adds the codes it first produces) | U-CSV-08..11 | Every applicable error on a row is reported |
 | 25 | `e/25-duplicate-resolution` | `DuplicateIsinResolver`, dispositions, counts; `CsvCanonicalizer` assembling stage 1 | U-DUP-01..03, U-CSV-12 | Golden bhavcopy yields the golden canonical records |
 | 26 | `e/26-canonical-storage` | `S3CanonicalFileWriter` (JSON Lines per run), rejected-record and issue persistence in bounded batches | I-CSV-02 (storage part) | Accepted rows are in S3 only; rejected rows are in both |
 | 27 | `e/27-summary-mapper` | `DailyMarketSummaryMapper` driven by the mapping contract, including `faceValue` | U-MAP-01..02, U-OUT-01 | — |
