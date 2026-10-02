@@ -47,13 +47,20 @@ class NumberRulesTest {
   @ValueSource(
       strings = {
         "1,2,34",
-        "12,34.5,6",
         "1,,234",
         ",123",
-        "1.234,56",
         "1234,567",
         "1,23,45",
-        "1,2345"
+        "1,2345",
+        "0,123",
+        "000,123",
+        "01,234",
+        "00,00,000",
+        "0,00,000",
+        ",",
+        "123,45,678",
+        "100,00,000",
+        "1,234,56,789"
       })
   void rejectsMalformedGroupingWithoutStrippingCommas(String text) {
     assertThat(numberNormalizer.normalize(text))
@@ -65,12 +72,57 @@ class NumberRulesTest {
   // U-NUM-02
   @ParameterizedTest
   @ValueSource(
-      strings = {"1e5", "₹100", "(100)", "abc", "+5", "1.", ".5", "1.2.3", "12 34", "a,bcd"})
+      strings = {
+        "1e5",
+        "₹100",
+        "(100)",
+        "abc",
+        "+5",
+        "1.",
+        ".5",
+        "1.2.3",
+        "12 34",
+        "a,bcd",
+        "12,34.5,6",
+        "1.234,56",
+        "1,234.",
+        "1,234.5.6",
+        "1.5,000",
+        "+1,234",
+        "1,234abc",
+        "$1,000",
+        "-",
+        "١٢٣"
+      })
   void rejectsTextThatIsNotPlainDecimal(String text) {
     assertThat(numberNormalizer.normalize(text))
         .isInstanceOfSatisfying(
             FieldResult.Rejected.class,
             rejected -> assertThat(rejected.code()).isEqualTo(ErrorCode.INVALID_DECIMAL));
+  }
+
+  @ParameterizedTest
+  @CsvSource({"007, 007", "0.50, 0.50", "-0, -0", "00, 00"})
+  void ungroupedLeadingZerosAreLeftForTheParser(String text, String expected) {
+    assertThat(numberNormalizer.normalize(text)).isEqualTo(new FieldResult.Valid<>(expected));
+    assertThat(ExactNumbers.decimal(expected))
+        .isEqualTo(new FieldResult.Valid<>(new BigDecimal(expected)));
+  }
+
+  @Test
+  void numberLongerThanTheLimitIsRejectedQuickly() {
+    String atLimit = "9".repeat(ExactNumbers.MAX_LENGTH);
+    String overLimit = "9".repeat(5_000_000);
+
+    assertThat(ExactNumbers.decimal(atLimit)).isInstanceOf(FieldResult.Valid.class);
+    assertThat(ExactNumbers.decimal(overLimit))
+        .isInstanceOfSatisfying(
+            FieldResult.Rejected.class,
+            rejected -> assertThat(rejected.code()).isEqualTo(ErrorCode.INVALID_DECIMAL));
+    assertThat(ExactNumbers.wholeNumber(overLimit))
+        .isInstanceOfSatisfying(
+            FieldResult.Rejected.class,
+            rejected -> assertThat(rejected.message()).contains("at most 1000 characters"));
   }
 
   @Test
@@ -158,7 +210,15 @@ class NumberRulesTest {
   void rejectsValidatorNameThatIsNotRegistered() {
     assertThatThrownBy(() -> registry.numberValidatorFor(List.of("lessThanSalary")))
         .isInstanceOf(UnknownRuleException.class)
-        .hasMessageContaining("lessThanSalary");
+        .hasMessage("No number validator named 'lessThanSalary'");
+  }
+
+  @Test
+  void namingRuleOfTheWrongKindSaysSo() {
+    assertThatThrownBy(() -> registry.numberValidatorFor(List.of("trim")))
+        .hasMessage("Rule 'trim' exists but is not a number validator");
+    assertThatThrownBy(() -> registry.normalizerFor(List.of("nonNegative")))
+        .hasMessage("Rule 'nonNegative' exists but is not a normalizer");
   }
 
   @ParameterizedTest

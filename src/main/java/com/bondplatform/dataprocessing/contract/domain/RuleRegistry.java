@@ -62,7 +62,8 @@ public final class RuleRegistry {
   private NumberValidator numberValidator(String ruleName) {
     NumberValidator validator = numberValidators.get(ruleName);
     if (validator == null) {
-      throw new UnknownRuleException(ruleName);
+      throw new UnknownRuleException(
+          "number validator", ruleName, normalizers.containsKey(ruleName));
     }
     return validator;
   }
@@ -70,7 +71,8 @@ public final class RuleRegistry {
   private Normalizer normalizer(String ruleName) {
     Normalizer normalizer = normalizers.get(ruleName);
     if (normalizer == null) {
-      throw new UnknownRuleException("normalizer", ruleName, false);
+      throw new UnknownRuleException(
+          "normalizer", ruleName, numberValidators.containsKey(ruleName));
     }
     return normalizer;
   }
