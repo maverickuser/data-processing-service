@@ -1,5 +1,6 @@
 package com.bondplatform.dataprocessing.shared.adapter.web;
 
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.jackson.autoconfigure.JsonMapperBuilderCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,6 +17,7 @@ import tools.jackson.databind.DeserializationFeature;
  * own offset.
  */
 @Configuration(proxyBeanMethods = false)
+@EnableConfigurationProperties(PublicApiProperties.class)
 public class JsonConfiguration {
 
   /**

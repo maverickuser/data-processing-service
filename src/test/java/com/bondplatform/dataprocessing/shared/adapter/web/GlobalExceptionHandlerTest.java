@@ -13,6 +13,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -20,6 +21,7 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.context.request.ServletWebRequest;
@@ -47,6 +49,57 @@ class GlobalExceptionHandlerTest {
   @AfterEach
   void releaseLog() {
     handlerLogger.detachAppender(log);
+  }
+
+  @Test
+  void requestedProblemKeepsItsTypeDetailAndErrors() {
+    ProblemError error = new ProblemError("body", "/subject", null, "REQUIRED", "Is required.");
+
+    ResponseEntity<ProblemDetail> response =
+        handler.requestedProblem(
+            new ApiProblemException(ProblemType.INVALID_REQUEST, "Not valid.", List.of(error)));
+
+    ProblemDetail problem = Objects.requireNonNull(response.getBody());
+    assertThat(response.getStatusCode().value()).isEqualTo(400);
+    assertThat(problem.getDetail()).isEqualTo("Not valid.");
+    assertThat(problem.getProperties())
+        .containsEntry("code", "INVALID_REQUEST")
+        .containsEntry("errors", List.of(error));
+  }
+
+  @Test
+  void requestedProblemWithoutErrorsHasNoErrorsProperty() {
+    ResponseEntity<ProblemDetail> response =
+        handler.requestedProblem(
+            new ApiProblemException(ProblemType.IDEMPOTENCY_CONFLICT, "Already accepted."));
+
+    assertThat(response.getStatusCode().value()).isEqualTo(409);
+    assertThat(Objects.requireNonNull(response.getBody()).getProperties())
+        .containsEntry("code", "IDEMPOTENCY_CONFLICT")
+        .doesNotContainKey("errors");
+  }
+
+  @Test
+  void unreachableOrSlowStorageIsServiceUnavailableWithRetryAfter() {
+    ResponseEntity<ProblemDetail> response =
+        handler.storageUnavailable(
+            new CannotAcquireLockException("group stayed locked: password=secret"));
+
+    ProblemDetail problem = Objects.requireNonNull(response.getBody());
+    assertThat(response.getStatusCode().value()).isEqualTo(503);
+    assertThat(response.getHeaders().getFirst(HttpHeaders.RETRY_AFTER)).isEqualTo("5");
+    assertThat(problem.getProperties()).containsEntry("code", "SERVICE_UNAVAILABLE");
+    assertThat(problem.getDetail()).doesNotContain("secret");
+    assertThat(log.list).singleElement().extracting(ILoggingEvent::getLevel).isEqualTo(Level.WARN);
+  }
+
+  @Test
+  void transactionThatCannotStartIsServiceUnavailable() {
+    ResponseEntity<ProblemDetail> response =
+        handler.storageUnavailable(new CannotCreateTransactionException("no connection"));
+
+    assertThat(response.getStatusCode().value()).isEqualTo(503);
+    assertThat(response.getHeaders().getFirst(HttpHeaders.RETRY_AFTER)).isEqualTo("5");
   }
 
   @Test
