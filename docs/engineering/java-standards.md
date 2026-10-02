@@ -71,7 +71,7 @@ A name that needs `And` or `Or` describes a class or method with two jobs. Split
 - **Guard clauses over nesting.** Return or throw early; keep the main path unindented.
 - **Immutable by default.** Records for data. Fields `final`. Collections exposed as unmodifiable. No setters on domain types.
 - **Values, not primitives, for domain concepts.** `Isin`, `TradeDate`, `Percent`, `JobId` — each validates and normalizes itself in its constructor, so the rule lives in one place.
-- **No nulls across boundaries.** Packages are `@NullMarked` (JSpecify). A method that may have no result returns `Optional`. A nullable parameter or field is annotated `@Nullable` and is the exception.
+- **No nulls across boundaries.** Packages are `@NullMarked` (JSpecify). The annotation is not inherited by sub-packages, so every package has its own `package-info.java` declaring it. A method that may have no result returns `Optional`. A nullable parameter or field is annotated `@Nullable` and is the exception.
 - **Constructor injection only.** No field injection, no `ApplicationContext` lookups, no static mutable state.
 - **Comments say why.** Javadoc on every public type and method states the contract: what it returns, what it rejects, side effects, transactional and ordering guarantees. Inline comments explain a non-obvious reason, never restate the code.
 - **No dead code, no commented-out code, no `TODO` without a linked issue.**
@@ -129,3 +129,7 @@ A name that needs `And` or `Or` describes a class or method with two jobs. Split
 | OWASP Dependency-Check and secret scanning | Supply chain | Findings triaged with a recorded reason |
 
 Suppressions are narrow, sit next to the code, and state why the rule does not apply.
+
+The coverage gate is `scripts/check_coverage.py`, not JaCoCo's own rule, because JaCoCo's minimum is inclusive and the gate must be strict. The only class excluded from coverage is `DataProcessingApplication`, the bootstrap class with no logic, which the context-load integration test exercises. Any further exclusion needs a decision record.
+
+Every compiler warning fails the build (`-Werror`), which is what turns Error Prone's warning-level findings into failures.

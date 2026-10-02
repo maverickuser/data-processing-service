@@ -10,7 +10,7 @@ Last updated: 2026-10-02.
 |---|---|---|---|---|---|---|
 | 00 | — | `docs/implementation-plan` | merged | [#1](https://github.com/maverickuser/data-processing-service/pull/1) | YAML contracts parse; OpenAPI YAML and JSON equivalent; relative links resolve | Documentation baseline and NSDL fixtures |
 | 01 | A Foundation | `a/01-build-skeleton` | in review | — | `make build`, `make test-unit` (local, JDK 25.0.4.1) | Context-load test `DataProcessingApplicationIT`; no unit tests yet because there is no logic |
-| 02 | A Foundation | `a/02-quality-gates` | not started | — | — | |
+| 02 | A Foundation | `a/02-quality-gates` | in review | — | `make fmt lint build`, `make coverage-check COVERAGE_ALLOW_EMPTY=--allow-empty` (local, JDK 25.0.4.1); seeded format, Checkstyle, NullAway, and Error Prone violations each failed their gate | U-ARCH-01..03 (each rule also proven against a violating fixture); 8 coverage-checker tests |
 | 03 | A Foundation | `a/03-ci-workflow` | not started | — | — | |
 | 04 | A Foundation | `a/04-value-types` | not started | — | — | |
 | 05 | A Foundation | `a/05-web-baseline` | not started | — | — | |

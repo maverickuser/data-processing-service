@@ -60,14 +60,16 @@ A documented command must never be a placeholder that returns success. Commands 
 
 | Command | Purpose | Implemented |
 |---|---|---|
-| `make fmt` | Format Java with google-java-format (Spotless) | no |
-| `make lint` | Checkstyle, Error Prone with NullAway, ArchUnit rules | no |
+| `make fmt` | Format Java with google-java-format (Spotless) | yes |
+| `make lint` | Checkstyle, Error Prone with NullAway, ArchUnit rules | yes |
 | `make test-unit` | Unit tests only, no Docker, with a unit-only coverage report | yes |
-| `make coverage-check` | Fail unless unit line coverage is strictly greater than 95% | no |
+| `make coverage-check` | Fail unless unit line coverage is strictly greater than 95% | yes |
 | `make test-integration` | Integration tests against Testcontainers PostgreSQL and LocalStack | no |
 | `make build` | Compile, run all tests, and package the Lambda artifact `target/data-processing-service-lambda.zip` | yes |
 | `make check-contracts` | Validate the four YAML contracts and both OpenAPI documents (YAML and JSON equivalent) | no |
 | `make check-docs` | Validate documentation links | no |
+
+Until plan PR 04 adds the first production logic there are no measurable lines, so run `make coverage-check COVERAGE_ALLOW_EMPTY=--allow-empty`; PR 04 removes the need for that flag.
 
 Unit tests need no Docker and no AWS credentials. Integration tests need Docker only. Nothing on a pull request uses real AWS.
 
