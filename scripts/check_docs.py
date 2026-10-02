@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+"""Verify that every relative link in the repository's Markdown files points at an existing path.
+
+External links (http, https, mailto) and same-page anchors are not checked.
+"""
+
+import os
+import re
+import sys
+
+LINK = re.compile(r"\]\(([^)\s]+)\)")
+SKIPPED_DIRECTORIES = {".git", "target", "node_modules", ".terraform"}
+EXTERNAL_PREFIXES = ("http://", "https://", "mailto:", "#")
+
+
+def markdown_files(root):
+    """Yield the path of every Markdown file under root, skipping build and VCS directories."""
+    for directory, subdirectories, names in os.walk(root):
+        subdirectories[:] = [name for name in subdirectories if name not in SKIPPED_DIRECTORIES]
+        for name in names:
+            if name.endswith(".md"):
+                yield os.path.join(directory, name)
+
+
+def broken_links(path):
+    """Return the relative link targets in the file at path that do not exist."""
+    with open(path, encoding="utf-8") as handle:
+        text = handle.read()
+    broken = []
+    for target in LINK.findall(text):
+        if target.startswith(EXTERNAL_PREFIXES):
+            continue
+        resolved = os.path.normpath(os.path.join(os.path.dirname(path), target.split("#")[0]))
+        if not os.path.exists(resolved):
+            broken.append(target)
+    return broken
+
+
+def main(root="."):
+    failures = [(path, target) for path in markdown_files(root) for target in broken_links(path)]
+    for path, target in failures:
+        print(f"{path}: broken link {target}")
+    if failures:
+        return 1
+    print("Documentation links valid.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(*sys.argv[1:]))
