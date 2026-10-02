@@ -62,6 +62,10 @@
       <version>${aws-serverless-java-container.version}</version>
     </dependency>
     <dependency>
+      <groupId>org.yaml</groupId>
+      <artifactId>snakeyaml</artifactId>
+    </dependency>
+    <dependency>
       <groupId>org.jspecify</groupId>
       <artifactId>jspecify</artifactId>
       <version>${jspecify.version}</version>
@@ -81,6 +85,19 @@
   </dependencies>
 
   <build>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+      </resource>
+      <!-- The processing contracts live at the repository root and are packaged on the classpath. -->
+      <resource>
+        <directory>contracts</directory>
+        <targetPath>contracts</targetPath>
+        <includes>
+          <include>*.yaml</include>
+        </includes>
+      </resource>
+    </resources>
     <plugins>
       <!--
         Error Prone and NullAway run inside every compilation; a finding fails the build.
