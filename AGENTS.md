@@ -64,10 +64,10 @@ A documented command must never be a placeholder that returns success. Commands 
 | `make lint` | Checkstyle, Error Prone with NullAway, ArchUnit rules | yes |
 | `make test-unit` | Unit tests only, no Docker, with a unit-only coverage report | yes |
 | `make coverage-check` | Fail unless unit line coverage is strictly greater than 95% | yes |
-| `make test-integration` | Integration tests against Testcontainers PostgreSQL and LocalStack | no |
+| `make test-integration` | Integration tests only (`*IT`); Testcontainers PostgreSQL and LocalStack are added with the first database PR | yes |
 | `make build` | Compile, run all tests, and package the Lambda artifact `target/data-processing-service-lambda.zip` | yes |
-| `make check-contracts` | Validate the four YAML contracts and both OpenAPI documents (YAML and JSON equivalent) | no |
-| `make check-docs` | Validate documentation links | no |
+| `make check-contracts` | Validate the four YAML contracts and both OpenAPI documents (YAML and JSON equivalent) | yes |
+| `make check-docs` | Validate documentation links | yes |
 
 Until plan PR 04 adds the first production logic there are no measurable lines, so run `make coverage-check COVERAGE_ALLOW_EMPTY=--allow-empty`; PR 04 removes the need for that flag.
 
