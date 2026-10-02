@@ -3,32 +3,35 @@ package com.bondplatform.dataprocessing.persistence;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.jdbc.core.simple.JdbcClient;
 
-/** Test cases I-DB-01 (securities part), I-DB-02, I-DB-03, and I-DB-04. */
+/**
+ * Test cases I-DB-01 (securities part), I-DB-02, I-DB-03, and I-DB-04. The expected shapes below
+ * are the LLD section 22.1 definitions written out; a migration that drifts from them fails here.
+ */
 class SecuritiesSchemaIT extends PostgresIntegrationTest {
 
+  private static final String SCHEMA = "securities_data";
   private static final String ISIN = "INE831R08076";
-  private static final String LINEAGE = "'%s', 'INE831R08076_coupon-details.json', '$.x[0]', now()";
+  private static final List<String> ORIGIN_COLUMNS =
+      List.of(
+          "source_request_id uuid NOT NULL",
+          "source_file text NOT NULL",
+          "source_location text NOT NULL");
 
-  @Autowired private JdbcClient jdbc;
+  private SchemaInspector schema;
 
   @BeforeEach
-  void emptyTables() {
-    jdbc.sql(
-            """
-            TRUNCATE securities_data.security_cash_flows, securities_data.security_listings,
-              securities_data.security_ratings, securities_data.security_collateral_assets,
-              securities_data.security_daily_market_summaries, securities_data.securities
-            """)
-        .update();
+  void createSecurity() {
+    schema = new SchemaInspector(jdbc);
     jdbc.sql(
             "INSERT INTO securities_data.securities (isin, created_at, updated_at)"
                 + " VALUES (?, now(), now())")
@@ -38,109 +41,8 @@ class SecuritiesSchemaIT extends PostgresIntegrationTest {
 
   // I-DB-01
   @Test
-  void tablesHaveExactlyTheColumnsOfTheDesign() {
-    assertThat(columnsOf("securities"))
-        .containsExactly(
-            "isin text NO",
-            "issuer_name text YES",
-            "issuer_ownership_type text YES",
-            "instrument_type text YES",
-            "allotment_date date YES",
-            "redemption_date date YES",
-            "original_face_value numeric YES",
-            "collateral_status text YES",
-            "asset_coverage_basis text YES",
-            "asset_coverage_value numeric YES",
-            "asset_coverage_unit text YES",
-            "coupon_rate_value numeric YES",
-            "coupon_rate_unit text YES",
-            "coupon_type text YES",
-            "listing_status text YES",
-            "field_sources jsonb NO",
-            "created_at timestamp with time zone NO",
-            "updated_at timestamp with time zone NO");
-    assertThat(columnsOf("security_daily_market_summaries"))
-        .containsExactly(
-            "isin text NO",
-            "trade_date date NO",
-            "exchange_name text NO",
-            "security_code text YES",
-            "open_price numeric YES",
-            "high_price numeric YES",
-            "low_price numeric YES",
-            "close_price numeric YES",
-            "traded_volume numeric YES",
-            "number_of_trades numeric YES",
-            "turnover numeric YES",
-            "face_value numeric YES",
-            "source_request_id uuid NO",
-            "source_file text NO",
-            "source_location text NO",
-            "created_at timestamp with time zone NO",
-            "updated_at timestamp with time zone NO");
-    assertThat(columnsOf("security_cash_flows"))
-        .containsExactly(
-            "id uuid NO",
-            "isin text NO",
-            "event_type text YES",
-            "record_date date YES",
-            "due_date date YES",
-            "amount_payable numeric YES",
-            "payment_date date YES",
-            "new_face_value numeric YES",
-            "source_request_id uuid NO",
-            "source_file text NO",
-            "source_location text NO",
-            "first_recorded_at timestamp with time zone NO");
-    assertThat(columnsOf("security_listings"))
-        .containsExactly(
-            "id uuid NO",
-            "isin text NO",
-            "exchange_name text YES",
-            "listing_date date YES",
-            "source_request_id uuid NO",
-            "source_file text NO",
-            "source_location text NO",
-            "first_recorded_at timestamp with time zone NO");
-    assertThat(columnsOf("security_ratings"))
-        .containsExactly(
-            "id uuid NO",
-            "isin text NO",
-            "source_category text NO",
-            "rating_agency_name text YES",
-            "rating text YES",
-            "outlook text YES",
-            "rating_action text YES",
-            "rating_date date YES",
-            "rating_change_date date YES",
-            "verification_date date YES",
-            "source_request_id uuid NO",
-            "source_file text NO",
-            "source_location text NO",
-            "first_recorded_at timestamp with time zone NO");
-    assertThat(columnsOf("security_collateral_assets"))
-        .containsExactly(
-            "id uuid NO",
-            "isin text NO",
-            "asset_type text YES",
-            "collateral_description text YES",
-            "remarks text YES",
-            "source_request_id uuid NO",
-            "source_file text NO",
-            "source_location text NO",
-            "first_recorded_at timestamp with time zone NO");
-  }
-
-  @Test
   void schemaHoldsExactlyTheSixBusinessTables() {
-    List<String> tables =
-        jdbc.sql(
-                "SELECT table_name FROM information_schema.tables"
-                    + " WHERE table_schema = 'securities_data' ORDER BY table_name")
-            .query(String.class)
-            .list();
-
-    assertThat(tables)
+    assertThat(schema.tables(SCHEMA))
         .containsExactly(
             "securities",
             "security_cash_flows",
@@ -150,54 +52,193 @@ class SecuritiesSchemaIT extends PostgresIntegrationTest {
             "security_ratings");
   }
 
-  // I-DB-02
+  // I-DB-01
   @Test
-  void entriesDifferingOnlyByAnEmptyFieldAreOneEntry() {
+  void securitiesTableMatchesTheDesign() {
+    assertThat(schema.columns(SCHEMA, "securities"))
+        .containsExactly(
+            "isin text NOT NULL",
+            "issuer_name text",
+            "issuer_ownership_type text",
+            "instrument_type text",
+            "allotment_date date",
+            "redemption_date date",
+            "original_face_value numeric",
+            "collateral_status text",
+            "asset_coverage_basis text",
+            "asset_coverage_value numeric",
+            "asset_coverage_unit text",
+            "coupon_rate_value numeric",
+            "coupon_rate_unit text",
+            "coupon_type text",
+            "listing_status text",
+            "field_sources jsonb NOT NULL DEFAULT '{}'::jsonb",
+            "created_at timestamp with time zone NOT NULL",
+            "updated_at timestamp with time zone NOT NULL");
+    assertThat(schema.indexes(SCHEMA, "securities"))
+        .containsExactly(
+            "CREATE UNIQUE INDEX securities_pkey ON securities_data.securities"
+                + " USING btree (isin)");
+  }
+
+  // I-DB-01
+  @Test
+  void dailyMarketSummariesTableMatchesTheDesign() {
+    assertThat(schema.columns(SCHEMA, "security_daily_market_summaries"))
+        .containsExactly(
+            "isin text NOT NULL",
+            "trade_date date NOT NULL",
+            "exchange_name text NOT NULL",
+            "security_code text",
+            "open_price numeric",
+            "high_price numeric",
+            "low_price numeric",
+            "close_price numeric",
+            "traded_volume numeric",
+            "number_of_trades numeric",
+            "turnover numeric",
+            "face_value numeric",
+            "source_request_id uuid NOT NULL",
+            "source_file text NOT NULL",
+            "source_location text NOT NULL",
+            "created_at timestamp with time zone NOT NULL",
+            "updated_at timestamp with time zone NOT NULL");
+    assertThat(schema.indexes(SCHEMA, "security_daily_market_summaries"))
+        .containsExactly(
+            "CREATE INDEX security_daily_market_summaries_by_date"
+                + " ON securities_data.security_daily_market_summaries"
+                + " USING btree (trade_date, exchange_name, isin)",
+            "CREATE UNIQUE INDEX security_daily_market_summaries_pkey"
+                + " ON securities_data.security_daily_market_summaries"
+                + " USING btree (isin, trade_date, exchange_name)");
+  }
+
+  // I-DB-01
+  @Test
+  void appendOnlyTablesMatchTheDesign() {
+    assertThat(schema.columns(SCHEMA, "security_cash_flows"))
+        .containsExactlyElementsOf(
+            appendOnlyColumns(
+                "event_type text",
+                "record_date date",
+                "due_date date",
+                "amount_payable numeric",
+                "payment_date date",
+                "new_face_value numeric"));
+    assertThat(schema.columns(SCHEMA, "security_listings"))
+        .containsExactlyElementsOf(appendOnlyColumns("exchange_name text", "listing_date date"));
+    assertThat(schema.columns(SCHEMA, "security_ratings"))
+        .containsExactlyElementsOf(
+            appendOnlyColumns(
+                "source_category text NOT NULL",
+                "rating_agency_name text",
+                "rating text",
+                "outlook text",
+                "rating_action text",
+                "rating_date date",
+                "rating_change_date date",
+                "verification_date date"));
+    assertThat(schema.columns(SCHEMA, "security_collateral_assets"))
+        .containsExactlyElementsOf(
+            appendOnlyColumns("asset_type text", "collateral_description text", "remarks text"));
+  }
+
+  // I-DB-01, I-DB-02
+  @ParameterizedTest
+  @CsvSource(
+      delimiter = '|',
+      textBlock =
+          """
+          security_cash_flows|isin, event_type, record_date, due_date, amount_payable, payment_date, new_face_value
+          security_listings|isin, exchange_name, listing_date
+          security_ratings|isin, source_category, rating_agency_name, rating, outlook, rating_action, rating_date, rating_change_date, verification_date
+          security_collateral_assets|isin, asset_type, collateral_description, remarks
+          """)
+  void appendOnlyTableHasOneUniqueIndexTreatingEmptyValuesAsEqual(String table, String columns) {
+    assertThat(schema.indexes(SCHEMA, table))
+        .containsExactly(
+            "CREATE UNIQUE INDEX %s_distinct_entry ON securities_data.%s USING btree (%s)"
+                    .formatted(table, table, columns)
+                + " NULLS NOT DISTINCT",
+            "CREATE UNIQUE INDEX %s_pkey ON securities_data.%s USING btree (id)"
+                .formatted(table, table));
+  }
+
+  // I-DB-04
+  @Test
+  void everyChildTableRefusesToLoseItsSecurity() {
+    assertThat(schema.foreignKeys(SCHEMA))
+        .containsExactly(
+            "security_cash_flows.isin -> securities.isin ON DELETE RESTRICT",
+            "security_collateral_assets.isin -> securities.isin ON DELETE RESTRICT",
+            "security_daily_market_summaries.isin -> securities.isin ON DELETE RESTRICT",
+            "security_listings.isin -> securities.isin ON DELETE RESTRICT",
+            "security_ratings.isin -> securities.isin ON DELETE RESTRICT");
+  }
+
+  // I-DB-02
+  @ParameterizedTest
+  @CsvSource(
+      delimiter = '|',
+      quoteCharacter = '"',
+      textBlock =
+          """
+          security_cash_flows|event_type|'Interest'
+          security_listings|exchange_name|'NSE'
+          security_collateral_assets|asset_type|'Book Debts'
+          """)
+  void entriesDifferingOnlyByEmptyFieldsAreOneEntry(String table, String column, String value) {
     String insert =
-        "INSERT INTO securities_data.security_cash_flows"
-            + " (id, isin, event_type, due_date, amount_payable, source_request_id, source_file,"
-            + " source_location, first_recorded_at)"
-            + " VALUES (?, ?, 'Interest', DATE '2027-06-08', 89400, "
-            + LINEAGE.formatted(UUID.randomUUID())
-            + ") ON CONFLICT DO NOTHING";
+        "INSERT INTO securities_data.%s (id, isin, %s, %s) VALUES (?, ?, %s, %s)"
+                .formatted(table, column, originColumns(), value, originValues())
+            + " ON CONFLICT DO NOTHING";
 
     int first = jdbc.sql(insert).params(UUID.randomUUID(), ISIN).update();
     int second = jdbc.sql(insert).params(UUID.randomUUID(), ISIN).update();
 
     assertThat(first).isEqualTo(1);
     assertThat(second).isZero();
-    assertThat(count("security_cash_flows")).isEqualTo(1);
+    assertThat(count(table)).isEqualTo(1);
   }
 
   // I-DB-03
   @Test
   void numericallyEqualAmountsAreTheSameEntry() {
     String insert =
-        "INSERT INTO securities_data.security_cash_flows"
-            + " (id, isin, event_type, amount_payable, source_request_id, source_file,"
-            + " source_location, first_recorded_at)"
-            + " VALUES (?, ?, 'Interest', ?::numeric, "
-            + LINEAGE.formatted(UUID.randomUUID())
-            + ") ON CONFLICT DO NOTHING";
+        "INSERT INTO securities_data.security_cash_flows (id, isin, amount_payable, %s)"
+                .formatted(originColumns())
+            + " VALUES (?, ?, ?::numeric, %s) ON CONFLICT DO NOTHING".formatted(originValues());
 
     jdbc.sql(insert).params(UUID.randomUUID(), ISIN, "89400").update();
-    int second = jdbc.sql(insert).params(UUID.randomUUID(), ISIN, "89400.00").update();
-    int different = jdbc.sql(insert).params(UUID.randomUUID(), ISIN, "89400.01").update();
+    int sameValue = jdbc.sql(insert).params(UUID.randomUUID(), ISIN, "89400.00").update();
+    int otherValue = jdbc.sql(insert).params(UUID.randomUUID(), ISIN, "89400.01").update();
 
-    assertThat(second).isZero();
-    assertThat(different).isEqualTo(1);
+    assertThat(sameValue).isZero();
+    assertThat(otherValue).isEqualTo(1);
     assertThat(count("security_cash_flows")).isEqualTo(2);
+  }
+
+  @Test
+  void numericColumnsKeepEveryDigit() {
+    String exact = "123456789012345678901234567890.123456789012345678901234567890";
+    jdbc.sql(
+            "UPDATE securities_data.securities SET original_face_value = ?::numeric WHERE isin = ?")
+        .params(exact, ISIN)
+        .update();
+
+    assertThat(
+            jdbc.sql("SELECT original_face_value::text FROM securities_data.securities")
+                .query(String.class)
+                .single())
+        .isEqualTo(exact);
   }
 
   @Test
   void ratingsWithDifferentSourceCategoriesAreDifferentEntries() {
     String insert =
-        "INSERT INTO securities_data.security_ratings"
-            + " (id, isin, source_category, rating_agency_name, rating, source_request_id,"
-            + " source_file, source_location, first_recorded_at)"
-            + " VALUES (?, ?, ?, 'INDIA RATING', 'AAA', "
-            + LINEAGE.formatted(UUID.randomUUID())
-            + ") ON CONFLICT DO NOTHING";
+        "INSERT INTO securities_data.security_ratings (id, isin, source_category, rating, %s)"
+                .formatted(originColumns())
+            + " VALUES (?, ?, ?, 'AAA', %s) ON CONFLICT DO NOTHING".formatted(originValues());
 
     jdbc.sql(insert).params(UUID.randomUUID(), ISIN, "CURRENT").update();
     jdbc.sql(insert).params(UUID.randomUUID(), ISIN, "EARLIER").update();
@@ -213,11 +254,9 @@ class SecuritiesSchemaIT extends PostgresIntegrationTest {
   @Test
   void securityWithChildRowsCannotBeDeleted() {
     jdbc.sql(
-            "INSERT INTO securities_data.security_listings (id, isin, exchange_name,"
-                + " source_request_id, source_file, source_location, first_recorded_at)"
-                + " VALUES (?, ?, 'NSE', "
-                + LINEAGE.formatted(UUID.randomUUID())
-                + ")")
+            "INSERT INTO securities_data.security_listings (id, isin, exchange_name, %s)"
+                    .formatted(originColumns())
+                + " VALUES (?, ?, 'NSE', %s)".formatted(originValues()))
         .params(UUID.randomUUID(), ISIN)
         .update();
 
@@ -229,48 +268,76 @@ class SecuritiesSchemaIT extends PostgresIntegrationTest {
         .isInstanceOf(DataIntegrityViolationException.class);
   }
 
-  @Test
-  void summaryRejectsNegativeAndFractionalCounts() {
-    String insert =
-        "INSERT INTO securities_data.security_daily_market_summaries"
-            + " (isin, trade_date, exchange_name, traded_volume, open_price, source_request_id,"
-            + " source_file, source_location, created_at, updated_at)"
-            + " VALUES (?, DATE '2026-01-01', ?, ?::numeric, ?::numeric, ?,"
-            + " 'BSE_fgroup01012026.csv', '2', now(), now())";
-
-    assertThat(jdbc.sql(insert).params(ISIN, "BSE", "14", "114200.00", UUID.randomUUID()).update())
-        .isEqualTo(1);
-    assertThatThrownBy(
-            () -> jdbc.sql(insert).params(ISIN, "NSE", "14.5", "1", UUID.randomUUID()).update())
-        .isInstanceOf(DataIntegrityViolationException.class);
-    assertThatThrownBy(
-            () -> jdbc.sql(insert).params(ISIN, "NSE", "14", "-1", UUID.randomUUID()).update())
-        .isInstanceOf(DataIntegrityViolationException.class);
-    assertThatThrownBy(
-            () -> jdbc.sql(insert).params(ISIN, "BSE", "15", "1", UUID.randomUUID()).update())
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "open_price",
+        "high_price",
+        "low_price",
+        "close_price",
+        "traded_volume",
+        "number_of_trades",
+        "turnover",
+        "face_value"
+      })
+  void summaryNumbersCannotBeNegative(String column) {
+    assertThat(insertSummary(column, "0")).isEqualTo(1);
+    assertThatThrownBy(() -> insertSummary(column, "-0.01"))
         .isInstanceOf(DataIntegrityViolationException.class);
   }
 
-  private List<String> columnsOf(String table) {
-    return jdbc
-        .sql(
-            "SELECT column_name, data_type, is_nullable FROM information_schema.columns"
-                + " WHERE table_schema = 'securities_data' AND table_name = ?"
-                + " ORDER BY ordinal_position")
-        .param(table)
-        .query()
-        .listOfRows()
-        .stream()
-        .map(SecuritiesSchemaIT::describe)
-        .toList();
+  @ParameterizedTest
+  @ValueSource(strings = {"traded_volume", "number_of_trades"})
+  void summaryCountsMustBeWholeNumbers(String column) {
+    assertThat(insertSummary(column, "14.00")).isEqualTo(1);
+    assertThatThrownBy(() -> insertSummary(column, "14.5"))
+        .isInstanceOf(DataIntegrityViolationException.class);
   }
 
-  private static String describe(Map<String, Object> column) {
-    return column.get("column_name")
-        + " "
-        + column.get("data_type")
-        + " "
-        + column.get("is_nullable");
+  @ParameterizedTest
+  @CsvSource(
+      delimiter = '|',
+      quoteCharacter = '"',
+      textBlock =
+          """
+          original_face_value|0|-1
+          coupon_rate_unit|'PERCENT'|'FRACTION'
+          asset_coverage_unit|'PERCENT'|'RATIO'
+          """)
+  void securityChecksRejectNegativeFaceValueAndUnknownUnits(
+      String column, String allowed, String refused) {
+    String update = "UPDATE securities_data.securities SET %s = %s WHERE isin = ?";
+
+    assertThat(jdbc.sql(update.formatted(column, allowed)).param(ISIN).update()).isEqualTo(1);
+    assertThatThrownBy(() -> jdbc.sql(update.formatted(column, refused)).param(ISIN).update())
+        .isInstanceOf(DataIntegrityViolationException.class);
+  }
+
+  private int insertSummary(String column, String value) {
+    return jdbc.sql(
+            "INSERT INTO securities_data.security_daily_market_summaries"
+                + " (isin, trade_date, exchange_name, %s, %s, created_at, updated_at)"
+                    .formatted(column, "source_request_id, source_file, source_location")
+                + " VALUES (?, DATE '2026-01-01', ?, ?::numeric, ?, 'BSE_fgroup01012026.csv',"
+                + " '2', now(), now())")
+        .params(ISIN, "X" + UUID.randomUUID(), value, UUID.randomUUID())
+        .update();
+  }
+
+  private static List<String> appendOnlyColumns(String... businessColumns) {
+    List<String> columns = new ArrayList<>(List.of("id uuid NOT NULL", "isin text NOT NULL"));
+    columns.addAll(List.of(businessColumns));
+    columns.addAll(ORIGIN_COLUMNS);
+    columns.add("first_recorded_at timestamp with time zone NOT NULL");
+    return columns;
+  }
+
+  private static String originColumns() {
+    return "source_request_id, source_file, source_location, first_recorded_at";
+  }
+
+  private static String originValues() {
+    return "'%s', 'INE831R08076_coupon-details.json', '$.x[0]', now()".formatted(UUID.randomUUID());
   }
 
   private long count(String table) {

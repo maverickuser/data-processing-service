@@ -1313,7 +1313,7 @@ The four append-only tables share one pattern: UUID `id` primary key, `isin` for
 | `security_ratings` | `source_category` (`CURRENT`/`EARLIER`, NOT NULL), `rating_agency_name`, `rating`, `outlook`, `rating_action`, `rating_date DATE`, `rating_change_date DATE`, `verification_date DATE` |
 | `security_collateral_assets` | `asset_type`, `collateral_description`, `remarks` |
 
-Each also has a plain index on `isin`. `NUMERIC` equality treats `89400` and `89400.00` as the same value, satisfying the normalized-comparison rule.
+The unique index leads with `isin`, so lookups by ISIN use it and no separate index on `isin` is needed. `NUMERIC` equality treats `89400` and `89400.00` as the same value, satisfying the normalized-comparison rule.
 
 ### 22.2 `data_processing`
 

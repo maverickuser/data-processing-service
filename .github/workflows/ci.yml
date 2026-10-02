@@ -107,6 +107,9 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
           cache: maven
       - name: Integration tests
+        env:
+          # Makes DockerAvailabilityIT fail the stage if database tests would be skipped.
+          CI: 'true'
         run: make test-integration
       - name: Upload integration test reports
         if: always()

@@ -12,6 +12,12 @@ spring:
       maximum-pool-size: 1
       minimum-idle: 0
       initialization-fail-timeout: -1
+      # Give up on getting a connection well inside API Gateway's 29-second limit.
+      connection-timeout: 10000
+      data-source-properties:
+        # PostgreSQL driver timeouts, in seconds: opening the connection, and waiting on a reply.
+        connectTimeout: 10
+        socketTimeout: 60
   flyway:
     # Migrations are run by the migration function during deployment, never at application start.
     enabled: false
