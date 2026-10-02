@@ -82,6 +82,7 @@ CREATE TABLE data_processing.rejected_records (
 
 CREATE INDEX rejected_records_by_run ON data_processing.rejected_records (processing_run_id);
 CREATE INDEX rejected_records_by_created_at ON data_processing.rejected_records (created_at);
+CREATE INDEX rejected_records_by_source_file ON data_processing.rejected_records (source_file_id);
 
 CREATE TABLE data_processing.validation_issues (
   id                  UUID PRIMARY KEY,
@@ -104,6 +105,8 @@ CREATE TABLE data_processing.validation_issues (
 CREATE INDEX validation_issues_by_run_and_isin
   ON data_processing.validation_issues (processing_run_id, isin, sequence_number);
 CREATE INDEX validation_issues_by_created_at ON data_processing.validation_issues (created_at);
+CREATE INDEX validation_issues_by_rejected_record
+  ON data_processing.validation_issues (rejected_record_id);
 
 CREATE TABLE data_processing.outbox_events (
   id               UUID PRIMARY KEY,

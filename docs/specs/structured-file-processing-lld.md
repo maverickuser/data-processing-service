@@ -1414,6 +1414,8 @@ CREATE INDEX ON data_processing.validation_issues (processing_run_id, isin, sequ
 CREATE INDEX ON data_processing.validation_issues (created_at);   -- one-year cleanup
 CREATE INDEX ON data_processing.rejected_records (processing_run_id);
 CREATE INDEX ON data_processing.rejected_records (created_at);     -- one-year cleanup
+CREATE INDEX ON data_processing.rejected_records (source_file_id);
+CREATE INDEX ON data_processing.validation_issues (rejected_record_id);  -- cascade deletes
 
 CREATE TABLE data_processing.outbox_events (
   id               UUID PRIMARY KEY,                       -- CloudEvent id for security-details events

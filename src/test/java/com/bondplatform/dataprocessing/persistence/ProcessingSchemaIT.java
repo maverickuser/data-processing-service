@@ -5,14 +5,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
 import java.util.UUID;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.jdbc.core.simple.JdbcClient;
 
 /** Test case I-DB-01 (processing part), and the constraints of the processing tables. */
 class ProcessingSchemaIT extends PostgresIntegrationTest {
+
+  private static final String SCHEMA = "data_processing";
 
   private static final String INSERT_REQUEST =
       """
@@ -28,30 +27,10 @@ class ProcessingSchemaIT extends PostgresIntegrationTest {
          'sha256:s', 'nsdl-security-mapping', 'v1', 'sha256:m', ?, now())
       """;
 
-  @Autowired private JdbcClient jdbc;
-
-  @BeforeEach
-  void emptyTables() {
-    jdbc.sql(
-            """
-            TRUNCATE data_processing.validation_issues, data_processing.rejected_records,
-              data_processing.source_files, data_processing.processing_runs,
-              data_processing.outbox_events, data_processing.ingestion_requests
-            """)
-        .update();
-  }
-
   // I-DB-01
   @Test
   void schemaHoldsTheSixProcessingTablesAndTheMigrationHistory() {
-    List<String> tables =
-        jdbc.sql(
-                "SELECT table_name FROM information_schema.tables"
-                    + " WHERE table_schema = 'data_processing' ORDER BY table_name")
-            .query(String.class)
-            .list();
-
-    assertThat(tables)
+    assertThat(schema().tables(SCHEMA))
         .containsExactly(
             "flyway_schema_history",
             "ingestion_requests",
@@ -67,99 +46,160 @@ class ProcessingSchemaIT extends PostgresIntegrationTest {
   void tablesHaveExactlyTheColumnsOfTheDesign() {
     assertThat(columnsOf("ingestion_requests"))
         .containsExactly(
-            "id uuid NO",
-            "idempotency_key text NO",
-            "payload_hash text NO",
-            "dataset_urn text NO",
-            "subject text NO",
-            "ordering_group text NO",
-            "acceptance_sequence bigint NO",
-            "event_source text NO",
-            "event_id text NO",
-            "run_id text NO",
-            "inputs jsonb NO",
-            "manifest_bucket text NO",
-            "manifest_key text NO",
-            "manifest_version_id text YES",
-            "dataset_fingerprint text NO",
-            "submission_event jsonb NO",
-            "source_contract_id text NO",
-            "source_contract_version text NO",
-            "source_contract_hash text NO",
-            "mapping_contract_id text NO",
-            "mapping_contract_version text NO",
-            "mapping_contract_hash text NO",
-            "status text NO",
-            "attempt_count integer NO",
-            "counts jsonb YES",
-            "error_count integer NO",
-            "submitted_at timestamp with time zone NO",
-            "started_at timestamp with time zone YES",
-            "completed_at timestamp with time zone YES");
+            "id uuid NOT NULL",
+            "idempotency_key text NOT NULL",
+            "payload_hash text NOT NULL",
+            "dataset_urn text NOT NULL",
+            "subject text NOT NULL",
+            "ordering_group text NOT NULL",
+            "acceptance_sequence bigint NOT NULL IDENTITY",
+            "event_source text NOT NULL",
+            "event_id text NOT NULL",
+            "run_id text NOT NULL",
+            "inputs jsonb NOT NULL",
+            "manifest_bucket text NOT NULL",
+            "manifest_key text NOT NULL",
+            "manifest_version_id text",
+            "dataset_fingerprint text NOT NULL",
+            "submission_event jsonb NOT NULL",
+            "source_contract_id text NOT NULL",
+            "source_contract_version text NOT NULL",
+            "source_contract_hash text NOT NULL",
+            "mapping_contract_id text NOT NULL",
+            "mapping_contract_version text NOT NULL",
+            "mapping_contract_hash text NOT NULL",
+            "status text NOT NULL",
+            "attempt_count integer NOT NULL DEFAULT 0",
+            "counts jsonb",
+            "error_count integer NOT NULL DEFAULT 0",
+            "submitted_at timestamp with time zone NOT NULL",
+            "started_at timestamp with time zone",
+            "completed_at timestamp with time zone");
     assertThat(columnsOf("processing_runs"))
         .containsExactly(
-            "id uuid NO",
-            "ingestion_request_id uuid NO",
-            "attempt_number integer NO",
-            "status text NO",
-            "failure_code text YES",
-            "failure_detail text YES",
-            "canonical_object_key text YES",
-            "started_at timestamp with time zone NO",
-            "completed_at timestamp with time zone YES");
+            "id uuid NOT NULL",
+            "ingestion_request_id uuid NOT NULL",
+            "attempt_number integer NOT NULL",
+            "status text NOT NULL",
+            "failure_code text",
+            "failure_detail text",
+            "canonical_object_key text",
+            "started_at timestamp with time zone NOT NULL",
+            "completed_at timestamp with time zone");
     assertThat(columnsOf("source_files"))
         .containsExactly(
-            "id uuid NO",
-            "ingestion_request_id uuid NO",
-            "fetch_job_id text YES",
-            "bucket text NO",
-            "object_key text NO",
-            "file_name text NO",
-            "format text NO",
+            "id uuid NOT NULL",
+            "ingestion_request_id uuid NOT NULL",
+            "fetch_job_id text",
+            "bucket text NOT NULL",
+            "object_key text NOT NULL",
+            "file_name text NOT NULL",
+            "format text NOT NULL",
             "sha256 text NO",
-            "size_bytes bigint NO",
-            "last_modified timestamp with time zone YES",
-            "version_id text YES");
+            "size_bytes bigint NOT NULL",
+            "last_modified timestamp with time zone",
+            "version_id text");
     assertThat(columnsOf("rejected_records"))
         .containsExactly(
-            "id uuid NO",
-            "processing_run_id uuid NO",
-            "source_file_id uuid YES",
-            "isin text YES",
-            "record_number integer YES",
-            "json_path text YES",
-            "disposition text NO",
-            "record jsonb NO",
-            "created_at timestamp with time zone NO");
+            "id uuid NOT NULL",
+            "processing_run_id uuid NOT NULL",
+            "source_file_id uuid",
+            "isin text",
+            "record_number integer",
+            "json_path text",
+            "disposition text NOT NULL",
+            "record jsonb NOT NULL",
+            "created_at timestamp with time zone NOT NULL");
     assertThat(columnsOf("validation_issues"))
         .containsExactly(
-            "id uuid NO",
-            "processing_run_id uuid NO",
-            "rejected_record_id uuid YES",
-            "sequence_number bigint NO",
-            "code text NO",
-            "isin text YES",
-            "source_file_name text YES",
-            "record_number integer YES",
-            "field text YES",
-            "json_path text YES",
-            "raw_value jsonb YES",
-            "message text NO",
-            "action_taken text YES",
-            "created_at timestamp with time zone NO");
+            "id uuid NOT NULL",
+            "processing_run_id uuid NOT NULL",
+            "rejected_record_id uuid",
+            "sequence_number bigint NOT NULL",
+            "code text NOT NULL",
+            "isin text",
+            "source_file_name text",
+            "record_number integer",
+            "field text",
+            "json_path text",
+            "raw_value jsonb",
+            "message text NOT NULL",
+            "action_taken text",
+            "created_at timestamp with time zone NOT NULL");
     assertThat(columnsOf("outbox_events"))
         .containsExactly(
-            "id uuid NO",
-            "destination text NO",
-            "message_group text YES",
-            "ordering_key bigint YES",
-            "payload jsonb NO",
-            "status text NO",
-            "attempt_count integer NO",
-            "next_attempt_at timestamp with time zone NO",
-            "last_error text YES",
-            "created_at timestamp with time zone NO",
-            "delivered_at timestamp with time zone YES");
+            "id uuid NOT NULL",
+            "destination text NOT NULL",
+            "message_group text",
+            "ordering_key bigint",
+            "payload jsonb NOT NULL",
+            "status text NOT NULL",
+            "attempt_count integer NOT NULL DEFAULT 0",
+            "next_attempt_at timestamp with time zone NOT NULL",
+            "last_error text",
+            "created_at timestamp with time zone NOT NULL",
+            "delivered_at timestamp with time zone");
+  }
+
+  // I-DB-01
+  @Test
+  void namedIndexesMatchTheDesign() {
+    assertThat(schema().indexes(SCHEMA, "ingestion_requests"))
+        .contains(
+            "CREATE INDEX ingestion_requests_by_ordering_group"
+                + " ON data_processing.ingestion_requests"
+                + " USING btree (ordering_group, acceptance_sequence)");
+    assertThat(schema().indexes(SCHEMA, "rejected_records"))
+        .containsExactly(
+            "CREATE INDEX rejected_records_by_created_at ON data_processing.rejected_records"
+                + " USING btree (created_at)",
+            "CREATE INDEX rejected_records_by_run ON data_processing.rejected_records"
+                + " USING btree (processing_run_id)",
+            "CREATE INDEX rejected_records_by_source_file ON data_processing.rejected_records"
+                + " USING btree (source_file_id)",
+            "CREATE UNIQUE INDEX rejected_records_pkey ON data_processing.rejected_records"
+                + " USING btree (id)");
+    assertThat(schema().indexes(SCHEMA, "validation_issues"))
+        .contains(
+            "CREATE INDEX validation_issues_by_created_at ON data_processing.validation_issues"
+                + " USING btree (created_at)",
+            "CREATE INDEX validation_issues_by_rejected_record"
+                + " ON data_processing.validation_issues USING btree (rejected_record_id)",
+            "CREATE INDEX validation_issues_by_run_and_isin"
+                + " ON data_processing.validation_issues"
+                + " USING btree (processing_run_id, isin, sequence_number)");
+    assertThat(schema().indexes(SCHEMA, "outbox_events"))
+        .containsExactly(
+            "CREATE INDEX outbox_events_pending ON data_processing.outbox_events"
+                + " USING btree (status, next_attempt_at) WHERE (status = 'PENDING'::text)",
+            "CREATE UNIQUE INDEX outbox_events_pkey ON data_processing.outbox_events"
+                + " USING btree (id)");
+  }
+
+  // I-DB-01
+  @Test
+  void foreignKeysMatchTheDesign() {
+    assertThat(schema().foreignKeys(SCHEMA))
+        .containsExactly(
+            "processing_runs.ingestion_request_id -> ingestion_requests.id ON DELETE NO ACTION",
+            "rejected_records.processing_run_id -> processing_runs.id ON DELETE CASCADE",
+            "rejected_records.source_file_id -> source_files.id ON DELETE NO ACTION",
+            "source_files.ingestion_request_id -> ingestion_requests.id ON DELETE NO ACTION",
+            "validation_issues.processing_run_id -> processing_runs.id ON DELETE CASCADE",
+            "validation_issues.rejected_record_id -> rejected_records.id ON DELETE CASCADE");
+  }
+
+  @Test
+  void requestWithRunsOrSourceFilesCannotBeDeleted() {
+    UUID request = insertRequest("key-1", "event-1", "PROCESSING");
+    insertRun(request, 1);
+
+    assertThatThrownBy(
+            () ->
+                jdbc.sql("DELETE FROM data_processing.ingestion_requests WHERE id = ?")
+                    .param(request)
+                    .update())
+        .isInstanceOf(DataIntegrityViolationException.class);
   }
 
   @Test
@@ -263,14 +303,11 @@ class ProcessingSchemaIT extends PostgresIntegrationTest {
   }
 
   private List<String> columnsOf(String table) {
-    return jdbc.sql(
-            "SELECT column_name || ' ' || data_type || ' ' || is_nullable"
-                + " FROM information_schema.columns"
-                + " WHERE table_schema = 'data_processing' AND table_name = ?"
-                + " ORDER BY ordinal_position")
-        .param(table)
-        .query(String.class)
-        .list();
+    return schema().columns(SCHEMA, table);
+  }
+
+  private SchemaInspector schema() {
+    return new SchemaInspector(jdbc);
   }
 
   private long count(String table) {
