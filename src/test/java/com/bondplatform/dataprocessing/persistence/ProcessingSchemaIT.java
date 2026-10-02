@@ -95,7 +95,7 @@ class ProcessingSchemaIT extends PostgresIntegrationTest {
             "object_key text NOT NULL",
             "file_name text NOT NULL",
             "format text NOT NULL",
-            "sha256 text NO",
+            "sha256 text NOT NULL",
             "size_bytes bigint NOT NULL",
             "last_modified timestamp with time zone",
             "version_id text");
