@@ -1,12 +1,26 @@
 # Local command contract. See AGENTS.md. Each target must do what its comment says.
 MVN := ./mvnw --batch-mode --no-transfer-progress
+COVERAGE_REPORT := target/site/jacoco/jacoco.csv
 
-.PHONY: build test-unit
+.PHONY: fmt lint build test-unit coverage-check
+
+## fmt: format Java sources with google-java-format
+fmt:
+	$(MVN) spotless:apply
+
+## lint: formatting check, Checkstyle, Error Prone with NullAway (in compilation), architecture rules
+lint:
+	$(MVN) spotless:check checkstyle:check test-compile surefire:test -Dtest=ArchitectureTest
 
 ## build: compile, run all tests, and package the Lambda deployment artifact (target/data-processing-service-lambda.zip)
 build:
 	$(MVN) verify
 
-## test-unit: run unit tests only (*Test); no Spring context, Docker, or network
+## test-unit: run unit tests only (*Test) and write the unit coverage report; no Spring context, Docker, or network
 test-unit:
 	$(MVN) test
+
+## coverage-check: fail unless unit line coverage is strictly greater than 95%
+coverage-check: test-unit
+	python3 scripts/test_check_coverage.py
+	python3 scripts/check_coverage.py $(COVERAGE_REPORT) $(COVERAGE_ALLOW_EMPTY)

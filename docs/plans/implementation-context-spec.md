@@ -37,10 +37,10 @@ Versions marked assumed must be checked against the current stable releases and 
 | Spring Boot | 4.1.1 (parent POM) | known: pinned in PR 01 |
 | Build | Maven with wrapper (`./mvnw`), wrapped by `make`. A JDK 25 must be on `PATH` or in `JAVA_HOME` | known |
 | Lambda artifact | `target/data-processing-service-lambda.zip`: classes at the root, dependencies under `lib/` | known: built in PR 01 |
-| Formatting | Spotless with google-java-format | assumed |
-| Static analysis | Checkstyle (Google checks), Error Prone, NullAway, JSpecify | assumed |
-| Architecture tests | ArchUnit | assumed |
-| Coverage | JaCoCo | assumed |
+| Formatting | Spotless Maven plugin 3.10.3 with google-java-format 1.35.0 (1.37.0 fails inside this Spotless release) | known: pinned in PR 02 |
+| Static analysis | Checkstyle 14.3.0 (Google checks), Error Prone 2.50.0, NullAway 0.14.2, JSpecify 1.0.1; `-Werror` | known: pinned in PR 02 |
+| Architecture tests | ArchUnit 1.5.1 | known: pinned in PR 02 |
+| Coverage | JaCoCo 0.8.15 report, gate in `scripts/check_coverage.py` | known: pinned in PR 02 |
 | Tests | JUnit 5, AssertJ, Mockito (sparingly), Testcontainers (PostgreSQL 16, LocalStack) | assumed |
 | CSV parsing | Apache Commons CSV | assumed |
 | JSON | Jackson with strict duplicate detection and `BigDecimal` numbers | assumed |
