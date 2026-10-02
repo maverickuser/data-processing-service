@@ -27,6 +27,7 @@
     <skipUnitTests>false</skipUnitTests>
 
     <jspecify.version>1.0.1</jspecify.version>
+    <aws-serverless-java-container.version>3.0.2</aws-serverless-java-container.version>
     <error-prone.version>2.50.0</error-prone.version>
     <nullaway.version>0.14.2</nullaway.version>
     <archunit.version>1.5.1</archunit.version>
@@ -44,6 +45,22 @@
       <artifactId>spring-boot-starter</artifactId>
     </dependency>
 
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-webmvc</artifactId>
+      <exclusions>
+        <!-- API Gateway is the HTTP server; the embedded server is never started on Lambda. -->
+        <exclusion>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-starter-tomcat</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>com.amazonaws.serverless</groupId>
+      <artifactId>aws-serverless-java-container-springboot4</artifactId>
+      <version>${aws-serverless-java-container.version}</version>
+    </dependency>
     <dependency>
       <groupId>org.jspecify</groupId>
       <artifactId>jspecify</artifactId>
