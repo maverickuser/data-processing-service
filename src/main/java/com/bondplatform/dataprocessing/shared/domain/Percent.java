@@ -1,6 +1,7 @@
 package com.bondplatform.dataprocessing.shared.domain;
 
 import java.math.BigDecimal;
+import java.util.regex.Pattern;
 
 /**
  * An exact, non-negative quantity in percentage points: {@code 8.94} means 8.94 percent, not
@@ -13,6 +14,8 @@ public final class Percent {
 
   /** The unit label carried next to the value in stored and serialized forms. */
   public static final String UNIT = "PERCENT";
+
+  private static final Pattern PLAIN_DECIMAL = Pattern.compile("[0-9]+(\\.[0-9]+)?");
 
   private final BigDecimal value;
 
@@ -35,18 +38,20 @@ public final class Percent {
   /**
    * Parses text such as {@code "8.94"}, {@code "8.94%"}, or {@code " 100 % "}.
    *
-   * @throws IllegalArgumentException if the text is not a non-negative decimal number
+   * <p>The number must be plain ASCII digits with an optional fraction. Signs, scientific notation
+   * ({@code 1e2}), a bare leading or trailing point, and non-ASCII digits are rejected.
+   *
+   * @throws IllegalArgumentException if the text is not such a number
    */
   public static Percent parse(String text) {
     String number = text.strip();
     if (number.endsWith("%")) {
       number = number.substring(0, number.length() - 1).strip();
     }
-    try {
-      return of(new BigDecimal(number));
-    } catch (NumberFormatException e) {
-      throw new IllegalArgumentException("Percent must be a decimal number: " + text, e);
+    if (!PLAIN_DECIMAL.matcher(number).matches()) {
+      throw new IllegalArgumentException("Percent must be a plain decimal number: " + text);
     }
+    return of(new BigDecimal(number));
   }
 
   /** Returns the exact value in percentage points, with the scale it was created with. */

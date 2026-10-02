@@ -1,7 +1,5 @@
 package com.bondplatform.dataprocessing.shared.domain;
 
-import java.util.Locale;
-
 /**
  * A security identifier, normalized so that two spellings of the same ISIN are equal.
  *
@@ -14,7 +12,7 @@ public record Isin(String value) {
 
   /** Rejects a value that is not already normalized; use {@link #of(String)} for raw input. */
   public Isin {
-    if (value.isBlank() || !value.equals(normalize(value))) {
+    if (value.isBlank() || !value.equals(NormalizedText.trimmedUppercase(value))) {
       throw new IllegalArgumentException("ISIN must be non-blank, trimmed, and uppercase");
     }
   }
@@ -25,7 +23,7 @@ public record Isin(String value) {
    * @throws IllegalArgumentException if the text is blank
    */
   public static Isin of(String rawValue) {
-    String normalized = normalize(rawValue);
+    String normalized = NormalizedText.trimmedUppercase(rawValue);
     if (normalized.isEmpty()) {
       throw new IllegalArgumentException("ISIN must not be blank");
     }
@@ -35,9 +33,5 @@ public record Isin(String value) {
   @Override
   public String toString() {
     return value;
-  }
-
-  private static String normalize(String rawValue) {
-    return rawValue.strip().toUpperCase(Locale.ROOT);
   }
 }

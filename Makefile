@@ -23,7 +23,7 @@ test-unit:
 ## coverage-check: fail unless unit line coverage is strictly greater than 95%
 coverage-check: test-unit
 	python3 scripts/test_check_coverage.py
-	python3 scripts/check_coverage.py $(COVERAGE_REPORT) $(COVERAGE_ALLOW_EMPTY)
+	python3 scripts/check_coverage.py $(COVERAGE_REPORT)
 
 ## test-integration: run integration tests only (*IT); needs Docker once tests use Testcontainers
 test-integration:
