@@ -69,8 +69,6 @@ A documented command must never be a placeholder that returns success. Commands 
 | `make check-contracts` | Validate the four YAML contracts and both OpenAPI documents (YAML and JSON equivalent) | yes |
 | `make check-docs` | Validate documentation links | yes |
 
-Until plan PR 04 adds the first production logic there are no measurable lines, so run `make coverage-check COVERAGE_ALLOW_EMPTY=--allow-empty`; PR 04 removes the need for that flag.
-
 Unit tests need no Docker and no AWS credentials. Integration tests need Docker only. Nothing on a pull request uses real AWS.
 
 ## Implementation invariants

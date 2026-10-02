@@ -35,7 +35,7 @@ jobs:
         run: make lint
 
       - name: Unit tests and coverage gate
-        run: make coverage-check COVERAGE_ALLOW_EMPTY=--allow-empty
+        run: make coverage-check
 
       - name: Integration tests
         run: make test-integration
