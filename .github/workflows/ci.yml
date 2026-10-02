@@ -74,7 +74,7 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
           cache: maven
       - name: Unit tests and the strict 95% coverage gate
-        run: make coverage-check COVERAGE_ALLOW_EMPTY=--allow-empty
+        run: make coverage-check
       - name: Upload unit test and coverage reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
