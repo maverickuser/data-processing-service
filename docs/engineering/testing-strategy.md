@@ -140,7 +140,8 @@ Following Google's small/medium/large split:
 |---|---|
 | U-ARCH-01 | `domain` packages import no Spring, AWS SDK, or JDBC types |
 | U-ARCH-02 | No feature depends on another feature's adapters; no package cycles |
-| U-ARCH-03 | Production code uses no `float`, `double`, `Instant.now()`, `LocalDate.now()`, or `UUID.randomUUID()` outside the designated suppliers |
+| U-ARCH-03 | Production code has no floating-point fields, signatures, or conversions, and reads the system clock or generates random UUIDs only in `shared.supplier` (every `java.time` `now()` without a `Clock`, `Clock.system*`, `System.currentTimeMillis`, `new Date()`, `UUID.randomUUID()`) |
+| U-ARCH-04 | Every package is `@NullMarked`; Lambda and API Gateway types appear only in `lambda` and adapter packages |
 
 ## Integration test cases
 

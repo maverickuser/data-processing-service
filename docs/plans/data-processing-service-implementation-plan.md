@@ -122,7 +122,7 @@ Base package `com.bondplatform.dataprocessing`. Each feature has `domain`, `appl
 
 | Package | Principal types |
 |---|---|
-| `shared` | `Isin`, `TradeDate`, `ExchangeName`, `Percent`, `JobId`, `IdSupplier`, `ErrorCode`, `ProblemDetailFactory` |
+| `shared` | `Isin`, `TradeDate`, `ExchangeName`, `Percent`, `JobId`, `IdSupplier`, `ProblemType`, `ProblemDetailFactory`, `GlobalExceptionHandler` |
 | `contract` | `SourceContract`, `MappingContract`, `ContractLoader`, `ContractValidator`, `ContractRegistry`, `ContractVersion`, `DatasetUrn`, `RuleRegistry`, `Normalizer`, `Validator` |
 | `admission` | `SubmissionController`, `SubmissionEvent`, `SubmissionValidator`, `AdmitSubmission`, `AdmissionReceipt` |
 | `job` | `IngestionRequest`, `ProcessingRun`, `JobStatus`, `RunOutcome`, `OrderingGroup`, `RunJob`, `DatasetHandler`, `RetryPolicy`, `IngestionRequestRepository`, `ProcessingRunRepository` |
@@ -155,7 +155,7 @@ LLD sections 1, 15.
 | 02 | `a/02-quality-gates` | Spotless/google-java-format, Checkstyle, Error Prone with NullAway and JSpecify, JaCoCo strict >95% rule, ArchUnit suite; `make fmt lint coverage-check` | U-ARCH-01..03 | A seeded violation of each gate fails it; coverage fixture proves 95.0% fails |
 | 03 | `a/03-ci-workflow` | `.github/workflows/ci.yml`, `scripts/check_docs`, `scripts/check_contracts`, `make check-docs check-contracts test-integration`, Testcontainers base; required checks configured | — | CI green on a stacked PR whose base is not `main`; reports uploaded on a forced failure |
 | 04 | `a/04-value-types` | `Isin`, `TradeDate`, `ExchangeName`, `Percent`, `JobId`, clock and `IdSupplier` | U-VAL-01..02 | — |
-| 05 | `a/05-web-baseline` | `ErrorCode`, `ProblemDetailFactory`, one `@RestControllerAdvice`, exact-decimal and UTC JSON configuration, `ApiGatewayHandler` translating API Gateway HTTP API events to the Spring web layer | I-READ-08 (serialisation part) | An API Gateway event fixture for an unknown route returns a `404` problem response through the handler |
+| 05 | `a/05-web-baseline` | `ProblemType`, `ProblemDetailFactory`, one `@RestControllerAdvice`, exact-decimal and UTC JSON configuration, `ApiGatewayHandler` translating API Gateway HTTP API events to the Spring web layer | I-READ-08 (serialisation part) | An API Gateway event fixture for an unknown route returns a `404` problem response through the handler |
 
 ## Stack B — Contracts and schema
 
@@ -202,7 +202,7 @@ LLD sections 4, 5, 7, 8.1, 14; both BSE contracts.
 | PR | Branch | Scope | Test cases | Exit evidence |
 |---|---|---|---|---|
 | 23 | `e/23-csv-structure` | `CsvHeaderResolver` and structural checks over Apache Commons CSV: headers, BOM, blank lines, malformed records | U-CSV-01..07 | — |
-| 24 | `e/24-csv-row-validation` | `CsvRowValidator`, `PriceConsistencyRule`, `CanonicalRecord` and `ValidationIssue` | U-CSV-08..11 | Every applicable error on a row is reported |
+| 24 | `e/24-csv-row-validation` | `CsvRowValidator`, `PriceConsistencyRule`, `CanonicalRecord`, `ValidationIssue`, and the validation `ErrorCode` enum (moved here from PR 05: this is the first PR that produces validation issues) | U-CSV-08..11 | Every applicable error on a row is reported |
 | 25 | `e/25-duplicate-resolution` | `DuplicateIsinResolver`, dispositions, counts; `CsvCanonicalizer` assembling stage 1 | U-DUP-01..03, U-CSV-12 | Golden bhavcopy yields the golden canonical records |
 | 26 | `e/26-canonical-storage` | `S3CanonicalFileWriter` (JSON Lines per run), rejected-record and issue persistence in bounded batches | I-CSV-02 (storage part) | Accepted rows are in S3 only; rejected rows are in both |
 | 27 | `e/27-summary-mapper` | `DailyMarketSummaryMapper` driven by the mapping contract, including `faceValue` | U-MAP-01..02, U-OUT-01 | — |

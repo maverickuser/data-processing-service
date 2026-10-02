@@ -17,25 +17,25 @@ import java.io.OutputStream;
  */
 public class ApiGatewayHandler implements RequestStreamHandler {
 
-  private final HttpEventProxy proxy;
+  private final HttpEventServer server;
 
   /** Used by Lambda: starts the application context. */
   public ApiGatewayHandler() {
     this(startApplication());
   }
 
-  /** Creates a handler over an existing proxy. */
-  ApiGatewayHandler(HttpEventProxy proxy) {
-    this.proxy = proxy;
+  /** Creates a handler that serves events with the given server. */
+  ApiGatewayHandler(HttpEventServer server) {
+    this.server = server;
   }
 
   @Override
   public void handleRequest(InputStream event, OutputStream response, Context context)
       throws IOException {
-    proxy.proxy(event, response, context);
+    server.serve(event, response, context);
   }
 
-  private static HttpEventProxy startApplication() {
+  private static HttpEventServer startApplication() {
     try {
       return SpringBootLambdaContainerHandler.getHttpApiV2ProxyHandler(
               DataProcessingApplication.class)
@@ -47,9 +47,9 @@ public class ApiGatewayHandler implements RequestStreamHandler {
 
   /** Serves one API Gateway HTTP API event, reading it from and writing the result to streams. */
   @FunctionalInterface
-  interface HttpEventProxy {
+  interface HttpEventServer {
 
     /** Reads the event, handles it, and writes the API Gateway response. */
-    void proxy(InputStream event, OutputStream response, Context context) throws IOException;
+    void serve(InputStream event, OutputStream response, Context context) throws IOException;
   }
 }

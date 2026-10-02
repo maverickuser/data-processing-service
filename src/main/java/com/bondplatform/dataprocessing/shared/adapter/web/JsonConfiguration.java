@@ -9,6 +9,11 @@ import tools.jackson.databind.DeserializationFeature;
 /**
  * JSON conventions for every request and response: numbers are exact and never pass through
  * floating point.
+ *
+ * <p>Timestamps need no configuration because response models carry recorded times only as {@link
+ * java.time.Instant}, which is always written in UTC ({@code 2026-09-27T14:31:02Z}). Do not put
+ * {@code OffsetDateTime} or {@code ZonedDateTime} in a response model: they are written with their
+ * own offset.
  */
 @Configuration(proxyBeanMethods = false)
 public class JsonConfiguration {

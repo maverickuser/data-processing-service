@@ -1,6 +1,7 @@
 package com.bondplatform.dataprocessing.shared.adapter.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 import java.net.URI;
 import java.util.UUID;
@@ -27,5 +28,24 @@ class ProblemDetailFactoryTest {
     assertThat(problem.getProperties())
         .containsEntry("code", "INVALID_REQUEST")
         .containsEntry("correlationId", CORRELATION_ID.toString());
+  }
+
+  @Test
+  void readsBackTheCorrelationIdOfItsOwnProblems() {
+    ProblemDetail problem = factory.create(ProblemType.NOT_FOUND, "No such job.");
+
+    assertThat(ProblemDetailFactory.correlationIdOf(problem)).isEqualTo(CORRELATION_ID.toString());
+  }
+
+  @Test
+  void rejectsProblemsItDidNotCreate() {
+    ProblemDetail withoutProperties = ProblemDetail.forStatus(500);
+    ProblemDetail withOtherProperties = ProblemDetail.forStatus(500);
+    withOtherProperties.setProperty("code", "INTERNAL_ERROR");
+
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> ProblemDetailFactory.correlationIdOf(withoutProperties));
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> ProblemDetailFactory.correlationIdOf(withOtherProperties));
   }
 }

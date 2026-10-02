@@ -1,23 +1,30 @@
 package com.bondplatform.dataprocessing.shared.adapter.web;
 
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.servlet.NoHandlerFoundException;
-import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 /**
- * Turns exceptions that escape a controller into problem-details responses.
+ * Turns every exception that escapes a controller into a problem-details response.
  *
- * <p>This is the only place that converts exceptions to HTTP errors, and the only place an
- * unexpected exception is logged.
+ * <p>Errors the web framework detects itself (unknown route, unsupported method or media type,
+ * missing or malformed input) keep their own status and are given this service's problem shape.
+ * Anything else is an unexpected failure: it becomes {@code 500} and is logged here, once.
  */
 @RestControllerAdvice
-public class GlobalExceptionHandler {
+public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
   private static final Logger LOG = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+  private static final String UNEXPECTED_FAILURE_DETAIL = "The request could not be completed.";
 
   private final ProblemDetailFactory problems;
 
@@ -26,26 +33,49 @@ public class GlobalExceptionHandler {
     this.problems = problems;
   }
 
-  /** Responds {@code 404} when no route matches the request. */
-  @ExceptionHandler({NoHandlerFoundException.class, NoResourceFoundException.class})
-  public ProblemDetail handleUnknownRoute(Exception exception) {
-    return problems.create(ProblemType.NOT_FOUND, "No resource exists at this path.");
-  }
-
   /**
-   * Responds {@code 500} for anything unexpected. The cause is logged with the correlation
-   * identifier and never shown to the caller.
+   * Responds {@code 500} to a failure nothing else handles. The cause is logged with the
+   * correlation identifier and is never shown to the caller.
    */
   @ExceptionHandler(Exception.class)
-  public ProblemDetail handleUnexpected(Exception exception) {
-    ProblemDetail problem =
-        problems.create(ProblemType.INTERNAL_ERROR, "The request could not be completed.");
-    LOG.error("Unexpected failure, correlationId={}", correlationIdOf(problem), exception);
+  public ProblemDetail unexpectedFailure(Exception exception) {
+    ProblemDetail problem = problems.create(ProblemType.INTERNAL_ERROR, UNEXPECTED_FAILURE_DETAIL);
+    LOG.error(
+        "Unexpected failure, correlationId={}",
+        ProblemDetailFactory.correlationIdOf(problem),
+        exception);
     return problem;
   }
 
-  private static Object correlationIdOf(ProblemDetail problem) {
-    var properties = problem.getProperties();
-    return properties == null ? "unknown" : properties.getOrDefault("correlationId", "unknown");
+  /**
+   * Gives a framework-detected error this service's problem shape while keeping its status and
+   * headers, for example {@code Allow} on {@code 405}.
+   */
+  @Override
+  protected ResponseEntity<Object> handleExceptionInternal(
+      Exception exception,
+      @Nullable Object body,
+      HttpHeaders headers,
+      HttpStatusCode status,
+      WebRequest request) {
+    ProblemType type = ProblemType.forFrameworkStatus(status.value());
+    if (type == ProblemType.INTERNAL_ERROR) {
+      return ResponseEntity.status(type.status())
+          .headers(headers)
+          .body(unexpectedFailure(exception));
+    }
+    ProblemDetail problem = problems.create(type, detailOf(exception, type));
+    return ResponseEntity.status(type.status()).headers(headers).body(problem);
+  }
+
+  /** Returns the framework's own caller-safe explanation, or the type's title when it has none. */
+  private static String detailOf(Exception exception, ProblemType type) {
+    if (exception instanceof ErrorResponse errorResponse) {
+      String detail = errorResponse.getBody().getDetail();
+      if (detail != null && !detail.isBlank()) {
+        return detail;
+      }
+    }
+    return type.title() + ".";
   }
 }
