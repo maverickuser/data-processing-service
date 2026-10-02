@@ -235,8 +235,8 @@ class SecuritiesSchemaIT extends PostgresIntegrationTest {
         "INSERT INTO securities_data.security_daily_market_summaries"
             + " (isin, trade_date, exchange_name, traded_volume, open_price, source_request_id,"
             + " source_file, source_location, created_at, updated_at)"
-            + " VALUES (?, DATE '2026-01-01', ?, ?::numeric, ?::numeric, ?, 'BSE_fgroup01012026.csv',"
-            + " '2', now(), now())";
+            + " VALUES (?, DATE '2026-01-01', ?, ?::numeric, ?::numeric, ?,"
+            + " 'BSE_fgroup01012026.csv', '2', now(), now())";
 
     assertThat(jdbc.sql(insert).params(ISIN, "BSE", "14", "114200.00", UUID.randomUUID()).update())
         .isEqualTo(1);
