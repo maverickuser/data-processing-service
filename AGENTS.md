@@ -32,7 +32,6 @@ Do not resolve a contradiction between documents by inventing behaviour. Name th
 contracts/                      four YAML processing contracts, packaged as classpath resources
 docs/                           specs, plans, engineering standards, decision records
 infra/bootstrap                 Terraform state bucket
-infra/network                   shared VPC, subnets, NAT, endpoints (consumed by this service and data-fetch-service)
 infra/persistent                RDS PostgreSQL, canonical-file S3 bucket (never destroyed by the application workflow)
 infra/application               Lambda functions, API Gateway, SQS queues, schedules, alarms, DNS, IAM (disposable)
 src/main/java/com/bondplatform/dataprocessing/
@@ -51,6 +50,8 @@ src/main/java/com/bondplatform/dataprocessing/
 src/main/resources/db/migration Flyway migrations for securities_data and data_processing
 src/test/java                   unit tests (*Test) and integration tests (*IT)
 ```
+
+The network (VPC, subnets, NAT gateway, endpoints, Lambda security groups) is not in this repository. It is owned by [cloud-platform-network](https://github.com/maverickuser/cloud-platform-network); this service's deployment calls that repository's reusable workflow and its Terraform reads the network state. Never define network resources here.
 
 Each feature package has `domain` (pure Java, no framework imports), `application` (use cases and ports), and `adapter` (web, persistence, AWS) sub-packages. Dependencies point inward: adapter → application → domain. ArchUnit tests enforce this.
 

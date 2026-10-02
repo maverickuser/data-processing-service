@@ -21,7 +21,7 @@ Decisions preserved throughout:
 - Exact arithmetic; no floating point.
 - Public unauthenticated read APIs. Submission requires AWS IAM authorization (SigV4) at API Gateway, granted only to the fetch service's delivery role.
 - Jobs run in parallel across ordering groups and in order within a group; worker concurrency is capped at 10 and each execution environment holds one database connection.
-- One environment, `prod`, in `ap-south-1`. Terraform in four roots: bootstrap, network, persistent, application.
+- One environment, `prod`, in `ap-south-1`. Terraform in three roots here: bootstrap, persistent, application. The shared network (VPC, subnets, NAT gateway, endpoints, Lambda security groups) is owned by the separate repository [cloud-platform-network](https://github.com/maverickuser/cloud-platform-network); this repository never defines network resources, it calls that repository's reusable workflow and reads its state.
 
 ## Pull request size
 
@@ -95,7 +95,7 @@ flowchart LR
 |---|---|---|---|
 | `ci.yml` | Every pull request, whatever its base branch, and pushes to `main` | Staged jobs: 1 compile (Error Prone, NullAway); 2 static analysis (format, Checkstyle, architecture rules); 3 unit tests and the coverage gate; 4 integration tests; 5 contracts and documentation; 6 package (uploads the Lambda zip). A later stage runs only when the stages it needs passed. `ci passed` aggregates them and is the required check on `main`. Test and coverage reports are uploaded even on failure. Terraform `fmt`/`validate`/`test` join as a stage once `infra/` exists | None |
 | `package.yml` | Called by `deploy.yml` | Builds the Lambda deployment artifact and uploads it to the artifact bucket, keyed by commit SHA | OIDC role |
-| `deploy.yml` | Push to `main` after PR 47 merges, and manual dispatch | Applies Terraform roots in order (bootstrap → network → persistent → application), publishes new function versions, invokes the migration function and stops on failure, then moves the live alias | OIDC role |
+| `deploy.yml` | Push to `main` after PR 47 merges, and manual dispatch | First job calls the shared network's reusable workflow (`maverickuser/cloud-platform-network/.github/workflows/apply.yml@v1`), which creates the network on the first call and changes nothing afterwards. Then applies this repository's Terraform roots in order (bootstrap → persistent → application), publishes new function versions, invokes the migration function and stops on failure, then moves the live alias | OIDC role |
 | `smoke.yml` | After a successful `deploy.yml`, and manual dispatch | Runs smoke cases S-01..05 against the deployed service | OIDC role |
 | `destroy-application.yml` | Manual dispatch with a typed confirmation | Destroys `infra/application` only. Never touches network, persistent, or bootstrap | OIDC role |
 
@@ -250,17 +250,36 @@ LLD sections 1, 14.2, 18, 21, 23.
 | PR | Branch | Scope | Exit evidence |
 |---|---|---|---|
 | 43 | `i/43-lambda-package` | Lambda deployment artifact (arm64, SnapStart-safe initialisation), `MigrationHandler` running Flyway, `package.yml` reusable workflow (build only until credentials are used in PR 47) | Artifact builds in CI; each handler class loads and handles a fixture event |
-| 44 | `i/44-network` | `infra/bootstrap` state and artifact buckets; `infra/network`: VPC `10.20.0.0/16`, two AZs, public and private subnets, one NAT gateway, S3 gateway endpoint, SQS and CloudWatch Logs interface endpoints, fetch-Lambda security group. Outputs named as `data-fetch-service` consumes them: `vpc_id`, `private_subnet_ids_by_az`, `private_route_table_ids_by_az`, `nat_gateway_ids_by_az`, `s3_endpoint_id`, `sqs_endpoint_id`, `logs_endpoint_id`, `fetch_lambda_security_group_id`. With one NAT gateway, `nat_gateway_ids_by_az` maps both AZ keys to the same gateway so the fetch service's precondition holds | `terraform validate` and `terraform test` without credentials |
-| 45 | `i/45-persistent` | `infra/persistent`: RDS PostgreSQL 16 `db.t4g.micro`, 20 GB gp3, single AZ, 7-day backups, deletion protection, `prevent_destroy`; canonical-file S3 bucket; database credentials in Secrets Manager | Same |
-| 46 | `i/46-application` | `infra/application`: five Lambda functions with versions and a live alias, API Gateway HTTP API with custom domain `processing.kagent.app` (ACM certificate and Route 53 alias in the existing shared zone), IAM authorization on the `POST` route, throttling, FIFO processing queue and DLQ with `maxReceiveCount` 3 and a 16-minute visibility timeout, SQS event source mapping (batch size 1, maximum concurrency 10), EventBridge schedules, CloudWatch alarms, function roles scoped to the fetch artifact bucket (read), canonical bucket (write), queues, and the database secret. Outputs for `data-fetch-service`: `vpc_id`, `processor_api_endpoint`, `processor_submission_route_arn`. Inputs, not resources: security-details queue ARN and URL, hosted-zone ID, fetch artifact bucket name, fetch delivery role ARN | Same, plus assertions that the `POST` route has IAM authorization and the `GET` routes have none |
+| 44 | `i/44-bootstrap` | `infra/bootstrap`: Terraform state bucket and Lambda artifact bucket. A small shared `network` data module that reads the `cloud-platform-network` state (`bucket = cloud-platform-network-terraform-state`, `key = network/terraform.tfstate`) and exposes what this service needs: `vpc_id`, `private_subnet_ids_by_az`, and the `processing` entry of `lambda_security_group_ids`, with preconditions that at least two private subnets exist and belong to that VPC. No VPC, subnet, NAT, or endpoint resources are defined in this repository | `terraform validate` and `terraform test` (mocked remote state) without credentials |
+| 45 | `i/45-persistent` | `infra/persistent`: RDS PostgreSQL 16 `db.t4g.micro`, 20 GB gp3, single AZ, 7-day backups, deletion protection, `prevent_destroy`; a DB subnet group over the shared private subnets and a database security group that admits PostgreSQL only from the `processing` Lambda security group; canonical-file S3 bucket; database credentials in Secrets Manager | Same |
+| 46 | `i/46-application` | `infra/application`: five Lambda functions with versions and a live alias, API Gateway HTTP API with custom domain `processing.kagent.app` (ACM certificate and Route 53 alias in the existing shared zone), IAM authorization on the `POST` route, throttling, FIFO processing queue and DLQ with `maxReceiveCount` 3 and a 16-minute visibility timeout, SQS event source mapping (batch size 1, maximum concurrency 10), EventBridge schedules, CloudWatch alarms, function roles scoped to the fetch artifact bucket (read), canonical bucket (write), queues, and the database secret. The functions run in the shared private subnets with the `processing` Lambda security group from the network state. Outputs for `data-fetch-service`: `processor_api_endpoint`, `processor_submission_route_arn`. Inputs, not resources: security-details queue ARN and URL, hosted-zone ID, fetch artifact bucket name, fetch delivery role ARN | Same, plus assertions that the `POST` route has IAM authorization and the `GET` routes have none |
 | 47 | `i/47-deploy-workflows` | `deploy.yml` and `destroy-application.yml` as described above | A deployment from `main` runs migrations and serves the read API; the destroy workflow plan touches only `infra/application` |
 | 48 | `i/48-smoke` | `smoke.yml` running S-01..05; status file updated with deployed and smoke-tested evidence | Smoke cases pass against real AWS |
 
 PRs 44–46 are validated without credentials. Nothing is applied to AWS before PR 47 merges.
 
+## Coordination with cloud-platform-network
+
+The shared network lives in [cloud-platform-network](https://github.com/maverickuser/cloud-platform-network) (created 2026-10-02; nothing applied to AWS yet). It provides the VPC `10.20.0.0/16`, one public and one private subnet in each of two zones, one NAT gateway, an S3 gateway endpoint, SQS and CloudWatch Logs interface endpoints, and one Lambda security group per consumer.
+
+What this service needs from it before its infrastructure PRs can be applied:
+
+| Need | State | Needed by |
+|---|---|---|
+| A `processing` entry in `lambda_security_groups`, so `lambda_security_group_ids["processing"]` exists | Not present: the default list has only `fetch`. Requires a pull request in the network repository and a new version tag | PR 44 (tests can mock it), PR 47 (real apply) |
+| A released version tag to call (`@v1` or later) | Not tagged yet; the owner will tag after a first successful plan | PR 47 |
+| The deployment role's OIDC trust allowing this repository, because the reusable workflow assumes the role as the calling repository | Not verified | PR 47 |
+
+Facts this service's Terraform relies on:
+
+- The S3 gateway endpoint policy allows any bucket in the account, so the canonical-file bucket and the fetch artifact bucket need no change in the network repository.
+- Secrets Manager has no interface endpoint; the functions reach it through the NAT gateway. Adding an endpoint is a network-repository change and only a cost and latency consideration.
+- `nat_gateway_ids_by_az` maps every zone to the one gateway.
+- Callers move to a new network version deliberately, by changing the tag in `deploy.yml`.
+
 ## Coordination with data-fetch-service
 
-- The fetch service's Terraform reads this repository's network and application states. PRs 44 and 46 fix the output names; PR 47 applies them before the fetch service can deploy.
+- The fetch service's Terraform reads the shared network state from `cloud-platform-network` and this repository's application state. PR 46 fixes the application output names; PR 47 applies them before the fetch service can deploy.
 - The move to Lambda changes the fetch service: its Terraform currently requires `processor_internal_lb_arn` and `processor_security_group_id`. It must instead read `processor_api_endpoint` and `processor_submission_route_arn`, grant its delivery role `execute-api:Invoke` on that route, and sign the submission request with SigV4. Request and response bodies are unchanged. This is recorded in the fetch service's plan and must land there before PR 48's smoke tests.
 - The fetch repository holds older copies of the LLD and submission OpenAPI under `docs/specs/`. This repository owns those documents; refresh the copies there after PR 00 merges.
 - The security-details queue ARN and URL come from the fetch service's Terraform outputs and are deployment inputs here.

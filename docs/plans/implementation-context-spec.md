@@ -68,8 +68,10 @@ Versions marked assumed must be checked against the current stable releases and 
 | Input | Needed by | Status |
 |---|---|---|
 | OIDC deployment role | PR 47 | known: the same role as data-fetch-service, `arn:aws:iam::055173110395:role/GitHubDeploy`, stored in this repository's secret `AWS_ROLE_TO_ASSUME`. Before PR 47, verify that the role's trust policy allows this repository's OIDC subject and that its permissions cover ECS, ECR, RDS, ALB, ACM, and Route 53 |
-| Terraform state bucket name | PR 44 | assumed: `data-processing-service-terraform-state`, created by `infra/bootstrap` |
-| Owner of the shared network state | PR 44 | known (confirmed 2026-10-02): this repository (`infra/network`); data-fetch-service consumes it by remote state |
+| Terraform state bucket name | PR 44 | assumed: `data-processing-service-terraform-state`, created by `infra/bootstrap`. Separate from the network repository's state bucket |
+| Owner of the shared network | PR 44, PR 47 | known (2026-10-02): the separate repository [cloud-platform-network](https://github.com/maverickuser/cloud-platform-network). State bucket `cloud-platform-network-terraform-state`, key `network/terraform.tfstate`. Called through its reusable workflow `apply.yml`. This supersedes the earlier decision to keep `infra/network` in this repository |
+| `processing` Lambda security group in the network repository | PR 44, PR 47 | pending: needs a pull request there adding `processing` to `lambda_security_groups`, then a version tag |
+| Network repository version tag | PR 47 | pending: `v1` is not tagged yet |
 | Route 53 hosted-zone ID for `kagent.app` | PR 46 | pending |
 | Security-details queue ARN, URL, and type (Standard or FIFO) | PR 46, PR 29 configuration | pending: from data-fetch-service Terraform outputs |
 | Fetch-service artifact bucket name | PR 46 | pending: `data-fetch-service-artifacts` appears in examples; confirm the deployed name |
