@@ -3,3 +3,11 @@ spring:
     name: data-processing-service
   main:
     banner-mode: off
+
+data-processing:
+  # One entry per dataset: the stage-1 and stage-2 contract files, without the .yaml extension.
+  contracts:
+    - source: bse-debt-bhavcopy-csv-v1
+      mapping: bse-debt-bhavcopy-mapping-v1
+    - source: nsdl-security-json-v1
+      mapping: nsdl-security-mapping-v1
