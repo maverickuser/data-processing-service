@@ -2,7 +2,7 @@
 MVN := ./mvnw --batch-mode --no-transfer-progress
 COVERAGE_REPORT := target/site/jacoco/jacoco.csv
 
-.PHONY: fmt lint build test-unit coverage-check
+.PHONY: fmt lint build test-unit coverage-check test-integration check-contracts check-docs
 
 ## fmt: format Java sources with google-java-format
 fmt:
@@ -24,3 +24,16 @@ test-unit:
 coverage-check: test-unit
 	python3 scripts/test_check_coverage.py
 	python3 scripts/check_coverage.py $(COVERAGE_REPORT) $(COVERAGE_ALLOW_EMPTY)
+
+## test-integration: run integration tests only (*IT); needs Docker once tests use Testcontainers
+test-integration:
+	$(MVN) verify -DskipUnitTests=true -Dassembly.skipAssembly=true
+
+## check-contracts: processing contracts parse; OpenAPI YAML and JSON forms are equal
+check-contracts:
+	ruby scripts/check_contracts.rb
+
+## check-docs: every relative Markdown link resolves
+check-docs:
+	python3 scripts/test_check_docs.py
+	python3 scripts/check_docs.py

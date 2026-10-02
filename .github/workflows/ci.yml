@@ -1,0 +1,54 @@
+name: ci
+
+# Runs on every pull request whatever its base branch, so stacked PRs are checked too.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: quality gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Lint (format, Checkstyle, Error Prone, architecture rules)
+        run: make lint
+
+      - name: Unit tests and coverage gate
+        run: make coverage-check COVERAGE_ALLOW_EMPTY=--allow-empty
+
+      - name: Integration tests
+        run: make test-integration
+
+      - name: Package the Lambda artifact
+        run: make build
+
+      - name: Contract and documentation checks
+        run: make check-contracts check-docs
+
+      - name: Upload test and coverage reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: reports
+          if-no-files-found: ignore
+          path: |
+            target/surefire-reports/
+            target/failsafe-reports/
+            target/site/jacoco/
