@@ -10,6 +10,9 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 class RuleRegistryTest {
 
+  private static final FieldResult<String> NO_VALUE =
+      new FieldResult.NoValue<>(FieldPresence.PLACEHOLDER);
+
   private final RuleRegistry registry = RuleRegistry.standard();
 
   @ParameterizedTest
@@ -25,42 +28,43 @@ class RuleRegistryTest {
           blankToNull|kept|kept
           """)
   void appliesSingleNormalizer(String ruleName, String input, String expected) {
-    assertThat(registry.normalizerFor(List.of(ruleName)).normalize(input)).isEqualTo(expected);
+    assertThat(registry.normalizerFor(List.of(ruleName)).normalize(input))
+        .isEqualTo(valid(expected));
   }
 
   @Test
   void blankToNullTreatsWhitespaceOnlyTextAsNoValue() {
     Normalizer normalizer = registry.normalizerFor(List.of("blankToNull"));
 
-    assertThat(normalizer.normalize("")).isNull();
-    assertThat(normalizer.normalize("   ")).isNull();
+    assertThat(normalizer.normalize("")).isEqualTo(NO_VALUE);
+    assertThat(normalizer.normalize("   ")).isEqualTo(NO_VALUE);
   }
 
   @Test
   void appliesStepsInContractOrder() {
     Normalizer isinNormalizer = registry.normalizerFor(List.of("trim", "blankToNull", "uppercase"));
 
-    assertThat(isinNormalizer.normalize("  ine0kh208019 ")).isEqualTo("INE0KH208019");
+    assertThat(isinNormalizer.normalize("  ine0kh208019 ")).isEqualTo(valid("INE0KH208019"));
   }
 
   @Test
   void skipsLaterStepsOnceTheFieldHasNoValue() {
     Normalizer isinNormalizer = registry.normalizerFor(List.of("trim", "blankToNull", "uppercase"));
 
-    assertThat(isinNormalizer.normalize("   ")).isNull();
+    assertThat(isinNormalizer.normalize("   ")).isEqualTo(NO_VALUE);
   }
 
   @Test
   void emptyRuleListLeavesTextUnchanged() {
-    assertThat(registry.normalizerFor(List.of()).normalize(" as is ")).isEqualTo(" as is ");
+    assertThat(registry.normalizerFor(List.of()).normalize(" as is ")).isEqualTo(valid(" as is "));
   }
 
   @Test
   void preservesLeadingZerosAndInnerSpaces() {
     Normalizer normalizer = registry.normalizerFor(List.of("trim", "blankToNull"));
 
-    assertThat(normalizer.normalize(" 000123 ")).isEqualTo("000123");
-    assertThat(normalizer.normalize(" Non PSU ")).isEqualTo("Non PSU");
+    assertThat(normalizer.normalize(" 000123 ")).isEqualTo(valid("000123"));
+    assertThat(normalizer.normalize(" Non PSU ")).isEqualTo(valid("Non PSU"));
   }
 
   @Test
@@ -75,5 +79,9 @@ class RuleRegistryTest {
   void ruleNamesAreCaseSensitive() {
     assertThatThrownBy(() -> registry.normalizerFor(List.of("Trim")))
         .isInstanceOf(UnknownRuleException.class);
+  }
+
+  private static FieldResult<String> valid(String text) {
+    return new FieldResult.Valid<>(text);
   }
 }

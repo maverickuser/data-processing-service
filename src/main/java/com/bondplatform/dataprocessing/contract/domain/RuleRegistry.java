@@ -11,7 +11,7 @@ import java.util.Map;
  */
 public final class RuleRegistry {
 
-  private static final Normalizer IDENTITY = text -> text;
+  private static final Normalizer IDENTITY = FieldResult.Valid::new;
 
   private final Map<String, Normalizer> normalizers;
 

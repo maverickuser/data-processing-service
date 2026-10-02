@@ -1,30 +1,32 @@
 package com.bondplatform.dataprocessing.contract.domain;
 
-import org.jspecify.annotations.Nullable;
-
 /**
  * One text normalization step named in a contract, such as {@code trim}.
  *
- * <p>A normalizer never changes the stored raw value; it produces the value the next step sees.
+ * <p>A normalizer never changes the stored raw value; it produces the text the next step sees. A
+ * step may also decide that the field has no value, or reject text it cannot normalize safely.
  */
 @FunctionalInterface
 public interface Normalizer {
 
   /**
-   * Returns the normalized text, or {@code null} when the step decides the field has no value.
+   * Normalizes the output of the previous step.
    *
-   * @param text the output of the previous step, never null
+   * @return the normalized text, {@link FieldResult.NoValue} when the field turns out to be empty,
+   *     or {@link FieldResult.Rejected} when the text is malformed
    */
-  @Nullable String normalize(String text);
+  FieldResult<String> normalize(String text);
 
   /**
-   * Returns a normalizer that applies this one and then {@code next}. Once a step yields no value,
-   * later steps are skipped.
+   * Returns a normalizer that applies this one and then {@code next}. Later steps run only while
+   * the field still has valid text.
    */
   default Normalizer then(Normalizer next) {
     return text -> {
-      String normalized = normalize(text);
-      return normalized == null ? null : next.normalize(normalized);
+      FieldResult<String> result = normalize(text);
+      return result instanceof FieldResult.Valid<String> valid
+          ? next.normalize(valid.value())
+          : result;
     };
   }
 }
