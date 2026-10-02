@@ -5,7 +5,7 @@
 <!-- Every suppression states why the rule does not apply. Keep this list short. -->
 <suppressions>
   <!-- Architecture-test fixtures deliberately break project rules to prove the rules catch them. -->
-  <suppress checks="MissingJavadocType|MissingJavadocMethod"
+  <suppress checks="MissingJavadocType|MissingJavadocMethod|JavadocPackage"
             files=".*[\\/]architecture[\\/]fixture[\\/].*"/>
   <!-- Integration tests end in IT, the Maven Failsafe convention this project uses to separate them. -->
   <suppress checks="AbbreviationAsWordInName" files=".*IT\.java"/>

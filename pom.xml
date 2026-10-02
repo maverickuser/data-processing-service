@@ -62,7 +62,10 @@
 
   <build>
     <plugins>
-      <!-- Error Prone and NullAway run inside every compilation; a finding fails the build. -->
+      <!--
+        Error Prone and NullAway run inside every compilation; a finding fails the build.
+        The architecture-test fixtures are excluded: they break rules on purpose.
+      -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
@@ -72,7 +75,7 @@
             <arg>-Werror</arg>
             <arg>-XDcompilePolicy=simple</arg>
             <arg>--should-stop=ifError=FLOW</arg>
-            <arg>-Xplugin:ErrorProne -Xep:NullAway:ERROR -XepOpt:NullAway:OnlyNullMarked=true -XepExcludedPaths:.*/target/generated-.*</arg>
+            <arg>-Xplugin:ErrorProne -Xep:NullAway:ERROR -XepOpt:NullAway:OnlyNullMarked=true -XepExcludedPaths:.*/(target/generated-.*|architecture/fixture/.*)</arg>
           </compilerArgs>
           <annotationProcessorPaths>
             <path>
@@ -143,6 +146,10 @@
             <goals>
               <goal>prepare-agent</goal>
             </goals>
+            <configuration>
+              <!-- Only Surefire uses this property, so integration tests never add coverage. -->
+              <propertyName>unitCoverageAgent</propertyName>
+            </configuration>
           </execution>
           <execution>
             <id>unit-coverage-report</id>
@@ -159,6 +166,7 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
+          <argLine>@{unitCoverageAgent}</argLine>
           <includes>
             <include>**/*Test.java</include>
           </includes>
