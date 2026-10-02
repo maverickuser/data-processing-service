@@ -1,0 +1,60 @@
+# Stage 1 (source -> canonical) for urn:bond-platform:dataset:bse-debt-trades
+# Parses, normalizes and validates selected columns into canonical rows.
+# Stage 2 (canonical -> internal model) is bse-debt-bhavcopy-mapping-v1.yaml.
+id: bse-debt-bhavcopy-csv
+version: v1
+dataset: urn:bond-platform:dataset:bse-debt-trades
+format: csv
+
+file:
+  encoding: UTF-8
+  acceptBom: true
+  dialect: rfc4180
+  blankLines: skip
+  maxBytes: 10485760
+  onChecksumMismatch: failJob     # CHECKSUM_MISMATCH
+  filename:
+    pattern: "{exchangeName}_*{DDMMYYYY}.csv"
+    onInvalid: failJob          # INVALID_SOURCE_FILENAME
+  context:                      # from manifest inputs, cross-checked against the filename
+    tradeDate:    { from: inputs.tradeDate, type: date, required: true }
+    exchangeName: { from: inputs.exchangeName, type: text, required: true }
+
+headers:
+  normalize: [trim, caseInsensitive]
+  duplicates: rejectFile
+  additionalColumns: ignore
+  selectedHeadersRequired: true
+
+fields:
+  security_code:    { header: Security_cd,         type: string,  requiredValue: false, normalize: [trim, blankToNull] }
+  open_price:       { header: Open Price,          type: decimal, requiredValue: false, normalize: [trim, blankToNull, normalizeGroupedNumber], validate: [nonNegative] }
+  high_price:       { header: High Price,          type: decimal, requiredValue: false, normalize: [trim, blankToNull, normalizeGroupedNumber], validate: [nonNegative] }
+  low_price:        { header: Low Price,           type: decimal, requiredValue: false, normalize: [trim, blankToNull, normalizeGroupedNumber], validate: [nonNegative] }
+  close_price:      { header: Close Price,         type: decimal, requiredValue: false, normalize: [trim, blankToNull, normalizeGroupedNumber], validate: [nonNegative] }
+  traded_volume:    { header: Total Traded Volume, type: integer, requiredValue: false, normalize: [trim, blankToNull, normalizeGroupedNumber], validate: [nonNegative] }
+  number_of_trades: { header: Number of Trades,    type: integer, requiredValue: false, normalize: [trim, blankToNull, normalizeGroupedNumber], validate: [nonNegative] }
+  turnover:         { header: Total Turnover,      type: decimal, requiredValue: false, normalize: [trim, blankToNull, normalizeGroupedNumber], validate: [nonNegative] }
+  face_value:       { header: FACE VALUE,          type: decimal, requiredValue: false, normalize: [trim, blankToNull, normalizeGroupedNumber], validate: [nonNegative] }
+  isin:             { header: ISIN No.,            type: string,  requiredValue: true,  normalize: [trim, blankToNull, uppercase] }
+
+numericFormat:
+  decimalSeparator: '.'
+  groupingSeparator: ','
+  acceptedGrouping: [western, indian]
+  validateGroupingBeforeRemoval: true
+  rounding: forbidden
+  integerParsing: exactMathematicalInteger
+
+rowRules:
+  - { rule: greaterThanOrEqual, left: high_price,  right: low_price }
+  - { rule: greaterThanOrEqual, left: open_price,  right: low_price }
+  - { rule: lessThanOrEqual,    left: open_price,  right: high_price }
+  - { rule: greaterThanOrEqual, left: close_price, right: low_price }
+  - { rule: lessThanOrEqual,    left: close_price, right: high_price }
+rowRuleExecution: { requirePresentAndValidOperands: true, collectAllErrors: true }
+
+duplicates:
+  key: isin
+  winner: lastValidRow
+  otherValidRows: quarantineSuperseded
