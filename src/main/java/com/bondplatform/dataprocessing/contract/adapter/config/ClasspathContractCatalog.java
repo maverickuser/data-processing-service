@@ -51,15 +51,15 @@ public final class ClasspathContractCatalog {
   }
 
   private PinnedContracts pin(ContractPair pair) {
-    String sourceText = read(pair.source());
-    String mappingText = read(pair.mapping());
-    SourceContract source = loader.loadSourceContract(sourceText);
-    MappingContract mapping = loader.loadMappingContract(mappingText);
+    byte[] sourceBytes = read(pair.source());
+    byte[] mappingBytes = read(pair.mapping());
+    SourceContract source = loader.loadSourceContract(text(sourceBytes));
+    MappingContract mapping = loader.loadMappingContract(text(mappingBytes));
     requireNameMatchesFile(pair.source(), source.id().name());
     requireNameMatchesFile(pair.mapping(), mapping.id().name());
     validator.requireValid(source, mapping);
     return new PinnedContracts(
-        source, ContractHash.of(sourceText), mapping, ContractHash.of(mappingText));
+        source, ContractHash.of(sourceBytes), mapping, ContractHash.of(mappingBytes));
   }
 
   private static void requireNameMatchesFile(String fileName, String contractName) {
@@ -69,14 +69,18 @@ public final class ClasspathContractCatalog {
     }
   }
 
-  private String read(String contractName) {
+  private static String text(byte[] contractBytes) {
+    return new String(contractBytes, StandardCharsets.UTF_8);
+  }
+
+  private byte[] read(String contractName) {
     String resource = DIRECTORY + contractName + ".yaml";
     try (InputStream stream = resources.apply(resource)) {
       if (stream == null) {
         throw new ContractFormatException(
             "(root)", "contract file " + resource + " does not exist");
       }
-      return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+      return stream.readAllBytes();
     } catch (IOException e) {
       throw new UncheckedIOException("Could not read " + resource, e);
     }

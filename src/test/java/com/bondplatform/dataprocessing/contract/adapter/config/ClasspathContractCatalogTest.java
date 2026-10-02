@@ -86,7 +86,8 @@ class ClasspathContractCatalogTest {
 
     assertThatThrownBy(() -> catalog.load(List.of(mismatched)))
         .isInstanceOf(InvalidContractException.class)
-        .hasMessageContaining("nsdl-security-mapping-v1");
+        .hasMessageContaining("nsdl-security-mapping-v1")
+        .hasMessageContaining("is paired with 'bse-debt-bhavcopy-csv-v1'");
   }
 
   @Test

@@ -263,6 +263,8 @@ Example: row 2 valid, row 5 valid, row 9 invalid for the same ISIN results in ro
 
 ## 6. Proposed YAML contracts
 
+The YAML below is the original illustration and is superseded by the contract files in `contracts/` (2026-10-02). Those files hold only the keys the service reads: fields, types, named rules, row rules, the duplicate key, size limits, JSON paths, and mappings. Behaviour that is the same for every dataset (CSV dialect and header matching, number format, row-rule execution, duplicate winner selection, presence handling, persistence semantics) is fixed in code and specified in sections 5, 7, and 13 rather than repeated as configuration, and a contract containing any other key fails startup. Field types are named `text`, `decimal`, `integer`, `date`, and `percent`.
+
 These examples define a small application-specific declarative format. Java must validate the configuration and reject unknown rules, conflicting mappings, or invalid rule parameters at startup.
 
 ### 6.1 Source contract
@@ -501,7 +503,7 @@ Illustrative validation error:
 }
 ```
 
-Proposed stable error codes include `REQUIRED_HEADER_MISSING`, `DUPLICATE_HEADER`, `MALFORMED_CSV`, `EMPTY_FILE`, `TRADE_DATE_MISMATCH`, `REQUIRED_VALUE_MISSING`, `INVALID_NUMBER_GROUPING`, `INVALID_DECIMAL`, `NOT_WHOLE_NUMBER`, `NEGATIVE_VALUE`, `PRICE_INCONSISTENT`, and `DUPLICATE_ISIN_SUPERSEDED`.
+Proposed stable error codes include `REQUIRED_HEADER_MISSING`, `DUPLICATE_HEADER`, `MALFORMED_CSV`, `EMPTY_FILE`, `TRADE_DATE_MISMATCH`, `REQUIRED_VALUE_MISSING`, `INVALID_NUMBER_GROUPING`, `INVALID_DECIMAL`, `NOT_WHOLE_NUMBER`, `NEGATIVE_VALUE`, `PRICE_INCONSISTENT`, and `DUPLICATE_ISIN_SUPERSEDED`. JSON field validation adds `INVALID_DATE` (not a real date from 1900 onwards in an accepted format) and `INVALID_TYPE` (a JSON value of the wrong kind, such as a number where text is due). Numbers longer than 1,000 characters are `INVALID_DECIMAL`.
 
 ## 10. Component responsibilities
 

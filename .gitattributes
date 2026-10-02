@@ -1,0 +1,2 @@
+# Contract hashes are taken over file bytes, so contracts are LF on every platform.
+contracts/*.yaml text eol=lf

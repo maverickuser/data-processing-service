@@ -1,9 +1,12 @@
 package com.bondplatform.dataprocessing.contract.domain;
 
+import com.bondplatform.dataprocessing.contract.domain.InternalModel.Target;
 import com.bondplatform.dataprocessing.contract.domain.MappingContract.CollectionMapping;
+import com.bondplatform.dataprocessing.contract.domain.MappingContract.RecordMapping;
 import com.bondplatform.dataprocessing.contract.domain.SourceContract.CsvField;
 import com.bondplatform.dataprocessing.contract.domain.SourceContract.JsonCollection;
 import com.bondplatform.dataprocessing.contract.domain.SourceContract.JsonField;
+import com.bondplatform.dataprocessing.contract.domain.SourceContract.RowRule;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -12,6 +15,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -21,11 +26,15 @@ import java.util.stream.Stream;
  * Checks that a pair of contracts is consistent before the service accepts any work.
  *
  * <p>The loader has already checked each file's shape. This class checks meaning: every rule a
- * contract names exists, types and rules fit together, and the mapping contract refers only to
- * things its source contract declares. It reports every problem, not just the first.
+ * contract names exists and fits the field's type, names and paths are unique, and the mapping
+ * contract maps exactly what its source contract declares onto fields the internal model has. It
+ * reports every problem it finds in both contracts, not just the first.
  */
 public final class ContractValidator {
 
+  private static final String GROUPED_NUMBER = "normalizeGroupedNumber";
+  private static final Set<String> NUMBER_NORMALIZERS =
+      Set.of(GROUPED_NUMBER, "stripTrailingPercent");
   private static final Set<FieldType> CSV_TYPES =
       Set.of(FieldType.TEXT, FieldType.DECIMAL, FieldType.INTEGER);
   private static final Set<FieldType> JSON_TYPES =
@@ -36,7 +45,6 @@ public final class ContractValidator {
   private static final Pattern COLLECTION_PATH =
       Pattern.compile("\\$(\\.[A-Za-z_][A-Za-z0-9_]*)+\\[\\*]");
   private static final Pattern PROPERTY_NAME = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
-  private static final Pattern QUALIFIED_TABLE = Pattern.compile("[a-z_]+\\.[a-z_]+");
 
   private final RuleRegistry rules;
 
@@ -46,18 +54,18 @@ public final class ContractValidator {
   }
 
   /**
-   * Throws if either contract of the pair is inconsistent.
+   * Throws if the pair is inconsistent.
    *
-   * @throws InvalidContractException naming the contract and listing every problem
+   * @throws InvalidContractException naming both contracts and listing every problem in either
    */
   public void requireValid(SourceContract source, MappingContract mapping) {
-    List<String> sourceProblems = problemsIn(source);
-    if (!sourceProblems.isEmpty()) {
-      throw new InvalidContractException(source.id().name(), sourceProblems);
-    }
-    List<String> mappingProblems = problemsIn(mapping, source);
-    if (!mappingProblems.isEmpty()) {
-      throw new InvalidContractException(mapping.id().name(), mappingProblems);
+    List<String> problems = new ArrayList<>();
+    problemsIn(source).forEach(problem -> problems.add(source.id().name() + ": " + problem));
+    problemsIn(mapping, source)
+        .forEach(problem -> problems.add(mapping.id().name() + ": " + problem));
+    if (!problems.isEmpty()) {
+      throw new InvalidContractException(
+          source.id().name() + " with " + mapping.id().name(), problems);
     }
   }
 
@@ -77,37 +85,9 @@ public final class ContractValidator {
           "sourceContract is '%s' but it is paired with '%s'"
               .formatted(mapping.sourceContract(), source.id().name()));
     }
-    Set<String> primaryFields =
-        switch (source) {
-          case SourceContract.Csv csv -> names(csv.fields(), CsvField::name);
-          case SourceContract.Json json -> names(json.scalars(), JsonField::name);
-        };
-    problems.addAll(
-        mappingProblems(
-            "fields",
-            mapping.primary().target(),
-            mapping.primary().fields(),
-            Map.of(),
-            primaryFields));
-    Map<String, JsonCollection> declaredCollections =
-        source instanceof SourceContract.Json json
-            ? json.collections().stream()
-                .collect(Collectors.toMap(JsonCollection::name, Function.identity()))
-            : Map.of();
-    for (CollectionMapping collection : mapping.collections()) {
-      JsonCollection declared = declaredCollections.get(collection.name());
-      if (declared == null) {
-        problems.add(
-            "collection '%s' is not declared by the source contract".formatted(collection.name()));
-        continue;
-      }
-      problems.addAll(
-          mappingProblems(
-              "collections." + collection.name(),
-              collection.target(),
-              collection.fields(),
-              collection.constants(),
-              names(declared.fields(), JsonField::name)));
+    switch (source) {
+      case SourceContract.Csv csv -> problems.addAll(csvMappingProblems(mapping, csv));
+      case SourceContract.Json json -> problems.addAll(jsonMappingProblems(mapping, json));
     }
     return problems;
   }
@@ -117,29 +97,57 @@ public final class ContractValidator {
     if (contract.maxBytes() <= 0) {
       problems.add("file.maxBytes must be positive");
     }
+    problems.addAll(duplicates("field", contract.fields().stream().map(CsvField::name)));
     problems.addAll(
         duplicates(
             "header",
             contract.fields().stream()
                 .map(field -> field.header().strip().toLowerCase(Locale.ROOT))));
-    Map<String, CsvField> fields =
-        contract.fields().stream().collect(Collectors.toMap(CsvField::name, Function.identity()));
-    for (CsvField field : contract.fields()) {
-      String at = "field '" + field.name() + "'";
-      if (!CSV_TYPES.contains(field.type())) {
-        problems.add(
-            at + " has type " + field.type().contractName() + ", which CSV does not support");
-      }
-      unknownRule(() -> rules.normalizerFor(field.normalize()))
-          .ifPresent(e -> problems.add(at + ": " + e));
-      unknownRule(() -> rules.numberValidatorFor(field.validate()))
-          .ifPresent(e -> problems.add(at + ": " + e));
-      if (!field.validate().isEmpty() && !NUMERIC_TYPES.contains(field.type())) {
+    Map<String, CsvField> fields = byName(contract.fields(), CsvField::name);
+    contract.fields().forEach(field -> problems.addAll(csvFieldProblems(field)));
+    contract.rowRules().forEach(rule -> problems.addAll(rowRuleProblems(rule, fields)));
+    CsvField key = fields.get(contract.duplicateKey());
+    if (key == null) {
+      problems.add("duplicates.key '" + contract.duplicateKey() + "' is not a declared field");
+    } else if (key.type() != FieldType.TEXT || !key.requiredValue()) {
+      problems.add(
+          "duplicates.key '" + key.name() + "' must be a text field with requiredValue true");
+    }
+    return problems;
+  }
+
+  private List<String> csvFieldProblems(CsvField field) {
+    List<String> problems = new ArrayList<>();
+    String at = "field '" + field.name() + "'";
+    if (!CSV_TYPES.contains(field.type())) {
+      problems.add(
+          at + " has type " + field.type().contractName() + ", which CSV does not support");
+    }
+    unknownRule(() -> rules.normalizerFor(field.normalize()))
+        .ifPresent(e -> problems.add(at + ": " + e));
+    unknownRule(() -> rules.numberValidatorFor(field.validate()))
+        .ifPresent(e -> problems.add(at + ": " + e));
+    boolean numeric = NUMERIC_TYPES.contains(field.type());
+    if (numeric && !field.normalize().contains(GROUPED_NUMBER)) {
+      problems.add(at + " is a number and must be normalized with " + GROUPED_NUMBER);
+    }
+    if (!numeric) {
+      field.normalize().stream()
+          .filter(NUMBER_NORMALIZERS::contains)
+          .forEach(rule -> problems.add(at + " is not a number but is normalized with " + rule));
+      if (!field.validate().isEmpty()) {
         problems.add(at + " has number validators but is not a number");
       }
     }
-    contract.rowRules().stream()
-        .flatMap(rule -> Stream.of(rule.left(), rule.right()))
+    return problems;
+  }
+
+  private static List<String> rowRuleProblems(RowRule rule, Map<String, CsvField> fields) {
+    List<String> problems = new ArrayList<>();
+    if (rule.left().equals(rule.right())) {
+      problems.add("row rule compares '" + rule.left() + "' with itself");
+    }
+    Stream.of(rule.left(), rule.right())
         .distinct()
         .forEach(
             operand -> {
@@ -150,9 +158,6 @@ public final class ContractValidator {
                 problems.add("row rule operand '" + operand + "' is not a number");
               }
             });
-    if (!fields.containsKey(contract.duplicateKey())) {
-      problems.add("duplicates.key '" + contract.duplicateKey() + "' is not a declared field");
-    }
     return problems;
   }
 
@@ -161,6 +166,15 @@ public final class ContractValidator {
     if (contract.maxCombinedBytes() <= 0) {
       problems.add("file.maxCombinedBytes must be positive");
     }
+    problems.addAll(
+        duplicates(
+            "scalar or collection name",
+            Stream.concat(
+                contract.scalars().stream().map(JsonField::name),
+                contract.collections().stream().map(JsonCollection::name))));
+    problems.addAll(duplicates("scalar path", contract.scalars().stream().map(JsonField::path)));
+    problems.addAll(
+        duplicates("collection path", contract.collections().stream().map(JsonCollection::path)));
     for (JsonField scalar : contract.scalars()) {
       problems.addAll(jsonFieldProblems("scalar '" + scalar.name() + "'", scalar, SCALAR_PATH));
     }
@@ -172,6 +186,9 @@ public final class ContractValidator {
       if (collection.fields().isEmpty()) {
         problems.add(at + " declares no fields");
       }
+      problems.addAll(duplicates(at + " field", collection.fields().stream().map(JsonField::name)));
+      problems.addAll(
+          duplicates(at + " field path", collection.fields().stream().map(JsonField::path)));
       for (JsonField field : collection.fields()) {
         problems.addAll(
             jsonFieldProblems(at + " field '" + field.name() + "'", field, PROPERTY_NAME));
@@ -192,28 +209,133 @@ public final class ContractValidator {
     return problems;
   }
 
-  private static List<String> mappingProblems(
-      String at,
-      String target,
-      Map<String, String> fields,
-      Map<String, String> constants,
-      Set<String> declaredCanonicalFields) {
+  private static List<String> csvMappingProblems(
+      MappingContract mapping, SourceContract.Csv source) {
     List<String> problems = new ArrayList<>();
-    if (!QUALIFIED_TABLE.matcher(target).matches()) {
-      problems.add(at + " target '" + target + "' must be schema.table in snake_case");
+    problems.addAll(
+        recordProblems(
+            mapping.primary(),
+            InternalModel.DAILY_MARKET_SUMMARIES,
+            names(source.fields(), CsvField::name)));
+    String keyTarget = mapping.primary().fields().get(source.duplicateKey());
+    if (keyTarget != null && !keyTarget.equals("isin")) {
+      problems.add("fields must map '" + source.duplicateKey() + "' to 'isin'");
     }
-    fields.keySet().stream()
-        .filter(canonical -> !declaredCanonicalFields.contains(canonical))
+    mapping.collections().stream()
+        .map(
+            collection ->
+                "collection '" + collection.name() + "' is not declared by the source contract")
+        .forEach(problems::add);
+    return problems;
+  }
+
+  private static List<String> jsonMappingProblems(
+      MappingContract mapping, SourceContract.Json source) {
+    List<String> problems = new ArrayList<>();
+    problems.addAll(
+        recordProblems(
+            mapping.primary(), InternalModel.SECURITIES, names(source.scalars(), JsonField::name)));
+    Map<String, JsonCollection> declared = byName(source.collections(), JsonCollection::name);
+    problems.addAll(
+        duplicates(
+            "collection mapping", mapping.collections().stream().map(CollectionMapping::name)));
+    for (CollectionMapping collection : mapping.collections()) {
+      JsonCollection declaredCollection = declared.get(collection.name());
+      if (declaredCollection == null) {
+        problems.add(
+            "collection '" + collection.name() + "' is not declared by the source contract");
+      } else {
+        problems.addAll(
+            collectionProblems(collection, names(declaredCollection.fields(), JsonField::name)));
+      }
+    }
+    Set<String> mapped = names(mapping.collections(), CollectionMapping::name);
+    declared.keySet().stream()
+        .filter(name -> !mapped.contains(name))
         .sorted()
         .forEach(
-            canonical ->
+            name ->
                 problems.add(
-                    at + " maps '" + canonical + "', which the source contract does not declare"));
+                    "collection '" + name + "' is declared by the source contract but not mapped"));
+    return problems;
+  }
+
+  private static List<String> recordProblems(
+      RecordMapping mapping, String requiredTarget, Set<String> canonicalFields) {
+    List<String> problems = new ArrayList<>();
+    if (!mapping.target().equals(requiredTarget)) {
+      problems.add(
+          "fields target must be " + requiredTarget + " but is '" + mapping.target() + "'");
+      return problems;
+    }
+    Target target = InternalModel.target(requiredTarget).orElseThrow();
+    problems.addAll(
+        fieldMappingProblems("fields", mapping.fields(), Map.of(), canonicalFields, target));
+    return problems;
+  }
+
+  private static List<String> collectionProblems(
+      CollectionMapping collection, Set<String> canonicalFields) {
+    String at = "collections." + collection.name();
+    Optional<Target> target = InternalModel.target(collection.target()).filter(Target::appendOnly);
+    if (target.isEmpty()) {
+      return List.of(at + " target '" + collection.target() + "' is not a collection table");
+    }
+    return fieldMappingProblems(
+        at, collection.fields(), collection.constants(), canonicalFields, target.get());
+  }
+
+  private static List<String> fieldMappingProblems(
+      String at,
+      Map<String, String> fields,
+      Map<String, String> constants,
+      Set<String> canonicalFields,
+      Target target) {
+    List<String> problems = new ArrayList<>();
+    new TreeSet<>(fields.keySet())
+        .stream()
+            .filter(canonical -> !canonicalFields.contains(canonical))
+            .forEach(
+                canonical ->
+                    problems.add(
+                        at
+                            + " maps '"
+                            + canonical
+                            + "', which the source contract does not declare"));
+    new TreeSet<>(canonicalFields)
+        .stream()
+            .filter(canonical -> !fields.containsKey(canonical))
+            .forEach(canonical -> problems.add(at + " does not map '" + canonical + "'"));
+    new TreeSet<>(fields.values())
+        .stream()
+            .filter(internal -> !target.fields().contains(internal))
+            .forEach(
+                internal ->
+                    problems.add(at + " maps to unknown internal field '" + internal + "'"));
     problems.addAll(
         duplicates(
             at + " internal field",
             Stream.concat(fields.values().stream(), constants.keySet().stream())));
+    for (Map.Entry<String, Set<String>> required : new TreeMap<>(target.constants()).entrySet()) {
+      String value = constants.get(required.getKey());
+      if (value == null) {
+        problems.add(at + " must set the constant '" + required.getKey() + "'");
+      } else if (!required.getValue().contains(value)) {
+        problems.add(
+            "%s constant '%s' has the unsupported value '%s'"
+                .formatted(at, required.getKey(), value));
+      }
+    }
+    new TreeSet<>(constants.keySet())
+        .stream()
+            .filter(name -> !target.constants().containsKey(name))
+            .forEach(name -> problems.add(at + " sets the unknown constant '" + name + "'"));
     return problems;
+  }
+
+  private static <T> Map<String, T> byName(Collection<T> items, Function<T, String> name) {
+    return items.stream()
+        .collect(Collectors.toMap(name, Function.identity(), (first, second) -> first));
   }
 
   private static <T> Set<String> names(Collection<T> items, Function<T, String> name) {
