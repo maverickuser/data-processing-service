@@ -110,7 +110,7 @@ Before editing: check the current branch, the worktree state, and `implementatio
 
 ## Stacked PR workflow
 
-Work is 48 small PRs in nine stacks, managed with GitHub Stacked PRs. Install the extension once with `gh extension install github/gh-stack` (and optionally its agent skill with `gh skill install github/gh-stack`).
+Work is about 48 small PRs in nine stacks (the exact number moves as PRs are split or folded; the implementation plan and status file are current), managed with GitHub Stacked PRs. Install the extension once with `gh extension install github/gh-stack` (and optionally its agent skill with `gh skill install github/gh-stack`).
 
 - Start a stack from an up-to-date `main` with `gh stack init <branch>`; add each next PR with `gh stack add <branch>`; open and link the PRs with `gh stack submit`.
 - Branch names are `<stack letter>/<PR number>-<slug>` exactly as listed in the implementation plan.

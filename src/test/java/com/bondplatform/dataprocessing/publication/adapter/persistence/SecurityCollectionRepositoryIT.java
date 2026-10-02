@@ -22,6 +22,8 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -68,6 +70,55 @@ class SecurityCollectionRepositoryIT extends PostgresIntegrationTest {
     assertThat(row.get("source_location")).isEqualTo("$.x[2]");
     assertThat(firstRecordedAt(row)).isEqualTo(FIRST);
     assertThat(row.get("id")).isNotNull();
+  }
+
+  @Test
+  void everyColumnOfEveryCollectionIsStoredInItsOwnPlace() {
+    collections.appendCashFlows(
+        List.of(
+            entry(
+                ISIN,
+                new CashFlow(
+                    "Interest",
+                    LocalDate.of(2026, 1, 1),
+                    LocalDate.of(2026, 2, 2),
+                    new BigDecimal("11.5"),
+                    LocalDate.of(2026, 3, 3),
+                    new BigDecimal("22.5")),
+                "$.c[0]")),
+        FIRST);
+    collections.appendListings(
+        List.of(entry(ISIN, new Listing("Nse", LocalDate.of(2019, 6, 14)), "$.l[0]")), FIRST);
+    collections.appendRatings(
+        List.of(
+            entry(
+                ISIN,
+                new Rating(
+                    SourceCategory.EARLIER,
+                    "agency",
+                    "grade",
+                    "view",
+                    "action",
+                    LocalDate.of(2026, 4, 4),
+                    LocalDate.of(2026, 5, 5),
+                    LocalDate.of(2026, 6, 6)),
+                "$.r[0]")),
+        FIRST);
+    collections.appendCollateralAssets(
+        List.of(entry(ISIN, new CollateralAsset("type", "description", "note"), "$.a[0]")), FIRST);
+
+    assertThat(textOf("security_cash_flows"))
+        .isEqualTo(
+            "event_type=Interest, record_date=2026-01-01, due_date=2026-02-02,"
+                + " amount_payable=11.5, payment_date=2026-03-03, new_face_value=22.5");
+    assertThat(textOf("security_listings")).isEqualTo("exchange_name=Nse, listing_date=2019-06-14");
+    assertThat(textOf("security_ratings"))
+        .isEqualTo(
+            "source_category=EARLIER, rating_agency_name=agency, rating=grade, outlook=view,"
+                + " rating_action=action, rating_date=2026-04-04, rating_change_date=2026-05-05,"
+                + " verification_date=2026-06-06");
+    assertThat(textOf("security_collateral_assets"))
+        .isEqualTo("asset_type=type, collateral_description=description, remarks=note");
   }
 
   @Test
@@ -189,6 +240,22 @@ class SecurityCollectionRepositoryIT extends PostgresIntegrationTest {
   private static <T> SecurityEntry<T> entry(Isin isin, T value, String location) {
     return new SecurityEntry<>(
         isin, value, new SourceReference(REQUEST, "INE831R08076_coupon-details.json", location));
+  }
+
+  /** Returns the business columns of a table's single row as {@code column=value} pairs. */
+  private String textOf(String table) {
+    Set<String> notBusiness =
+        Set.of(
+            "id",
+            "isin",
+            "source_request_id",
+            "source_file",
+            "source_location",
+            "first_recorded_at");
+    return single(table).entrySet().stream()
+        .filter(column -> !notBusiness.contains(column.getKey()))
+        .map(column -> column.getKey() + "=" + column.getValue())
+        .collect(Collectors.joining(", "));
   }
 
   private Map<String, Object> single(String table) {

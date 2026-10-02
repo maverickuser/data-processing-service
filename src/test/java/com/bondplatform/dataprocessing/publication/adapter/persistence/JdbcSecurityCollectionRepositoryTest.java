@@ -1,6 +1,7 @@
 package com.bondplatform.dataprocessing.publication.adapter.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -19,6 +20,7 @@ import com.bondplatform.dataprocessing.publication.domain.SourceReference;
 import com.bondplatform.dataprocessing.shared.domain.Isin;
 import com.bondplatform.dataprocessing.shared.domain.JobId;
 import java.math.BigDecimal;
+import java.sql.Statement;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -164,6 +166,18 @@ class JdbcSecurityCollectionRepositoryTest {
   }
 
   @Test
+  void failsRatherThanMiscountWhenTheDriverReportsNoRowCounts() {
+    when(jdbc.batchUpdate(any(String.class), any(SqlParameterSource[].class)))
+        .thenReturn(new int[] {1, Statement.SUCCESS_NO_INFO});
+    List<SecurityEntry<Listing>> entries =
+        List.of(entry(new Listing("NSE", null)), entry(new Listing("BSE", null)));
+
+    assertThatIllegalStateException()
+        .isThrownBy(() -> repository.appendListings(entries, RECORDED_AT))
+        .withMessageContaining("reWriteBatchedInserts");
+  }
+
+  @Test
   void givesEachEntryItsOwnIdentifierAndWritesInBatches() {
     databaseAddsEveryRow();
     List<SecurityEntry<Listing>> entries = new ArrayList<>();
@@ -196,17 +210,14 @@ class JdbcSecurityCollectionRepositoryTest {
   @Test
   void everyStatementAppendsOnlyNewEntriesToItsOwnTable() {
     assertThat(JdbcSecurityCollectionRepository.INSERT_CASH_FLOW)
-        .contains(
-            "securities_data.security_cash_flows", "new_face_value", "ON CONFLICT DO NOTHING");
+        .contains("securities_data.security_cash_flows", "new_face_value", "DO NOTHING");
     assertThat(JdbcSecurityCollectionRepository.INSERT_LISTING)
-        .contains("securities_data.security_listings", "listing_date", "ON CONFLICT DO NOTHING");
+        .contains("securities_data.security_listings", "listing_date", "DO NOTHING");
     assertThat(JdbcSecurityCollectionRepository.INSERT_RATING)
-        .contains("securities_data.security_ratings", "source_category", "ON CONFLICT DO NOTHING");
+        .contains("securities_data.security_ratings", "source_category", "DO NOTHING");
     assertThat(JdbcSecurityCollectionRepository.INSERT_COLLATERAL_ASSET)
         .contains(
-            "securities_data.security_collateral_assets",
-            "collateral_description",
-            "ON CONFLICT DO NOTHING");
+            "securities_data.security_collateral_assets", "collateral_description", "DO NOTHING");
   }
 
   private void databaseAddsEveryRow() {

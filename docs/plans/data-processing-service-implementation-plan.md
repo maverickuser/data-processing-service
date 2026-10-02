@@ -9,7 +9,7 @@ Progress: [implementation status](implementation-status.md)
 
 ## Objective and boundaries
 
-Implement the agreed LLD as 48 small pull requests, grouped into nine stacks managed with GitHub Stacked PRs (`gh stack`). Every PR adds working, tested behaviour or concrete infrastructure. CI and CD run on GitHub Actions. This plan creates no branches, PRs, or AWS resources by itself.
+Implement the agreed LLD as about 48 small pull requests (the tables below are current; PR 12 was split in two and PR 13 folded into later PRs), grouped into nine stacks managed with GitHub Stacked PRs (`gh stack`). Every PR adds working, tested behaviour or concrete infrastructure. CI and CD run on GitHub Actions. This plan creates no branches, PRs, or AWS resources by itself.
 
 Decisions preserved throughout:
 

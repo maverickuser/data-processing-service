@@ -24,7 +24,7 @@ import org.springframework.stereotype.Repository;
  * tables.
  *
  * <p>Each table has a unique index over the security and every business column that treats empty
- * values as equal, so "append only if new" is one {@code INSERT ... ON CONFLICT DO NOTHING}.
+ * values as equal, so "append only if new" is one {@code INSERT ... ON CONFLICT (...) DO NOTHING}.
  */
 @Repository
 public class JdbcSecurityCollectionRepository implements SecurityCollectionRepository {
@@ -32,7 +32,11 @@ public class JdbcSecurityCollectionRepository implements SecurityCollectionRepos
   /** Rows per database round trip; the caller's transaction spans all of them. */
   static final int BATCH_SIZE = 500;
 
-  /** Declared before the statements built from it; static fields initialize in source order. */
+  /**
+   * Declared before the statements built from it; static fields initialize in source order. The
+   * conflict target names the security and every business column, which is the table's unique
+   * index: that is what makes two entries "the same".
+   */
   @SuppressWarnings("InlineFormatString") // one template, four statements
   private static final String INSERT_TEMPLATE =
       """
@@ -40,7 +44,7 @@ public class JdbcSecurityCollectionRepository implements SecurityCollectionRepos
         (id, isin, %s, source_request_id, source_file, source_location, first_recorded_at)
       VALUES
         (:id, :isin, %s, :sourceRequestId, :sourceFile, :sourceLocation, :recordedAt)
-      ON CONFLICT DO NOTHING
+      ON CONFLICT (isin, %s) DO NOTHING
       """;
 
   static final String INSERT_CASH_FLOW =
@@ -136,7 +140,11 @@ public class JdbcSecurityCollectionRepository implements SecurityCollectionRepos
                 .addValue("remarks", asset.remarks()));
   }
 
-  /** Inserts the entries in batches and returns how many rows the database actually added. */
+  /**
+   * Inserts the entries in batches and returns how many rows the database actually added. Entries
+   * are written in the caller's order: they belong to one security, and jobs for one security run
+   * one at a time, so two transactions never interleave on the same rows.
+   */
   private <T> int append(
       String insert,
       Collection<SecurityEntry<T>> entries,
@@ -150,9 +158,22 @@ public class JdbcSecurityCollectionRepository implements SecurityCollectionRepos
           ordered.subList(start, Math.min(start + BATCH_SIZE, ordered.size())).stream()
               .map(entry -> parametersOf(entry, timestamp, bindValue))
               .toArray(SqlParameterSource[]::new);
-      appended += Arrays.stream(jdbc.batchUpdate(insert, batch)).filter(rows -> rows > 0).sum();
+      appended += rowsAdded(jdbc.batchUpdate(insert, batch));
     }
     return appended;
+  }
+
+  /**
+   * Sums the rows a batch added. The driver must report a count per row; with its batch-rewrite
+   * option it reports "unknown" instead, and then the number of appended entries cannot be known.
+   */
+  private static int rowsAdded(int[] batchResult) {
+    if (Arrays.stream(batchResult).anyMatch(rows -> rows < 0)) {
+      throw new IllegalStateException(
+          "The JDBC driver did not report row counts for a batch insert;"
+              + " reWriteBatchedInserts must stay off");
+    }
+    return Arrays.stream(batchResult).sum();
   }
 
   private <T> SqlParameterSource parametersOf(
@@ -172,6 +193,6 @@ public class JdbcSecurityCollectionRepository implements SecurityCollectionRepos
   }
 
   private static String insertInto(String table, String businessColumns, String businessValues) {
-    return INSERT_TEMPLATE.formatted(table, businessColumns, businessValues);
+    return INSERT_TEMPLATE.formatted(table, businessColumns, businessValues, businessColumns);
   }
 }

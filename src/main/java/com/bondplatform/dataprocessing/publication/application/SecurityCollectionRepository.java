@@ -14,7 +14,9 @@ import java.util.Collection;
  *
  * <p>An entry is appended only if the security has no entry with the same values, where two absent
  * values count as equal. An existing entry is never changed or removed, and keeps its original
- * source reference and first-recorded time. Every security must already exist.
+ * source reference and first-recorded time. Every security must already exist. A caller must not
+ * pass an entry whose values are all absent; whether an entry has anything worth storing is decided
+ * by the mapper (LLD section 13.4).
  */
 public interface SecurityCollectionRepository {
 
