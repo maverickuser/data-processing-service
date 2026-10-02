@@ -6,6 +6,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.fields;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 
+import com.tngtech.archunit.core.domain.AccessTarget.CodeUnitAccessTarget;
 import com.tngtech.archunit.core.domain.JavaAccess;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaCodeUnit;
@@ -15,9 +16,10 @@ import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
-import java.math.BigDecimal;
 import java.time.Clock;
+import java.util.Calendar;
 import java.util.Date;
+import java.util.GregorianCalendar;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -37,6 +39,8 @@ final class ArchitectureRules {
   private static final String ADAPTER = "..adapter..";
   private static final String LAMBDA = "..lambda..";
   private static final String SUPPLIER = "..shared.supplier..";
+  private static final String SHARED_FEATURE = "shared";
+  private static final String ENTRY_POINT_FEATURE = "lambda";
   private static final Set<String> FLOATING_POINT_TYPES =
       Set.of("float", "double", "java.lang.Float", "java.lang.Double");
 
@@ -85,20 +89,14 @@ final class ArchitectureRules {
   static final ArchRule NO_FLOATING_POINT_SIGNATURES =
       codeUnits().should(notTakeOrReturnFloatingPoint()).allowEmptyShould(true);
 
-  /** U-ARCH-03: no code converts to or from floating point. */
+  /**
+   * U-ARCH-03: no code converts to or from floating point: it neither uses {@code Double} or {@code
+   * Float}, nor calls or references anything that takes or returns floating point.
+   */
   static final ArchRule NO_FLOATING_POINT_CONVERSIONS =
-      noClasses()
-          .should()
-          .dependOnClassesThat()
-          .belongToAnyOf(Double.class, Float.class)
-          .orShould()
-          .callMethod(BigDecimal.class, "doubleValue")
-          .orShould()
-          .callMethod(BigDecimal.class, "floatValue")
-          .orShould()
-          .callMethod(BigDecimal.class, "valueOf", double.class)
-          .orShould()
-          .callConstructor(BigDecimal.class, double.class)
+      classes()
+          .should(notCallFloatingPointCode())
+          .andShould(notDependOnBoxedFloatingPoint())
           .allowEmptyShould(true);
 
   /**
@@ -133,6 +131,11 @@ final class ArchitectureRules {
   /**
    * U-ARCH-02: a feature (a package directly under {@code basePackage}) never depends on another
    * feature's adapters or on its {@code application.internal} package.
+   *
+   * <p>Two packages are not ordinary features. {@code shared} exists to be used by every feature,
+   * so its adapters (for example the shared web conventions) may be used from anywhere. {@code
+   * lambda} holds the entry points that wire features together, so it may use any feature's
+   * adapters.
    */
   static ArchRule featuresKeepTheirInternalsPrivate(String basePackage) {
     return classes().should(notReachIntoAnotherFeature(basePackage)).allowEmptyShould(true);
@@ -143,10 +146,14 @@ final class ArchitectureRules {
       @Override
       public void check(JavaClass origin, ConditionEvents events) {
         String originFeature = featureOf(origin, basePackage);
+        if (originFeature.equals(ENTRY_POINT_FEATURE)) {
+          return;
+        }
         origin.getDirectDependenciesFromSelf().stream()
             .map(dependency -> dependency.getTargetClass())
             .filter(target -> isPrivateToItsFeature(target.getPackageName()))
             .filter(target -> !featureOf(target, basePackage).isEmpty())
+            .filter(target -> !featureOf(target, basePackage).equals(SHARED_FEATURE))
             .filter(target -> !featureOf(target, basePackage).equals(originFeature))
             .forEach(
                 target ->
@@ -215,9 +222,7 @@ final class ArchitectureRules {
     return new ArchCondition<>("not read the system clock or generate random identifiers") {
       @Override
       public void check(JavaClass origin, ConditionEvents events) {
-        Stream.concat(
-                origin.getMethodCallsFromSelf().stream(),
-                origin.getConstructorCallsFromSelf().stream())
+        callsAndReferencesFrom(origin)
             .filter(ArchitectureRules::readsSystemClockOrRandomId)
             .forEach(
                 call ->
@@ -242,10 +247,70 @@ final class ArchitectureRules {
     if (owner.equals(System.class.getName())) {
       return name.equals("currentTimeMillis");
     }
-    if (owner.equals(Date.class.getName())) {
+    if (owner.equals(Date.class.getName()) || owner.equals(GregorianCalendar.class.getName())) {
       return signature.endsWith("<init>()");
     }
+    if (owner.equals(Calendar.class.getName())) {
+      return name.equals("getInstance");
+    }
+    if (owner.equals("java.time.InstantSource")) {
+      return name.equals("system");
+    }
     return owner.equals(UUID.class.getName()) && name.equals("randomUUID");
+  }
+
+  /** Returns every method and constructor the class calls or refers to, as in {@code Type::m}. */
+  private static Stream<JavaAccess<?>> callsAndReferencesFrom(JavaClass origin) {
+    return Stream.of(
+            origin.getMethodCallsFromSelf(),
+            origin.getConstructorCallsFromSelf(),
+            origin.getMethodReferencesFromSelf(),
+            origin.getConstructorReferencesFromSelf())
+        .flatMap(Set::stream);
+  }
+
+  private static ArchCondition<JavaClass> notCallFloatingPointCode() {
+    return new ArchCondition<>("not call or reference code that takes or returns floating point") {
+      @Override
+      public void check(JavaClass origin, ConditionEvents events) {
+        callsAndReferencesFrom(origin)
+            .filter(access -> access.getTarget() instanceof CodeUnitAccessTarget)
+            .filter(access -> usesFloatingPoint((CodeUnitAccessTarget) access.getTarget()))
+            .forEach(
+                access ->
+                    events.add(
+                        SimpleConditionEvent.violated(
+                            origin,
+                            origin.getName()
+                                + " uses floating point through "
+                                + access.getTarget().getFullName())));
+      }
+    };
+  }
+
+  private static boolean usesFloatingPoint(CodeUnitAccessTarget target) {
+    return Stream.concat(
+            Stream.of(target.getRawReturnType()), target.getRawParameterTypes().stream())
+        .map(type -> type.getBaseComponentType().getName())
+        .anyMatch(FLOATING_POINT_TYPES::contains);
+  }
+
+  private static ArchCondition<JavaClass> notDependOnBoxedFloatingPoint() {
+    return new ArchCondition<>("not depend on Double or Float") {
+      @Override
+      public void check(JavaClass origin, ConditionEvents events) {
+        origin.getDirectDependenciesFromSelf().stream()
+            .map(dependency -> dependency.getTargetClass().getName())
+            .filter(
+                name -> name.equals(Double.class.getName()) || name.equals(Float.class.getName()))
+            .distinct()
+            .forEach(
+                name ->
+                    events.add(
+                        SimpleConditionEvent.violated(
+                            origin, origin.getName() + " depends on " + name)));
+      }
+    };
   }
 
   private static ArchCondition<JavaClass> resideInNullMarkedPackage() {

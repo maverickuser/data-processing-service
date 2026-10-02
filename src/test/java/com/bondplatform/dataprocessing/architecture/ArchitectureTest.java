@@ -9,6 +9,7 @@ import com.tngtech.archunit.lang.ArchRule;
 import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Named;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -107,7 +108,10 @@ class ArchitectureTest {
             "ReadsDoubleValue",
             "ReadsFloatValue",
             "BuildsDecimalFromDouble",
-            "ConvertsDoubleToDecimal"),
+            "ConvertsDoubleToDecimal",
+            "ReadsNumberAsDouble",
+            "RaisesToPower",
+            "ReferencesDoubleValue"),
         violation(
             "system clock and random ids",
             ArchitectureRules.TIME_AND_IDS_ARE_INJECTED,
@@ -122,7 +126,12 @@ class ArchitectureTest {
             "SystemClock",
             "CurrentTimeMillis",
             "NewDate",
-            "RandomUuid"),
+            "RandomUuid",
+            "InstantNowReference",
+            "RandomUuidReference",
+            "NewDateReference",
+            "CalendarInstance",
+            "SystemInstantSource"),
         violation(
             "package without @NullMarked",
             ArchitectureRules.PACKAGES_ARE_NULL_MARKED,
@@ -148,6 +157,23 @@ class ArchitectureTest {
     JavaClasses compliant = new ClassFileImporter().importPackages(FIXTURES + "compliant");
 
     assertThat(rule.evaluate(compliant).hasViolation()).isFalse();
+  }
+
+  @Test
+  void compliantFeaturesMayUseSharedAdaptersAndBeWiredByEntryPoints() {
+    String compliantBase = FIXTURES + "compliant";
+    JavaClasses compliant = new ClassFileImporter().importPackages(compliantBase);
+
+    assertThat(
+            ArchitectureRules.featuresKeepTheirInternalsPrivate(compliantBase)
+                .evaluate(compliant)
+                .hasViolation())
+        .isFalse();
+    assertThat(
+            ArchitectureRules.packagesAreFreeOfCycles(compliantBase)
+                .evaluate(compliant)
+                .hasViolation())
+        .isFalse();
   }
 
   private static Arguments rule(String name, ArchRule rule) {
