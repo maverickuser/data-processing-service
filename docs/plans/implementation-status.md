@@ -4,12 +4,12 @@ Factual record of progress against the [implementation plan](data-processing-ser
 
 Rules: a PR link is added only when the PR exists. `State` is one of `not started`, `in progress`, `in review`, `merged`. `Verified checks` lists what actually ran and passed on the merged head. Planned or mocked work is never marked deployed or live-tested.
 
-Last updated: 2026-10-02. No application code exists yet.
+Last updated: 2026-10-02.
 
 | PR | Stack | Branch | State | PR link | Verified checks | Notes |
 |---|---|---|---|---|---|---|
-| 00 | — | `docs/implementation-plan` | in review | — | YAML contracts parse; OpenAPI YAML and JSON equivalent; relative links resolve | Documentation baseline and NSDL fixtures |
-| 01 | A Foundation | `a/01-build-skeleton` | not started | — | — | |
+| 00 | — | `docs/implementation-plan` | merged | [#1](https://github.com/maverickuser/data-processing-service/pull/1) | YAML contracts parse; OpenAPI YAML and JSON equivalent; relative links resolve | Documentation baseline and NSDL fixtures |
+| 01 | A Foundation | `a/01-build-skeleton` | in review | — | `make build`, `make test-unit` (local, JDK 25.0.4.1) | Context-load test `DataProcessingApplicationIT`; no unit tests yet because there is no logic |
 | 02 | A Foundation | `a/02-quality-gates` | not started | — | — | |
 | 03 | A Foundation | `a/03-ci-workflow` | not started | — | — | |
 | 04 | A Foundation | `a/04-value-types` | not started | — | — | |

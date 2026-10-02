@@ -56,18 +56,18 @@ Each feature package has `domain` (pure Java, no framework imports), `applicatio
 
 ## Local command contract
 
-PR 01 must provide these and verify each one does what it says before this section is treated as active. A documented command must never be a placeholder that returns success.
+A documented command must never be a placeholder that returns success. Commands are added by the PRs of stack A; `Implemented` shows what exists in this checkout. All need JDK 25 on `PATH` or in `JAVA_HOME`.
 
-| Command | Purpose |
-|---|---|
-| `make fmt` | Format Java with google-java-format (Spotless) |
-| `make lint` | Checkstyle, Error Prone with NullAway, ArchUnit rules |
-| `make test-unit` | Unit tests only, no Docker, with a unit-only coverage report |
-| `make coverage-check` | Fail unless unit line coverage is strictly greater than 95% |
-| `make test-integration` | Integration tests against Testcontainers PostgreSQL and LocalStack |
-| `make build` | Compile and package the application |
-| `make check-contracts` | Validate the four YAML contracts and both OpenAPI documents (YAML and JSON equivalent) |
-| `make check-docs` | Validate documentation links |
+| Command | Purpose | Implemented |
+|---|---|---|
+| `make fmt` | Format Java with google-java-format (Spotless) | no |
+| `make lint` | Checkstyle, Error Prone with NullAway, ArchUnit rules | no |
+| `make test-unit` | Unit tests only, no Docker, with a unit-only coverage report | yes |
+| `make coverage-check` | Fail unless unit line coverage is strictly greater than 95% | no |
+| `make test-integration` | Integration tests against Testcontainers PostgreSQL and LocalStack | no |
+| `make build` | Compile, run all tests, and package the Lambda artifact `target/data-processing-service-lambda.zip` | yes |
+| `make check-contracts` | Validate the four YAML contracts and both OpenAPI documents (YAML and JSON equivalent) | no |
+| `make check-docs` | Validate documentation links | no |
 
 Unit tests need no Docker and no AWS credentials. Integration tests need Docker only. Nothing on a pull request uses real AWS.
 
