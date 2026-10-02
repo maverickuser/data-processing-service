@@ -67,12 +67,12 @@ A documented command must never be a placeholder that returns success. Commands 
 | `make lint` | Checkstyle, Error Prone with NullAway, ArchUnit rules | yes |
 | `make test-unit` | Unit tests only, no Docker, with a unit-only coverage report | yes |
 | `make coverage-check` | Fail unless unit line coverage is strictly greater than 95% | yes |
-| `make test-integration` | Integration tests only (`*IT`); Testcontainers PostgreSQL and LocalStack are added with the first database PR | yes |
+| `make test-integration` | Integration tests only (`*IT`). Database tests use Testcontainers PostgreSQL 16 and are skipped on a machine without Docker; CI requires Docker | yes |
 | `make build` | Compile, run all tests, and package the Lambda artifact `target/data-processing-service-lambda.zip` | yes |
 | `make check-contracts` | Validate the four YAML contracts and both OpenAPI documents (YAML and JSON equivalent) | yes |
 | `make check-docs` | Validate documentation links | yes |
 
-Unit tests need no Docker and no AWS credentials. Integration tests need Docker only. Nothing on a pull request uses real AWS.
+Unit tests need no Docker and no AWS credentials. Database integration tests need Docker; without it they are skipped locally and still run in CI. Nothing on a pull request uses real AWS.
 
 ## Implementation invariants
 
