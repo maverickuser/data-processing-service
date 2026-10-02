@@ -52,6 +52,10 @@ public class JdbcIngestionRequestRepository implements IngestionRequestRepositor
       ORDER BY acceptance_sequence
       """;
 
+  /** A transaction-scoped advisory lock keyed by the group; released at commit or rollback. */
+  static final String LOCK_ORDERING_GROUP =
+      "SELECT pg_advisory_xact_lock(hashtextextended(:orderingGroup, 0))";
+
   private static final RowMapper<AcceptedRequest> ROW_MAPPER = JdbcIngestionRequestRepository::map;
 
   private final NamedParameterJdbcOperations jdbc;
@@ -88,6 +92,14 @@ public class JdbcIngestionRequestRepository implements IngestionRequestRepositor
             .addValue("mappingContractHash", request.contracts().mappingHash())
             .addValue("submittedAt", request.submittedAt().atOffset(ZoneOffset.UTC));
     return jdbc.query(INSERT_IF_ABSENT, parameters, ROW_MAPPER).stream().findFirst();
+  }
+
+  @Override
+  public void lockOrderingGroup(OrderingGroup group) {
+    jdbc.query(
+        LOCK_ORDERING_GROUP,
+        new MapSqlParameterSource("orderingGroup", group.value()),
+        (row, rowNumber) -> row.getObject(1));
   }
 
   @Override

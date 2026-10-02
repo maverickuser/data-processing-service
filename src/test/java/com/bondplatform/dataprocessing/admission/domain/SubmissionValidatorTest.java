@@ -142,6 +142,26 @@ class SubmissionValidatorTest {
   }
 
   @Test
+  void textWithNulCharacterIsInvalidWhereverItAppears() {
+    assertThat(errorsOf(nsdlEvent(), event -> event.put("id", "urn:a\0b")))
+        .containsExactly(
+            SubmissionError.inBody(
+                "/id", Code.INVALID_VALUE, "Must not contain the NUL character."));
+    assertThat(errorsOf(nsdlEvent(), event -> data(event).put("event_id", "evt\0")))
+        .extracting(SubmissionError::pointer)
+        .containsExactly("/data/event_id");
+    assertThat(errorsOf(nsdlEvent(), event -> manifest(event).put("key", "runs/\0/manifest.json")))
+        .extracting(SubmissionError::pointer)
+        .containsExactly("/data/manifest/key");
+    assertThat(errorsOf(nsdlEvent(), event -> event.put("traceparent", "00-\0-01")))
+        .extracting(SubmissionError::pointer, SubmissionError::code)
+        .containsExactly(tuple("/traceparent", Code.INVALID_VALUE));
+    assertThat(errorsOf(nsdlEvent(), event -> event.put("tags", List.of("ok", "\0"))))
+        .extracting(SubmissionError::pointer)
+        .contains("/tags/1");
+  }
+
+  @Test
   void valuesOfTheWrongKindAreInvalid() {
     assertThat(errorsOf(nsdlEvent(), event -> event.put("id", 42)))
         .containsExactly(
