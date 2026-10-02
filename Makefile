@@ -20,7 +20,8 @@ lint:
 build:
 	$(MVN) verify
 
-## package: build the Lambda deployment artifact without running tests (CI runs them in earlier stages)
+## package: build the Lambda deployment artifact without running tests. For the CI package stage only,
+## which runs after the test stages; a release must use the artifact that CI built, not a local one
 package:
 	$(MVN) package -DskipUnitTests=true
 

@@ -16,9 +16,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
@@ -116,6 +118,19 @@ class GlobalExceptionHandlerTest {
   }
 
   @Test
+  void errorResponseDefinedOutsideTheFrameworkDoesNotSupplyTheDetail() {
+    ResponseEntity<Object> response =
+        handler.handleExceptionInternal(
+            new ApplicationDefinedErrorResponse(),
+            null,
+            HttpHeaders.EMPTY,
+            HttpStatus.BAD_REQUEST,
+            request);
+
+    assertThat(problemOf(response).getDetail()).isEqualTo("Invalid Request.");
+  }
+
+  @Test
   void frameworkServerErrorIsTreatedAsUnexpectedFailure() {
     ResponseEntity<Object> response =
         handler.handleExceptionInternal(
@@ -130,6 +145,21 @@ class GlobalExceptionHandlerTest {
     assertThat(problem.getProperties()).containsEntry("code", "INTERNAL_ERROR");
     assertThat(problem.getDetail()).doesNotContain("conversion failed");
     assertThat(log.list).hasSize(1);
+  }
+
+  /** An exception that mimics the framework's contract but is not defined by it. */
+  private static final class ApplicationDefinedErrorResponse extends RuntimeException
+      implements ErrorResponse {
+
+    @Override
+    public HttpStatusCode getStatusCode() {
+      return HttpStatus.BAD_REQUEST;
+    }
+
+    @Override
+    public ProblemDetail getBody() {
+      return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "jdbc password=secret");
+    }
   }
 
   private static ProblemDetail problemOf(ResponseEntity<Object> response) {

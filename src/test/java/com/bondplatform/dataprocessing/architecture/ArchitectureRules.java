@@ -157,7 +157,7 @@ final class ArchitectureRules {
    * <p>Two packages are not ordinary features. {@code shared} exists to be used by every feature,
    * so its adapters (for example the shared web conventions) may be used from anywhere. {@code
    * lambda} holds the entry points that wire features together, so it may use any feature's
-   * adapters.
+   * adapters. Neither exemption extends to {@code application.internal} packages.
    */
   static ArchRule featuresKeepTheirInternalsPrivate(String basePackage) {
     return classes().should(notReachIntoAnotherFeature(basePackage)).allowEmptyShould(true);
@@ -168,15 +168,12 @@ final class ArchitectureRules {
       @Override
       public void check(JavaClass origin, ConditionEvents events) {
         String originFeature = featureOf(origin, basePackage);
-        if (originFeature.equals(ENTRY_POINT_FEATURE)) {
-          return;
-        }
         origin.getDirectDependenciesFromSelf().stream()
             .map(dependency -> dependency.getTargetClass())
             .filter(target -> isPrivateToItsFeature(target.getPackageName()))
             .filter(target -> !featureOf(target, basePackage).isEmpty())
-            .filter(target -> !featureOf(target, basePackage).equals(SHARED_FEATURE))
             .filter(target -> !featureOf(target, basePackage).equals(originFeature))
+            .filter(target -> !isAllowedAdapterUse(originFeature, target, basePackage))
             .forEach(
                 target ->
                     events.add(
@@ -187,6 +184,15 @@ final class ArchitectureRules {
                                 + target.getName())));
       }
     };
+  }
+
+  /** Shared adapters may be used by anyone; entry points may use any feature's adapters. */
+  private static boolean isAllowedAdapterUse(
+      String originFeature, JavaClass target, String basePackage) {
+    boolean targetIsAdapter = ("." + target.getPackageName() + ".").contains(".adapter.");
+    return targetIsAdapter
+        && (originFeature.equals(ENTRY_POINT_FEATURE)
+            || featureOf(target, basePackage).equals(SHARED_FEATURE));
   }
 
   private static boolean isPrivateToItsFeature(String packageName) {
