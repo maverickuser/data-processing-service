@@ -12,6 +12,7 @@ import java.util.Enumeration;
 import java.util.Locale;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
@@ -27,9 +28,11 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
  * the raw {@code Content-Type} text without asking Java to resolve the name: an unknown or
  * malformed name must be refused here, not fail inside the servlet container. Accepted are no
  * {@code charset} at all, {@code utf-8}, and {@code utf8}, in any case and optionally quoted. The
- * problem response is built by {@link GlobalExceptionHandler}, like every other.
+ * problem response is built by {@link GlobalExceptionHandler}, like every other. It exists only
+ * where the application serves HTTP; the worker and scheduled functions start without a web server.
  */
 @Component
+@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class RequestCharsetFilter extends OncePerRequestFilter {
 
