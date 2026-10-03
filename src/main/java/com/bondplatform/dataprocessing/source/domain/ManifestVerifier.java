@@ -32,7 +32,7 @@ public final class ManifestVerifier {
     if (!disagreements.isEmpty()) {
       return Optional.of(
           new SourceProblem(
-              SourceProblem.Code.MANIFEST_MISMATCH,
+              SourceProblem.Code.INVALID_MANIFEST,
               "The manifest disagrees with the submission on " + String.join(", ", disagreements)));
     }
     return fileSetProblem(manifest.files(), expectedFormat);

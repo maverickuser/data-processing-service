@@ -10,10 +10,11 @@ public record SourceProblem(Code code, String detail) {
 
   /** The codes, which are part of the public status API. */
   public enum Code {
-    /** The manifest is not a well-formed manifest event, or lists no usable file set. */
+    /**
+     * The manifest is not a well-formed manifest event, lists no usable file set, or describes
+     * another run, dataset, or input than the submission; the detail says which.
+     */
     INVALID_MANIFEST,
-    /** The manifest describes another run, dataset, or input than the submission. */
-    MANIFEST_MISMATCH,
     /** The manifest, a CSV, or the listed JSON files together are larger than allowed. */
     SOURCE_TOO_LARGE
   }

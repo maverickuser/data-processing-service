@@ -44,7 +44,7 @@ class ManifestVerifierTest {
 
     Optional<SourceProblem> problem = verify(nsdl(), other, SourceFormat.JSON);
 
-    assertThat(problem).map(SourceProblem::code).contains(Code.MANIFEST_MISMATCH);
+    assertThat(problem).map(SourceProblem::code).contains(Code.INVALID_MANIFEST);
     assertThat(problem.orElseThrow().detail())
         .contains(
             "dataschema",
@@ -119,6 +119,7 @@ class ManifestVerifierTest {
 
   @Test
   void mismatchIsReportedBeforeFileProblems() {
+    // Both are INVALID_MANIFEST; the detail tells them apart.
     SubmittedRun otherRun =
         new SubmittedRun(
             NSDL_RUN.dataset(),
@@ -129,8 +130,8 @@ class ManifestVerifierTest {
             NSDL_RUN.inputs(),
             NSDL_RUN.datasetFingerprint());
 
-    assertThat(verify(nsdl(), otherRun, SourceFormat.CSV).map(SourceProblem::code))
-        .contains(Code.MANIFEST_MISMATCH);
+    assertThat(verify(nsdl(), otherRun, SourceFormat.CSV).orElseThrow().detail())
+        .isEqualTo("The manifest disagrees with the submission on data.run_id");
   }
 
   @Test
