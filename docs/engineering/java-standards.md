@@ -88,7 +88,7 @@ A name that needs `And` or `Or` describes a class or method with two jobs. Split
 
 - **Bad data is a result, not an exception.** Validation produces `ValidationIssue` values that are collected and returned. Exceptions are for things the code cannot continue past.
 - Two exception families: `TemporaryFailureException` (retry the job) and `PermanentFailureException` (fail the job, no retry). The worker decides on type, not on message text.
-- Never catch `Exception` or `Throwable` except at the worker's and web layer's outermost boundary, where it is logged once with the job ID and converted.
+- Never catch `Exception` or `Throwable` except at the worker's and web layer's outermost boundary, where it is logged once with the job ID and converted. The one other boundary is immediate outbox delivery after a commit (`OutboxDispatcher.deliverCommitted`), which must never fail the caller; it catches `RuntimeException` and leaves the events to the sweep.
 - Never swallow an exception. Never log and rethrow the same exception at every layer.
 - HTTP errors are `application/problem+json` produced in one `@RestControllerAdvice`.
 - Error codes (`INVALID_DECIMAL`, `CHECKSUM_MISMATCH`, …) are an enum. They are part of the public contract; renaming one is a breaking change.
