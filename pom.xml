@@ -33,6 +33,7 @@
     <archunit.version>1.5.1</archunit.version>
     <json-schema-validator.version>3.0.8</json-schema-validator.version>
     <aws-sdk.version>2.55.11</aws-sdk.version>
+    <aws-lambda-java-events.version>3.16.1</aws-lambda-java-events.version>
     <spotless.version>3.10.3</spotless.version>
     <!-- Newest release that Spotless 3.10.3 can drive; 1.37.0 fails inside the plugin. -->
     <google-java-format.version>1.35.0</google-java-format.version>
@@ -88,6 +89,19 @@
     <dependency>
       <groupId>software.amazon.awssdk</groupId>
       <artifactId>url-connection-client</artifactId>
+    </dependency>
+    <!-- Typed SQS events and the partial batch response for the worker's entry point. -->
+    <dependency>
+      <groupId>com.amazonaws</groupId>
+      <artifactId>aws-lambda-java-events</artifactId>
+      <version>${aws-lambda-java-events.version}</version>
+      <exclusions>
+        <!-- Only the date-carrying event types use it; the SQS types this service reads do not. -->
+        <exclusion>
+          <groupId>joda-time</groupId>
+          <artifactId>joda-time</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>com.amazonaws.serverless</groupId>
