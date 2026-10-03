@@ -82,6 +82,14 @@ public class JdbcJobRunRepository implements JobRunRepository {
       WHERE id = :id AND status = 'PROCESSING' AND attempt_count = :attemptNumber
       """;
 
+  static final String FAIL_JOB_WITH_ATTEMPTS_USED_UP =
+      """
+      UPDATE data_processing.ingestion_requests
+      SET status = 'FAILED', completed_at = :now
+      WHERE id = :id AND attempt_count = :attemptNumber
+        AND status IN ('QUEUED', 'PROCESSING', 'RETRY_PENDING')
+      """;
+
   private static final RowMapper<StoredJob> ROW_MAPPER = JdbcJobRunRepository::map;
 
   private final NamedParameterJdbcOperations jdbc;
@@ -119,6 +127,16 @@ public class JdbcJobRunRepository implements JobRunRepository {
             .addValue("now", utc(now));
     requireOneRow(jdbc.update(START_JOB, parameters), "start", id);
     jdbc.update(INSERT_RUN, parameters);
+  }
+
+  @Override
+  public void failJob(JobId id, int attemptCount, Instant now) {
+    jdbc.update(
+        FAIL_JOB_WITH_ATTEMPTS_USED_UP,
+        new MapSqlParameterSource()
+            .addValue("id", id.value())
+            .addValue("attemptNumber", attemptCount)
+            .addValue("now", utc(now)));
   }
 
   @Override
