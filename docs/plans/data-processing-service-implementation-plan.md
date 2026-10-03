@@ -193,7 +193,7 @@ LLD sections 2.1, 13.1, 19, 21.
 
 | PR | Branch | Scope | Test cases | Exit evidence |
 |---|---|---|---|---|
-| 20 | `d/20-manifest` | `Manifest`, `ManifestLoader`, `ManifestVerifier`: 1 MB limit, agreement with the submission, `source_files` persistence | U-JOB-03, U-SRC-02 (manifest part) | — |
+| 20 | `d/20a-manifest`, `d/20b-load-manifest` (split 2026-10-03) | `Manifest`, `ManifestLoader`, `ManifestVerifier`: 1 MB limit, agreement with the submission, `source_files` persistence | U-JOB-03, U-SRC-02 (manifest part) | — |
 | 21 | `d/21-source-reader` | `SourceObjectReader` port, `S3SourceObjectReader` streaming with timeouts, size limits, SHA-256 verification | U-SRC-01..03 | Each failure maps to its agreed code and retry class |
 | 22 | `d/22-filenames` | `CsvFilename`, `JsonFilename`; manifest-input cross-check | U-VAL-03, U-SRC-04, U-JSON-04..05 | — |
 
