@@ -5,6 +5,7 @@ import com.bondplatform.dataprocessing.contract.domain.SourceContract;
 import com.bondplatform.dataprocessing.job.application.PermanentFailureException;
 import com.bondplatform.dataprocessing.job.domain.ClaimedJob;
 import com.bondplatform.dataprocessing.job.domain.StoredJob;
+import com.bondplatform.dataprocessing.source.domain.FilenameCheck;
 import com.bondplatform.dataprocessing.source.domain.Manifest;
 import com.bondplatform.dataprocessing.source.domain.ManifestReader;
 import com.bondplatform.dataprocessing.source.domain.ManifestVerifier;
@@ -25,8 +26,9 @@ import org.springframework.transaction.support.TransactionOperations;
  *
  * <p>Every problem with the manifest fails the job without a retry, because the manifest is an
  * immutable object: {@code INVALID_MANIFEST} for one that is malformed or disagrees with the
- * submission, {@code SOURCE_TOO_LARGE} for one over its limits. A retried attempt reads the same
- * manifest and records nothing twice.
+ * submission, {@code SOURCE_TOO_LARGE} for one over its limits, {@code INVALID_SOURCE_FILENAME} or
+ * {@code TRADE_DATE_MISMATCH} for file names that do not agree with its inputs. A retried attempt
+ * reads the same manifest and records nothing twice.
  */
 @Service
 public class LoadManifest {
@@ -71,13 +73,23 @@ public class LoadManifest {
           case ManifestReader.Reading.Unreadable unreadable ->
               throw invalid("The manifest is not usable: " + summary(unreadable.problems()));
         };
+    SourceFormat format = formatOf(job);
     Optional<SourceProblem> problem =
-        ManifestVerifier.verify(manifest, submittedRun(job), formatOf(job));
+        ManifestVerifier.verify(manifest, submittedRun(job), format)
+            .or(() -> namesProblem(manifest, format));
     if (problem.isPresent()) {
       throw new PermanentFailureException(problem.get().code().name(), problem.get().detail());
     }
     transactions.executeWithoutResult(status -> sourceFiles.saveAll(job.id(), manifest.files()));
     return manifest;
+  }
+
+  /** Checks that the files' names agree with the manifest's inputs. */
+  private static Optional<SourceProblem> namesProblem(Manifest manifest, SourceFormat format) {
+    return switch (format) {
+      case CSV -> FilenameCheck.csv(manifest.files().get(0), manifest.inputs());
+      case JSON -> FilenameCheck.json(manifest.files(), manifest.inputs());
+    };
   }
 
   private SubmittedRun submittedRun(StoredJob job) {

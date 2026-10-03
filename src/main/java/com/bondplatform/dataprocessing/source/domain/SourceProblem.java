@@ -21,6 +21,10 @@ public record SourceProblem(Code code, String detail) {
     SOURCE_NOT_FOUND,
     /** A listed file's size or SHA-256 differs from the manifest's (LLD section 19). */
     CHECKSUM_MISMATCH,
+    /** A listed file's name does not identify its trade date and exchange, or its security. */
+    INVALID_SOURCE_FILENAME,
+    /** A CSV filename's exchange or trade date differs from the manifest's inputs. */
+    TRADE_DATE_MISMATCH,
     /** Storage could not be read for a reason that may pass; the attempt is retried. */
     SOURCE_UNAVAILABLE
   }

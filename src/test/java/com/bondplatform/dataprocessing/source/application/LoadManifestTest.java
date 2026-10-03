@@ -151,6 +151,48 @@ class LoadManifestTest {
     assertThat(loadManifest.load(new ClaimedJob(bse, UUID.randomUUID(), 1)).files()).hasSize(1);
   }
 
+  // U-JSON-05 through the use case
+  @Test
+  void fileNamesOfAnotherSecurityFailTheJobBeforeAnythingIsRecorded() {
+    stored =
+        bytes(
+            with(
+                manifest ->
+                    Manifests.data(manifest)
+                        .put(
+                            "files",
+                            List.of(
+                                Manifests.file(
+                                    "ratings",
+                                    "runs/run_202/raw/ratings/1/INE002A08534_ratings.json",
+                                    "json",
+                                    10)))));
+
+    assertFailsPermanently("INVALID_SOURCE_FILENAME", "INE002A08534");
+    assertThat(saved).isEmpty();
+  }
+
+  // U-SRC-04 through the use case
+  @Test
+  void bhavcopyOfAnotherDayIsTradeDateMismatch() {
+    Map<String, Object> manifest = Manifests.bse();
+    Manifests.firstFile(manifest)
+        .put("key", "runs/run_101/raw/debt-bhavcopy/1/BSE_fgroup22092026.csv");
+    stored = bytes(manifest);
+    StoredJob bse =
+        job(
+            "urn:bond-platform:dataset:bse-debt-trades",
+            "exchange/BSE/trade-date/2026-09-21",
+            "daily-bhavcopy",
+            "run_101",
+            "{\"exchangeName\": \"BSE\", \"tradeDate\": \"2026-09-21\"}");
+
+    assertThatThrownBy(() -> loadManifest.load(new ClaimedJob(bse, UUID.randomUUID(), 1)))
+        .isInstanceOfSatisfying(
+            PermanentFailureException.class,
+            failure -> assertThat(failure.code()).isEqualTo("TRADE_DATE_MISMATCH"));
+  }
+
   @Test
   void failuresOfTheStoreReachTheCallerUnchanged() {
     LoadManifest unavailable =
