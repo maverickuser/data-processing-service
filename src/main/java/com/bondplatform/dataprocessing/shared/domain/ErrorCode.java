@@ -18,5 +18,13 @@ public enum ErrorCode {
   /** Text that should be a date is not a real calendar date in an accepted format. */
   INVALID_DATE,
   /** A selected field holds a JSON value of the wrong kind, such as a number where text is due. */
-  INVALID_TYPE
+  INVALID_TYPE,
+  /** A file has no data: it is empty or has a header and nothing after it. */
+  EMPTY_FILE,
+  /** A CSV is not valid UTF-8 RFC 4180, or a record has another number of cells than the header. */
+  MALFORMED_CSV,
+  /** A CSV lacks a header the source contract selects. */
+  REQUIRED_HEADER_MISSING,
+  /** Two CSV headers are the same after trimming and case-folding, selected or not. */
+  DUPLICATE_HEADER
 }
