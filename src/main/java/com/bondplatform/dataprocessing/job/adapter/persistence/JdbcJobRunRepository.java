@@ -64,10 +64,7 @@ public class JdbcJobRunRepository implements JobRunRepository {
       """
       UPDATE data_processing.ingestion_requests
       SET status = :status, counts = :counts::jsonb, error_count = :errorCount, completed_at = :now
-      WHERE id = :id AND status = 'PROCESSING'
-        AND EXISTS (
-          SELECT 1 FROM data_processing.processing_runs
-          WHERE id = :runId AND ingestion_request_id = :id AND status = 'RUNNING')
+      WHERE id = :id AND status = 'PROCESSING' AND attempt_count = :attemptNumber
       """;
 
   static final String END_RUN =
@@ -82,7 +79,7 @@ public class JdbcJobRunRepository implements JobRunRepository {
       UPDATE data_processing.ingestion_requests
       SET status = :jobStatus,
         completed_at = CASE WHEN :jobStatus = 'FAILED' THEN :now ELSE completed_at END
-      WHERE id = :id AND status = 'PROCESSING'
+      WHERE id = :id AND status = 'PROCESSING' AND attempt_count = :attemptNumber
       """;
 
   private static final RowMapper<StoredJob> ROW_MAPPER = JdbcJobRunRepository::map;
@@ -125,11 +122,13 @@ public class JdbcJobRunRepository implements JobRunRepository {
   }
 
   @Override
-  public void completeRun(JobId id, UUID runId, JobOutcome outcome, Instant now) {
+  public void completeRun(
+      JobId id, UUID runId, int attemptNumber, JobOutcome outcome, Instant now) {
     MapSqlParameterSource parameters =
         new MapSqlParameterSource()
             .addValue("id", id.value())
             .addValue("runId", runId)
+            .addValue("attemptNumber", attemptNumber)
             .addValue("status", outcome.status().name())
             .addValue("counts", outcome.countsJson())
             .addValue("errorCount", outcome.errorCount())
@@ -137,14 +136,16 @@ public class JdbcJobRunRepository implements JobRunRepository {
             .addValue("code", null)
             .addValue("detail", null)
             .addValue("now", utc(now));
+    // The run first: once another attempt has taken over, this one is no longer running.
+    requireOneRow(jdbc.update(END_RUN, parameters), "complete", id);
     requireOneRow(jdbc.update(COMPLETE_JOB, parameters), "complete", id);
-    jdbc.update(END_RUN, parameters);
   }
 
   @Override
   public void failRun(
       JobId id,
       UUID runId,
+      int attemptNumber,
       RunStatus runStatus,
       String code,
       String detail,
@@ -154,13 +155,16 @@ public class JdbcJobRunRepository implements JobRunRepository {
         new MapSqlParameterSource()
             .addValue("id", id.value())
             .addValue("runId", runId)
+            .addValue("attemptNumber", attemptNumber)
             .addValue("runStatus", runStatus.name())
             .addValue("code", code)
             .addValue("detail", detail)
             .addValue("jobStatus", jobStatus.name())
             .addValue("now", utc(now));
-    jdbc.update(END_RUN, parameters);
-    jdbc.update(FAIL_JOB, parameters);
+    // A stale attempt, whose run another attempt has already ended, leaves the job alone.
+    if (jdbc.update(END_RUN, parameters) == 1) {
+      jdbc.update(FAIL_JOB, parameters);
+    }
   }
 
   private static void requireOneRow(int rows, String action, JobId id) {

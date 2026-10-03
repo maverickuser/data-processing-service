@@ -36,17 +36,20 @@ public interface JobRunRepository {
   /**
    * Records that the attempt finished the job with this outcome.
    *
-   * @throws IllegalStateException if the job is not running this attempt
+   * @throws IllegalStateException if the job is not running this attempt: another attempt has taken
+   *     over, or the job has ended
    */
-  void completeRun(JobId id, UUID runId, JobOutcome outcome, Instant now);
+  void completeRun(JobId id, UUID runId, int attemptNumber, JobOutcome outcome, Instant now);
 
   /**
    * Records that the attempt failed, and the job's resulting status: {@code FAILED}, which also
-   * sets its completion time, or a status from which it runs again.
+   * sets its completion time, or a status from which it runs again. An attempt that is no longer
+   * the job's current one changes nothing.
    */
   void failRun(
       JobId id,
       UUID runId,
+      int attemptNumber,
       RunStatus runStatus,
       String code,
       String detail,

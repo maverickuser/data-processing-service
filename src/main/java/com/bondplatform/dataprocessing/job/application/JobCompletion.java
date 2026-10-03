@@ -30,6 +30,6 @@ public class JobCompletion {
    */
   @Transactional(propagation = Propagation.MANDATORY)
   public void complete(ClaimedJob job, JobOutcome outcome) {
-    runs.completeRun(job.job().id(), job.runId(), outcome, Instant.now(clock));
+    runs.completeRun(job.job().id(), job.runId(), job.attemptNumber(), outcome, Instant.now(clock));
   }
 }

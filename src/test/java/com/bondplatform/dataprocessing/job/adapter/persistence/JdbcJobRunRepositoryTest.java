@@ -127,19 +127,31 @@ class JdbcJobRunRepositoryTest {
 
   @Test
   void completesJobOnlyWhileThisAttemptIsRunning() {
+    when(jdbc.update(eq(JdbcJobRunRepository.END_RUN), any(SqlParameterSource.class)))
+        .thenReturn(1);
     when(jdbc.update(eq(JdbcJobRunRepository.COMPLETE_JOB), any(SqlParameterSource.class)))
         .thenReturn(1);
 
     repository.completeRun(
-        new JobId(ID), RUN, new JobOutcome(JobStatus.COMPLETED_WITH_ERRORS, "{\"a\":1}", 2), NOW);
+        new JobId(ID),
+        RUN,
+        3,
+        new JobOutcome(JobStatus.COMPLETED_WITH_ERRORS, "{\"a\":1}", 2),
+        NOW);
+
+    InOrder order = inOrder(jdbc);
+    order.verify(jdbc).update(eq(JdbcJobRunRepository.END_RUN), any(SqlParameterSource.class));
+    order.verify(jdbc).update(eq(JdbcJobRunRepository.COMPLETE_JOB), any(SqlParameterSource.class));
 
     SqlParameterSource bound = updated(JdbcJobRunRepository.COMPLETE_JOB);
     assertThat(bound.getValue("status")).isEqualTo("COMPLETED_WITH_ERRORS");
     assertThat(bound.getValue("counts")).isEqualTo("{\"a\":1}");
     assertThat(bound.getValue("errorCount")).isEqualTo(2);
+    assertThat(bound.getValue("attemptNumber")).isEqualTo(3);
     assertThat(updated(JdbcJobRunRepository.END_RUN).getValue("runStatus")).isEqualTo("SUCCEEDED");
     assertThat(JdbcJobRunRepository.COMPLETE_JOB)
-        .contains("status = 'PROCESSING'", "id = :runId", "status = 'RUNNING'");
+        .contains("status = 'PROCESSING'", "attempt_count = :attemptNumber");
+    assertThat(JdbcJobRunRepository.END_RUN).contains("id = :runId AND status = 'RUNNING'");
   }
 
   @Test
@@ -148,16 +160,21 @@ class JdbcJobRunRepositoryTest {
         .isThrownBy(
             () ->
                 repository.completeRun(
-                    new JobId(ID), RUN, new JobOutcome(JobStatus.COMPLETED, "{}", 0), NOW))
+                    new JobId(ID), RUN, 1, new JobOutcome(JobStatus.COMPLETED, "{}", 0), NOW))
         .withMessageContaining("not running this attempt");
-    verify(jdbc, never()).update(eq(JdbcJobRunRepository.END_RUN), any(SqlParameterSource.class));
+    verify(jdbc, never())
+        .update(eq(JdbcJobRunRepository.COMPLETE_JOB), any(SqlParameterSource.class));
   }
 
   @Test
   void failureEndsTheRunAndSetsTheJobStatus() {
+    when(jdbc.update(eq(JdbcJobRunRepository.END_RUN), any(SqlParameterSource.class)))
+        .thenReturn(1);
+
     repository.failRun(
         new JobId(ID),
         RUN,
+        2,
         RunStatus.FAILED_PERMANENT,
         "SOURCE_NOT_FOUND",
         "missing",
@@ -168,9 +185,28 @@ class JdbcJobRunRepositoryTest {
     assertThat(run.getValue("runStatus")).isEqualTo("FAILED_PERMANENT");
     assertThat(run.getValue("code")).isEqualTo("SOURCE_NOT_FOUND");
     assertThat(run.getValue("detail")).isEqualTo("missing");
-    assertThat(updated(JdbcJobRunRepository.FAIL_JOB).getValue("jobStatus")).isEqualTo("FAILED");
+    SqlParameterSource job = updated(JdbcJobRunRepository.FAIL_JOB);
+    assertThat(job.getValue("jobStatus")).isEqualTo("FAILED");
+    assertThat(job.getValue("attemptNumber")).isEqualTo(2);
     assertThat(JdbcJobRunRepository.FAIL_JOB)
-        .contains("WHEN :jobStatus = 'FAILED' THEN :now", "status = 'PROCESSING'");
+        .contains("WHEN :jobStatus = 'FAILED' THEN :now", "status = 'PROCESSING'")
+        .contains("attempt_count = :attemptNumber");
+  }
+
+  @Test
+  void failureOfStaleAttemptLeavesTheJobAlone() {
+    repository.failRun(
+        new JobId(ID),
+        RUN,
+        1,
+        RunStatus.FAILED_TEMPORARY,
+        "UNEXPECTED_FAILURE",
+        "java.lang.IllegalStateException",
+        JobStatus.RETRY_PENDING,
+        NOW);
+
+    verify(jdbc).update(eq(JdbcJobRunRepository.END_RUN), any(SqlParameterSource.class));
+    verify(jdbc, never()).update(eq(JdbcJobRunRepository.FAIL_JOB), any(SqlParameterSource.class));
   }
 
   private SqlParameterSource updated(String statement) {

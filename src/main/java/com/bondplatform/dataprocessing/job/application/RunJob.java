@@ -38,6 +38,9 @@ public class RunJob {
   /** Code of a handler that returned without finishing the job: a defect, not a data problem. */
   static final String JOB_NOT_FINISHED = "JOB_NOT_FINISHED";
 
+  /** Code of a job whose dataset no handler in this deployment processes. */
+  static final String NO_DATASET_HANDLER = "NO_DATASET_HANDLER";
+
   /** Code of a failure no handler anticipated; treated as temporary. */
   static final String UNEXPECTED_FAILURE = "UNEXPECTED_FAILURE";
 
@@ -98,7 +101,13 @@ public class RunJob {
     MDC.put("attemptNumber", String.valueOf(job.attemptNumber()));
     DatasetHandler handler = handlers.get(job.job().dataset());
     if (handler == null) {
-      throw new IllegalStateException("No handler for dataset " + job.job().dataset());
+      // A deployment defect, but failing the job once beats a message that loops forever.
+      fail(
+          job,
+          RunStatus.FAILED_PERMANENT,
+          NO_DATASET_HANDLER,
+          "No handler processes dataset " + job.job().dataset().value());
+      return RunResult.FINISHED;
     }
     try {
       handler.process(job);
@@ -110,8 +119,12 @@ public class RunJob {
       return RunResult.RETRY_LATER;
     } catch (RuntimeException e) {
       // The worker's outermost boundary for the job: an unanticipated failure is logged once and
-      // treated as temporary. Its message may hold anything, so only its type is stored.
-      LOG.error("Attempt failed unexpectedly", e);
+      // treated as temporary. Its message may quote source data, so only its type and where it
+      // was thrown are logged and stored.
+      LOG.error(
+          "Attempt failed unexpectedly, type={}, at={}",
+          e.getClass().getName(),
+          e.getStackTrace().length > 0 ? e.getStackTrace()[0] : "unknown");
       fail(job, RunStatus.FAILED_TEMPORARY, UNEXPECTED_FAILURE, e.getClass().getName());
       return RunResult.RETRY_LATER;
     }
@@ -156,6 +169,7 @@ public class RunJob {
             runs.failRun(
                 job.job().id(),
                 job.runId(),
+                job.attemptNumber(),
                 runStatus,
                 code,
                 detail,

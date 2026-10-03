@@ -165,6 +165,45 @@ class JobRunIT extends PostgresIntegrationTest {
         .isEqualTo("JOB_NOT_FINISHED");
   }
 
+  // Review finding R-2: an attempt still alive after another took over must not change the job.
+  @Test
+  void attemptThatWasTakenOverCanNeitherCompleteNorFailTheJob() {
+    handler.behaviour =
+        first -> {
+          handler.behaviour = second -> publishAndComplete(second, COMPLETED);
+          assertThat(runJob.run(job)).isEqualTo(RunResult.FINISHED);
+          // The first attempt, still alive, now tries to finish the job.
+          publishAndComplete(first, new JobOutcome(JobStatus.FAILED, "{}", 0));
+        };
+
+    assertThat(runJob.run(job)).isEqualTo(RunResult.RETRY_LATER);
+
+    assertThat(jobRow()).containsEntry("status", "COMPLETED").containsEntry("attempt_count", 2);
+    assertThat(runRows())
+        .containsExactly(
+            Map.of("attempt_number", 1, "status", "FAILED_TEMPORARY"),
+            Map.of("attempt_number", 2, "status", "SUCCEEDED"));
+    assertThat(securityCount()).isEqualTo(1);
+  }
+
+  @Test
+  void permanentFailureOfAttemptThatWasTakenOverLeavesTheJobAlone() {
+    handler.behaviour =
+        first -> {
+          handler.behaviour = second -> publishAndComplete(second, COMPLETED);
+          runJob.run(job);
+          throw new PermanentFailureException("SOURCE_NOT_FOUND", "late failure");
+        };
+
+    assertThat(runJob.run(job)).isEqualTo(RunResult.FINISHED);
+
+    assertThat(jobRow()).containsEntry("status", "COMPLETED").containsEntry("completed", true);
+    assertThat(runRows())
+        .containsExactly(
+            Map.of("attempt_number", 1, "status", "FAILED_TEMPORARY"),
+            Map.of("attempt_number", 2, "status", "SUCCEEDED"));
+  }
+
   private void publishAndComplete(ClaimedJob claimed, JobOutcome outcome) {
     transactions.executeWithoutResult(
         status -> {

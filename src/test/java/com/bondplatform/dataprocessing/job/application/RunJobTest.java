@@ -169,14 +169,16 @@ class RunJobTest {
   }
 
   @Test
-  void jobOfDatasetWithoutHandlerIsDefect() {
+  void jobOfDatasetWithoutHandlerFailsOnceInsteadOfLooping() {
     runs.add(JobStatus.QUEUED, 0);
     RunJob withoutHandlers =
         new RunJob(runs, List.of(), new DirectTransactions(), clock, () -> new UUID(0, 1));
 
-    assertThatIllegalStateException()
-        .isThrownBy(() -> withoutHandlers.run(JOB))
-        .withMessageContaining("nsdl-security");
+    assertThat(withoutHandlers.run(JOB)).isEqualTo(RunResult.FINISHED);
+
+    assertThat(runs.status).isEqualTo(JobStatus.FAILED);
+    assertThat(runs.runs.get(0).code()).isEqualTo("NO_DATASET_HANDLER");
+    assertThat(runs.lastDetail).contains("nsdl-security");
   }
 
   @Test
@@ -293,7 +295,8 @@ class RunJobTest {
     }
 
     @Override
-    public void completeRun(JobId id, UUID runId, JobOutcome jobOutcome, Instant now) {
+    public void completeRun(
+        JobId id, UUID runId, int attemptNumber, JobOutcome jobOutcome, Instant now) {
       status = jobOutcome.status();
       outcome = jobOutcome;
       end(runId, RunStatus.SUCCEEDED, null);
@@ -303,6 +306,7 @@ class RunJobTest {
     public void failRun(
         JobId id,
         UUID runId,
+        int attemptNumber,
         RunStatus runStatus,
         String code,
         String detail,
