@@ -23,6 +23,14 @@ class CsvFilenameTest {
         .contains(new CsvFilename(new ExchangeName("BSE"), TradeDate.parseIso("2026-09-21")));
   }
 
+  // Review finding N-1: a capital that lengthens when lowercased must not shift the exchange.
+  @Test
+  void exchangeIsCutFromTheNameAsWritten() {
+    assertThat(CsvFilename.parse("İSE_fgroup01012026.csv"))
+        .hasValueSatisfying(name -> assertThat(name.exchange().value()).isEqualTo("İSE"));
+    assertThat(CsvFilename.parse("İİİİİİ_01012026.csv")).isPresent();
+  }
+
   @ParameterizedTest
   @ValueSource(
       strings = {

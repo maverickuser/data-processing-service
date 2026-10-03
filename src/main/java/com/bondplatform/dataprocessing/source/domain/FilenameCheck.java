@@ -14,6 +14,9 @@ import java.util.Set;
  *
  * <p>A file name is never the source of the trade date, exchange, or ISIN: the manifest inputs are.
  * The name only has to agree with them.
+ *
+ * <p>Call it only after {@link ManifestVerifier} found the manifest's inputs equal to the
+ * submission's, which admission validated: the inputs are then present and well formed.
  */
 public final class FilenameCheck {
 
