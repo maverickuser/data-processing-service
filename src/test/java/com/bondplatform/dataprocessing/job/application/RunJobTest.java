@@ -11,10 +11,12 @@ import com.bondplatform.dataprocessing.job.domain.JobStatus;
 import com.bondplatform.dataprocessing.job.domain.ManifestLocation;
 import com.bondplatform.dataprocessing.job.domain.NewIngestionRequest.PinnedContractVersions;
 import com.bondplatform.dataprocessing.job.domain.OrderingGroup;
+import com.bondplatform.dataprocessing.job.domain.RetryPolicy;
 import com.bondplatform.dataprocessing.job.domain.RunStatus;
 import com.bondplatform.dataprocessing.job.domain.StoredJob;
 import com.bondplatform.dataprocessing.shared.domain.JobId;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -52,6 +54,7 @@ class RunJobTest {
           runs,
           List.of(handler),
           new DirectTransactions(),
+          RetryPolicy.STANDARD,
           clock,
           () -> new UUID(0, nextId.getAndIncrement()));
 
@@ -137,10 +140,58 @@ class RunJobTest {
 
     RunResult result = runJob.run(JOB);
 
-    assertThat(result).isEqualTo(RunResult.RETRY_LATER);
+    assertThat(result).isEqualTo(RunResult.retryAfter(Duration.ofMinutes(1)));
     assertThat(result.acknowledgesMessage()).isFalse();
     assertThat(runs.status).isEqualTo(JobStatus.RETRY_PENDING);
     assertThat(runs.runs.get(0).status()).isEqualTo(RunStatus.FAILED_TEMPORARY);
+  }
+
+  // U-JOB-01
+  @Test
+  void secondTemporaryFailureWaitsFiveMinutesAndTheThirdFailsTheJob() {
+    runs.add(JobStatus.RETRY_PENDING, 1);
+    handler.behaviour =
+        job -> {
+          throw new TemporaryFailureException(
+              "SOURCE_UNAVAILABLE", "S3 did not answer", new IllegalStateException());
+        };
+
+    assertThat(runJob.run(JOB)).isEqualTo(RunResult.retryAfter(Duration.ofMinutes(5)));
+    assertThat(runs.status).isEqualTo(JobStatus.RETRY_PENDING);
+
+    RunResult third = runJob.run(JOB);
+
+    assertThat(third).isEqualTo(RunResult.ATTEMPTS_EXHAUSTED);
+    assertThat(third.acknowledgesMessage()).isFalse();
+    assertThat(runs.status).isEqualTo(JobStatus.FAILED);
+    assertThat(runs.attemptCount).isEqualTo(3);
+  }
+
+  // U-JOB-01
+  @Test
+  void permanentFailureIsNeverRetriedWhateverTheAttempt() {
+    runs.add(JobStatus.QUEUED, 0);
+    handler.behaviour =
+        job -> {
+          throw new PermanentFailureException("CHECKSUM_MISMATCH", "sha256 differs");
+        };
+
+    assertThat(runJob.run(JOB)).isEqualTo(RunResult.FINISHED);
+    assertThat(runs.status).isEqualTo(JobStatus.FAILED);
+  }
+
+  @Test
+  void deliveryAfterEveryAttemptWasUsedFailsTheJobWithoutRunningIt() {
+    runs.add(JobStatus.PROCESSING, 3);
+    runs.runs.add(new Run(new UUID(9, 9), 3, RunStatus.RUNNING, null));
+
+    assertThat(runJob.run(JOB)).isEqualTo(RunResult.FINISHED);
+
+    assertThat(handler.claimed).isEmpty();
+    assertThat(runs.status).isEqualTo(JobStatus.FAILED);
+    assertThat(runs.runs)
+        .containsExactly(
+            new Run(new UUID(9, 9), 3, RunStatus.FAILED_TEMPORARY, "ATTEMPT_ABANDONED"));
   }
 
   @Test
@@ -151,7 +202,7 @@ class RunJobTest {
           throw new IllegalArgumentException("password=secret");
         };
 
-    assertThat(runJob.run(JOB)).isEqualTo(RunResult.RETRY_LATER);
+    assertThat(runJob.run(JOB)).isEqualTo(RunResult.retryAfter(Duration.ofMinutes(1)));
 
     assertThat(runs.runs.get(0).code()).isEqualTo("UNEXPECTED_FAILURE");
     assertThat(runs.lastDetail).isEqualTo("java.lang.IllegalArgumentException");
@@ -172,7 +223,13 @@ class RunJobTest {
   void jobOfDatasetWithoutHandlerFailsOnceInsteadOfLooping() {
     runs.add(JobStatus.QUEUED, 0);
     RunJob withoutHandlers =
-        new RunJob(runs, List.of(), new DirectTransactions(), clock, () -> new UUID(0, 1));
+        new RunJob(
+            runs,
+            List.of(),
+            new DirectTransactions(),
+            RetryPolicy.STANDARD,
+            clock,
+            () -> new UUID(0, 1));
 
     assertThat(withoutHandlers.run(JOB)).isEqualTo(RunResult.FINISHED);
 
@@ -190,6 +247,7 @@ class RunJobTest {
                     runs,
                     List.of(new FakeHandler(), new FakeHandler()),
                     new DirectTransactions(),
+                    RetryPolicy.STANDARD,
                     clock,
                     UUID::randomUUID));
   }
@@ -292,6 +350,13 @@ class RunJobTest {
       status = JobStatus.PROCESSING;
       attemptCount = attemptNumber;
       runs.add(new Run(runId, attemptNumber, RunStatus.RUNNING, null));
+    }
+
+    @Override
+    public void failJob(JobId id, int attempts, Instant now) {
+      if (attempts == attemptCount && !status.isTerminal()) {
+        status = JobStatus.FAILED;
+      }
     }
 
     @Override

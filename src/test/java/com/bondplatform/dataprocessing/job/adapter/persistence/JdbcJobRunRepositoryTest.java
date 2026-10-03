@@ -194,6 +194,18 @@ class JdbcJobRunRepositoryTest {
   }
 
   @Test
+  void failsJobWhoseAttemptsAreUsedUpOnlyIfItIsStillOnThatAttemptAndNotFinished() {
+    repository.failJob(new JobId(ID), 3, NOW);
+
+    SqlParameterSource bound = updated(JdbcJobRunRepository.FAIL_JOB_WITH_ATTEMPTS_USED_UP);
+    assertThat(bound.getValue("attemptNumber")).isEqualTo(3);
+    assertThat(bound.getValue("now")).isEqualTo(NOW.atOffset(ZoneOffset.UTC));
+    assertThat(JdbcJobRunRepository.FAIL_JOB_WITH_ATTEMPTS_USED_UP)
+        .contains("attempt_count = :attemptNumber")
+        .contains("status IN ('QUEUED', 'PROCESSING', 'RETRY_PENDING')");
+  }
+
+  @Test
   void failureOfStaleAttemptLeavesTheJobAlone() {
     repository.failRun(
         new JobId(ID),

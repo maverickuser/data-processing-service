@@ -141,7 +141,7 @@ class JobRunIT extends PostgresIntegrationTest {
               "SOURCE_UNAVAILABLE", "S3 did not answer", new IllegalStateException());
         };
 
-    assertThat(runJob.run(job)).isEqualTo(RunResult.RETRY_LATER);
+    assertThat(runJob.run(job).acknowledgesMessage()).isFalse();
 
     assertThat(jobRow()).containsEntry("status", "RETRY_PENDING").containsEntry("completed", false);
     assertThat(runRows())
@@ -176,7 +176,7 @@ class JobRunIT extends PostgresIntegrationTest {
           publishAndComplete(first, new JobOutcome(JobStatus.FAILED, "{}", 0));
         };
 
-    assertThat(runJob.run(job)).isEqualTo(RunResult.RETRY_LATER);
+    assertThat(runJob.run(job).acknowledgesMessage()).isFalse();
 
     assertThat(jobRow()).containsEntry("status", "COMPLETED").containsEntry("attempt_count", 2);
     assertThat(runRows())

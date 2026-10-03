@@ -34,6 +34,12 @@ public interface JobRunRepository {
   void startRun(JobId id, UUID runId, int attemptNumber, Instant now);
 
   /**
+   * Fails a job whose attempts have all been used, without starting another. The job must be on the
+   * given attempt and not finished; otherwise nothing changes.
+   */
+  void failJob(JobId id, int attemptCount, Instant now);
+
+  /**
    * Records that the attempt finished the job with this outcome.
    *
    * @throws IllegalStateException if the job is not running this attempt: another attempt has taken

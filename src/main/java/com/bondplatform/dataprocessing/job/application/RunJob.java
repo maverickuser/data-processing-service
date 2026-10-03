@@ -3,11 +3,13 @@ package com.bondplatform.dataprocessing.job.application;
 import com.bondplatform.dataprocessing.contract.domain.DatasetUrn;
 import com.bondplatform.dataprocessing.job.domain.ClaimedJob;
 import com.bondplatform.dataprocessing.job.domain.JobStatus;
+import com.bondplatform.dataprocessing.job.domain.RetryPolicy;
 import com.bondplatform.dataprocessing.job.domain.RunStatus;
 import com.bondplatform.dataprocessing.job.domain.StoredJob;
 import com.bondplatform.dataprocessing.shared.domain.JobId;
 import com.bondplatform.dataprocessing.shared.supplier.IdSupplier;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -49,6 +51,7 @@ public class RunJob {
   private final JobRunRepository runs;
   private final Map<DatasetUrn, DatasetHandler> handlers;
   private final TransactionOperations transactions;
+  private final RetryPolicy retryPolicy;
   private final Clock clock;
   private final IdSupplier idSupplier;
 
@@ -61,12 +64,14 @@ public class RunJob {
       JobRunRepository runs,
       List<DatasetHandler> handlers,
       TransactionOperations transactions,
+      RetryPolicy retryPolicy,
       Clock clock,
       IdSupplier idSupplier) {
     this.runs = runs;
     this.handlers =
         handlers.stream().collect(Collectors.toMap(DatasetHandler::dataset, Function.identity()));
     this.transactions = transactions;
+    this.retryPolicy = retryPolicy;
     this.clock = clock;
     this.idSupplier = idSupplier;
   }
@@ -88,6 +93,10 @@ public class RunJob {
         case Claim.AlreadyFinished finished -> {
           LOG.info("Job already finished as {}; nothing to do", finished.status());
           yield RunResult.ALREADY_FINISHED;
+        }
+        case Claim.AttemptsUsedUp usedUp -> {
+          LOG.warn("Every attempt was used; the job is failed");
+          yield RunResult.FINISHED;
         }
         case Claim.Started started -> attempt(started.job());
       };
@@ -115,8 +124,7 @@ public class RunJob {
       fail(job, RunStatus.FAILED_PERMANENT, e.code(), String.valueOf(e.getMessage()));
       return RunResult.FINISHED;
     } catch (TemporaryFailureException e) {
-      fail(job, RunStatus.FAILED_TEMPORARY, e.code(), String.valueOf(e.getMessage()));
-      return RunResult.RETRY_LATER;
+      return failTemporarily(job, e.code(), String.valueOf(e.getMessage()));
     } catch (RuntimeException e) {
       // The worker's outermost boundary for the job: an unanticipated failure is logged once and
       // treated as temporary. Its message may quote source data, so only its type and where it
@@ -125,8 +133,7 @@ public class RunJob {
           "Attempt failed unexpectedly, type={}, at={}",
           e.getClass().getName(),
           e.getStackTrace().length > 0 ? e.getStackTrace()[0] : "unknown");
-      fail(job, RunStatus.FAILED_TEMPORARY, UNEXPECTED_FAILURE, e.getClass().getName());
-      return RunResult.RETRY_LATER;
+      return failTemporarily(job, UNEXPECTED_FAILURE, e.getClass().getName());
     }
     if (!isFinished(job.job().id())) {
       fail(
@@ -149,6 +156,11 @@ public class RunJob {
     }
     Instant now = Instant.now(clock);
     runs.endAbandonedRuns(jobId, ATTEMPT_ABANDONED, now);
+    if (job.attemptCount() >= retryPolicy.maxAttempts()) {
+      // Every attempt was used, the last one by an invocation that died without recording an end.
+      runs.failJob(jobId, job.attemptCount(), now);
+      return new Claim.AttemptsUsedUp();
+    }
     ClaimedJob claimed = new ClaimedJob(job, idSupplier.nextId(), job.attemptCount() + 1);
     runs.startRun(jobId, claimed.runId(), claimed.attemptNumber(), now);
     return new Claim.Started(claimed);
@@ -161,9 +173,26 @@ public class RunJob {
     return Boolean.TRUE.equals(finished);
   }
 
+  /**
+   * Records a temporary failure: the job runs again after the policy's delay, or, after its last
+   * attempt, is failed.
+   */
+  private RunResult failTemporarily(ClaimedJob job, String code, String detail) {
+    Optional<Duration> delay = retryPolicy.delayAfterFailedAttempt(job.attemptNumber());
+    if (delay.isEmpty()) {
+      fail(job, RunStatus.FAILED_TEMPORARY, code, detail, JobStatus.FAILED);
+      return RunResult.ATTEMPTS_EXHAUSTED;
+    }
+    fail(job, RunStatus.FAILED_TEMPORARY, code, detail, JobStatus.RETRY_PENDING);
+    return RunResult.retryAfter(delay.get());
+  }
+
   private void fail(ClaimedJob job, RunStatus runStatus, String code, String detail) {
-    JobStatus jobStatus =
-        runStatus == RunStatus.FAILED_PERMANENT ? JobStatus.FAILED : JobStatus.RETRY_PENDING;
+    fail(job, runStatus, code, detail, JobStatus.FAILED);
+  }
+
+  private void fail(
+      ClaimedJob job, RunStatus runStatus, String code, String detail, JobStatus jobStatus) {
     transactions.executeWithoutResult(
         status ->
             runs.failRun(
@@ -183,6 +212,9 @@ public class RunJob {
 
     /** No job has this ID. */
     record UnknownJob() implements Claim {}
+
+    /** Every attempt had been used; the job is now failed. */
+    record AttemptsUsedUp() implements Claim {}
 
     /** The job has already finished; the message is a redelivery. */
     record AlreadyFinished(JobStatus status) implements Claim {}
