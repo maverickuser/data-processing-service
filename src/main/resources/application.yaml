@@ -37,6 +37,12 @@ spring:
     locations: classpath:db/migration
 
 data-processing:
+  queues:
+    # Lambda sets AWS_REGION. The queue URLs come from Terraform; the security-details queue is
+    # owned elsewhere (LLD section 14.2). A URL ending in .fifo is sent to as a FIFO queue.
+    region: ${AWS_REGION:ap-south-1}
+    file-processing-url: ${FILE_PROCESSING_QUEUE_URL:}
+    security-details-url: ${SECURITY_DETAILS_QUEUE_URL:}
   api:
     # The public origin of the API; links in responses (Location, statusUrl) are built from it.
     public-base-url: ${PUBLIC_BASE_URL:https://processing.kagent.app}

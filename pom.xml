@@ -32,6 +32,7 @@
     <nullaway.version>0.14.2</nullaway.version>
     <archunit.version>1.5.1</archunit.version>
     <json-schema-validator.version>3.0.8</json-schema-validator.version>
+    <aws-sdk.version>2.55.11</aws-sdk.version>
     <spotless.version>3.10.3</spotless.version>
     <!-- Newest release that Spotless 3.10.3 can drive; 1.37.0 fails inside the plugin. -->
     <google-java-format.version>1.35.0</google-java-format.version>
@@ -39,6 +40,18 @@
     <checkstyle.version>14.3.0</checkstyle.version>
     <jacoco.version>0.8.15</jacoco.version>
   </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>bom</artifactId>
+        <version>${aws-sdk.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
 
   <dependencies>
     <dependency>
@@ -56,6 +69,25 @@
           <artifactId>spring-boot-starter-tomcat</artifactId>
         </exclusion>
       </exclusions>
+    </dependency>
+    <!-- SQS with the JDK's own HTTP client: the smallest package and the fastest Lambda start. -->
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>sqs</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>software.amazon.awssdk</groupId>
+          <artifactId>apache-client</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>software.amazon.awssdk</groupId>
+          <artifactId>netty-nio-client</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>url-connection-client</artifactId>
     </dependency>
     <dependency>
       <groupId>com.amazonaws.serverless</groupId>
@@ -244,6 +276,12 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
           <argLine>@{unitCoverageAgent}</argLine>
+          <!-- Tests never reach real AWS: fixed fake credentials, and no instance-metadata lookups. -->
+          <systemPropertyVariables>
+            <aws.accessKeyId>test</aws.accessKeyId>
+            <aws.secretAccessKey>test</aws.secretAccessKey>
+            <aws.disableEc2Metadata>true</aws.disableEc2Metadata>
+          </systemPropertyVariables>
           <skipTests>${skipUnitTests}</skipTests>
           <includes>
             <include>**/*Test.java</include>
@@ -255,6 +293,14 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-failsafe-plugin</artifactId>
+        <configuration>
+          <!-- Tests never reach real AWS: fixed fake credentials, and no instance-metadata lookups. -->
+          <systemPropertyVariables>
+            <aws.accessKeyId>test</aws.accessKeyId>
+            <aws.secretAccessKey>test</aws.secretAccessKey>
+            <aws.disableEc2Metadata>true</aws.disableEc2Metadata>
+          </systemPropertyVariables>
+        </configuration>
         <executions>
           <execution>
             <goals>
