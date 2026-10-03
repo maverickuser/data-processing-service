@@ -37,6 +37,10 @@ spring:
     locations: classpath:db/migration
 
 data-processing:
+  sources:
+    # The fetch service's artifact bucket; no other bucket is read (LLD section 19).
+    region: ${AWS_REGION:ap-south-1}
+    allowed-buckets: ${SOURCE_BUCKETS:}
   queues:
     # Lambda sets AWS_REGION. The queue URLs come from Terraform; the security-details queue is
     # owned elsewhere (LLD section 14.2). A URL ending in .fifo is sent to as a FIFO queue.

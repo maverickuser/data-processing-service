@@ -71,10 +71,24 @@
         </exclusion>
       </exclusions>
     </dependency>
-    <!-- SQS with the JDK's own HTTP client: the smallest package and the fastest Lambda start. -->
+    <!-- SQS and S3 with the JDK's own HTTP client: the smallest package and the fastest start. -->
     <dependency>
       <groupId>software.amazon.awssdk</groupId>
       <artifactId>sqs</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>software.amazon.awssdk</groupId>
+          <artifactId>apache-client</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>software.amazon.awssdk</groupId>
+          <artifactId>netty-nio-client</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>s3</artifactId>
       <exclusions>
         <exclusion>
           <groupId>software.amazon.awssdk</groupId>

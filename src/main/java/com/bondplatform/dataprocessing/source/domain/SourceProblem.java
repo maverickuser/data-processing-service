@@ -16,6 +16,12 @@ public record SourceProblem(Code code, String detail) {
      */
     INVALID_MANIFEST,
     /** The manifest, a CSV, or the listed JSON files together are larger than allowed. */
-    SOURCE_TOO_LARGE
+    SOURCE_TOO_LARGE,
+    /** A listed object, or the manifest, does not exist or may not be read (LLD section 21). */
+    SOURCE_NOT_FOUND,
+    /** A listed file's size or SHA-256 differs from the manifest's (LLD section 19). */
+    CHECKSUM_MISMATCH,
+    /** Storage could not be read for a reason that may pass; the attempt is retried. */
+    SOURCE_UNAVAILABLE
   }
 }
