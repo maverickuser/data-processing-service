@@ -33,7 +33,11 @@ final class IngestionRequests {
         "{\"isin_code\": \"INE121A07QY9\"}",
         new ManifestLocation("data-fetch-service-artifacts", "runs/run_202/manifest.json", null),
         "sha256:fingerprint",
-        "{\"specversion\": \"1.0\", \"id\": \"" + eventId + "\"}",
+        "{\"specversion\": \"1.0\", \"id\": \""
+            + eventId
+            + "\", \"data\": {\"event_type\": \"nsdl-bond-data\", \"event_id\": \"evt_"
+            + idempotencyKey
+            + "\"}}",
         new PinnedContractVersions(
             new ContractId("nsdl-security-json", "v1"),
             "sha256:source",

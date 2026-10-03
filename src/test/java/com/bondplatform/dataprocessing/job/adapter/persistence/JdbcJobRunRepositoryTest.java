@@ -64,6 +64,9 @@ class JdbcJobRunRepositoryTest {
     when(row.getInt("attempt_count")).thenReturn(1);
     when(row.getString("dataset_urn")).thenReturn("urn:bond-platform:dataset:nsdl-security");
     when(row.getString("subject")).thenReturn("isin/INE121A07QY9");
+    when(row.getString("event_type")).thenReturn("nsdl-bond-data");
+    when(row.getString("fetch_event_id")).thenReturn("evt_1");
+    when(row.getString("run_id")).thenReturn("run_202");
     when(row.getString("ordering_group")).thenReturn("isin:INE121A07QY9");
     when(row.getString("inputs")).thenReturn("{\"isin_code\": \"INE121A07QY9\"}");
     when(row.getString("manifest_bucket")).thenReturn("bucket");
@@ -84,6 +87,9 @@ class JdbcJobRunRepositoryTest {
     assertThat(job.attemptCount()).isEqualTo(1);
     assertThat(job.dataset().value()).isEqualTo("urn:bond-platform:dataset:nsdl-security");
     assertThat(job.orderingGroup().value()).isEqualTo("isin:INE121A07QY9");
+    assertThat(job.eventType()).isEqualTo("nsdl-bond-data");
+    assertThat(job.fetchEventId()).isEqualTo("evt_1");
+    assertThat(job.runId()).isEqualTo("run_202");
     assertThat(job.manifest().versionId()).isEqualTo("v7");
     assertThat(job.contracts().mapping().name()).isEqualTo("nsdl-security-mapping-v2");
     assertThat(job.contracts().sourceHash()).isEqualTo("sha256:s");

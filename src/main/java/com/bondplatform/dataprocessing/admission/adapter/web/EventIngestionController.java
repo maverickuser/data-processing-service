@@ -7,6 +7,7 @@ import com.bondplatform.dataprocessing.admission.domain.Submission;
 import com.bondplatform.dataprocessing.admission.domain.SubmissionError;
 import com.bondplatform.dataprocessing.admission.domain.SubmissionResult;
 import com.bondplatform.dataprocessing.admission.domain.SubmissionValidator;
+import com.bondplatform.dataprocessing.shared.adapter.json.StrictJsonParser;
 import com.bondplatform.dataprocessing.shared.adapter.web.ApiProblemException;
 import com.bondplatform.dataprocessing.shared.adapter.web.ProblemError;
 import com.bondplatform.dataprocessing.shared.adapter.web.ProblemType;
@@ -83,7 +84,7 @@ public class EventIngestionController {
       throw new ApiProblemException(ProblemType.REQUEST_TOO_LARGE, TOO_LARGE);
     }
     Map<String, Object> event =
-        SubmissionBodyParser.parse(body)
+        StrictJsonParser.parse(body)
             .orElseThrow(() -> new ApiProblemException(ProblemType.INVALID_REQUEST, MALFORMED));
     AdmissionReceipt receipt = admit(validated(event, idempotencyKey), event);
     URI statusUrl = api.urlOf("/v1/processing-jobs/" + receipt.jobId());

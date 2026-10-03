@@ -29,7 +29,10 @@ public class JdbcJobRunRepository implements JobRunRepository {
 
   static final String LOCK_FOR_RUN =
       """
-      SELECT id, status, attempt_count, dataset_urn, subject, ordering_group, inputs::text AS inputs,
+      SELECT id, status, attempt_count, dataset_urn, subject,
+        submission_event -> 'data' ->> 'event_type' AS event_type,
+        submission_event -> 'data' ->> 'event_id' AS fetch_event_id, run_id,
+        ordering_group, inputs::text AS inputs,
         manifest_bucket, manifest_key, manifest_version_id, dataset_fingerprint,
         source_contract_id, source_contract_version, source_contract_hash,
         mapping_contract_id, mapping_contract_version, mapping_contract_hash
@@ -203,6 +206,9 @@ public class JdbcJobRunRepository implements JobRunRepository {
         row.getInt("attempt_count"),
         new DatasetUrn(row.getString("dataset_urn")),
         row.getString("subject"),
+        row.getString("event_type"),
+        row.getString("fetch_event_id"),
+        row.getString("run_id"),
         new OrderingGroup(row.getString("ordering_group")),
         row.getString("inputs"),
         new ManifestLocation(

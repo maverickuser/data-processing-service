@@ -1,4 +1,4 @@
-package com.bondplatform.dataprocessing.admission.adapter.web;
+package com.bondplatform.dataprocessing.shared.adapter.json;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-class SubmissionBodyParserTest {
+class StrictJsonParserTest {
 
   @Test
   void readsObjectIntoPlainMapsAndLists() {
@@ -66,16 +66,15 @@ class SubmissionBodyParserTest {
 
   @Test
   void bodyThatIsNotUtf8IsRefused() {
-    assertThat(SubmissionBodyParser.parse("{\"a\": \"é\"}".getBytes(StandardCharsets.ISO_8859_1)))
+    assertThat(StrictJsonParser.parse("{\"a\": \"é\"}".getBytes(StandardCharsets.ISO_8859_1)))
         .isEmpty();
-    assertThat(SubmissionBodyParser.parse("{\"a\": 1}".getBytes(StandardCharsets.UTF_16)))
-        .isEmpty();
+    assertThat(StrictJsonParser.parse("{\"a\": 1}".getBytes(StandardCharsets.UTF_16))).isEmpty();
   }
 
   @Test
   void nestingDeeperThanTheLimitIsRefusedWithoutExhaustingTheStack() {
-    assertThat(parse(nested(SubmissionBodyParser.MAX_NESTING_DEPTH - 1))).isPresent();
-    assertThat(parse(nested(SubmissionBodyParser.MAX_NESTING_DEPTH))).isEmpty();
+    assertThat(parse(nested(StrictJsonParser.MAX_NESTING_DEPTH - 1))).isPresent();
+    assertThat(parse(nested(StrictJsonParser.MAX_NESTING_DEPTH))).isEmpty();
     assertThat(parse(nested(30_000))).isEmpty();
   }
 
@@ -93,6 +92,6 @@ class SubmissionBodyParserTest {
   }
 
   private static Optional<Map<String, Object>> parse(String body) {
-    return SubmissionBodyParser.parse(body.getBytes(StandardCharsets.UTF_8));
+    return StrictJsonParser.parse(body.getBytes(StandardCharsets.UTF_8));
   }
 }

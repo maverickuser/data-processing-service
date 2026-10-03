@@ -52,7 +52,14 @@ class JobRunIT extends PostgresIntegrationTest {
 
   @Test
   void finishedAttemptRecordsJobOutcomeAndSucceededRun() {
-    handler.behaviour = claimed -> publishAndComplete(claimed, COMPLETED);
+    handler.behaviour =
+        claimed -> {
+          // What the worker reads about the submission, for comparing with the manifest.
+          assertThat(claimed.job().eventType()).isEqualTo("nsdl-bond-data");
+          assertThat(claimed.job().fetchEventId()).startsWith("evt_run_");
+          assertThat(claimed.job().runId()).startsWith("run_");
+          publishAndComplete(claimed, COMPLETED);
+        };
 
     assertThat(runJob.run(job)).isEqualTo(RunResult.FINISHED);
 
