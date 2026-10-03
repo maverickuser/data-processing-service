@@ -21,9 +21,9 @@ spring:
         # Do not add reWriteBatchedInserts: repositories rely on a row count per batched insert.
   servlet:
     encoding:
-      # Keep the character set the caller declared, so that the submission endpoint can refuse
-      # anything but UTF-8. A request that declares none is still read as UTF-8.
-      force-request: false
+      # RequestCharsetFilter decides the request character set: UTF-8, or 415. Spring's own filter
+      # would ask the container to resolve the declared name first, and a malformed one fails there.
+      enabled: false
   flyway:
     # Migrations are run by the migration function during deployment, never at application start.
     enabled: false

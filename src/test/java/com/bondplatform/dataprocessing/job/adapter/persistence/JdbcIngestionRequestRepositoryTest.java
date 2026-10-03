@@ -140,7 +140,7 @@ class JdbcIngestionRequestRepositoryTest {
 
     assertThatThrownBy(() -> repository.lockOrderingGroup(new OrderingGroup("isin:INE121A07QY9")))
         .isInstanceOf(CannotAcquireLockException.class)
-        .hasMessageContaining("isin:INE121A07QY9");
+        .hasMessageContaining("lock_timeout");
   }
 
   @Test
@@ -150,6 +150,21 @@ class JdbcIngestionRequestRepositoryTest {
 
     assertThatThrownBy(() -> repository.lockOrderingGroup(new OrderingGroup("isin:INE121A07QY9")))
         .isSameAs(failure);
+  }
+
+  @Test
+  void insertThatWaitedTooLongForRowLockIsTemporaryFailure() {
+    when(jdbc.query(
+            eq(JdbcIngestionRequestRepository.INSERT_IF_ABSENT),
+            any(SqlParameterSource.class),
+            anyRowMapper()))
+        .thenThrow(
+            new UncategorizedSQLException(
+                "insert", "INSERT", new SQLException("lock timeout", "55P03")));
+
+    assertThatThrownBy(
+            () -> repository.insertIfAbsent(IngestionRequests.nsdl(ID, "run_202", "event")))
+        .isInstanceOf(CannotAcquireLockException.class);
   }
 
   private UncategorizedSQLException lockFailsWith(SQLException cause) {

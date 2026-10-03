@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -55,6 +56,10 @@ class EventIngestionRejectionsIT {
             415),
         refused(
             "another character set", submission(CLOUD_EVENT + "; charset=ISO-8859-1", valid), 415),
+        refused("unknown character set", submission(CLOUD_EVENT + "; charset=foo", valid), 415),
+        refused(
+            "malformed character set", submission(CLOUD_EVENT + "; charset=\"x y\"", valid), 415),
+        refused("empty character set", submission(CLOUD_EVENT + "; charset=", valid), 415),
         refused(
             "no content type",
             HttpApiEvent.post(PATH)
@@ -131,6 +136,20 @@ class EventIngestionRejectionsIT {
         .startsWith(SubmissionOpenApi.documentedContentType(503));
     assertThat(SubmissionOpenApi.violations("Problem", response.body())).isEmpty();
     assertThat(response.body()).doesNotContain("127.0.0.1", "unreachable");
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"; charset=utf-8", "; Charset=\"UTF8\"", ""})
+  void utf8DeclaredInAnySpellingOrNotAtAllIsAccepted(String parameter) throws IOException {
+    HttpApiResponse response =
+        HttpApiResponse.of(
+            handler,
+            submission(
+                CLOUD_EVENT + parameter,
+                CanonicalJson.of(SubmissionEvents.nsdl("run_202", "INE121A07QY9"))));
+
+    // Accepted for admission, which then finds the database unreachable.
+    assertThat(response.status()).isEqualTo(503);
   }
 
   @Test

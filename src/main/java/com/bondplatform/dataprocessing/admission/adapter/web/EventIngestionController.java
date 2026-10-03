@@ -12,13 +12,10 @@ import com.bondplatform.dataprocessing.shared.adapter.web.ProblemError;
 import com.bondplatform.dataprocessing.shared.adapter.web.ProblemType;
 import com.bondplatform.dataprocessing.shared.adapter.web.PublicApiProperties;
 import java.net.URI;
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -44,7 +41,6 @@ public class EventIngestionController {
   static final int MAX_BODY_BYTES = 65_536;
 
   private static final String ACCEPTED = "ACCEPTED";
-  private static final String NOT_UTF_8 = "Use application/cloudevents+json with UTF-8 encoding.";
   private static final String TOO_LARGE = "The request body exceeds 65536 bytes.";
   private static final String MALFORMED =
       "The body must be one UTF-8 JSON object with no repeated names.";
@@ -71,23 +67,18 @@ public class EventIngestionController {
    * <p>The body is a required parameter on purpose: with an optional body the framework skips the
    * content-type check whenever it cannot tell that a body is present, as behind API Gateway.
    *
-   * @throws ApiProblemException with {@code 415} for another character set, {@code 413} for an
-   *     oversize body, {@code 400} for a malformed or invalid submission, and {@code 409} when the
-   *     key or event identity was accepted with other content
+   * @throws ApiProblemException with {@code 413} for an oversize body, {@code 400} for a malformed
+   *     or invalid submission, and {@code 409} when the key or event identity was accepted with
+   *     other content
    */
   @PostMapping(
       path = "/v1/event-ingestions",
       consumes = CLOUD_EVENT_JSON,
       produces = MediaType.APPLICATION_JSON_VALUE)
   public ResponseEntity<AdmissionReceiptResponse> submit(
-      @RequestHeader(HttpHeaders.CONTENT_TYPE) MediaType contentType,
       @RequestHeader(name = SubmissionValidator.IDEMPOTENCY_KEY_HEADER, required = false)
           @Nullable String idempotencyKey,
       @RequestBody byte[] body) {
-    Charset charset = contentType.getCharset();
-    if (charset != null && !charset.equals(StandardCharsets.UTF_8)) {
-      throw new ApiProblemException(ProblemType.UNSUPPORTED_MEDIA_TYPE, NOT_UTF_8);
-    }
     if (body.length > MAX_BODY_BYTES) {
       throw new ApiProblemException(ProblemType.REQUEST_TOO_LARGE, TOO_LARGE);
     }

@@ -14,6 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.CannotAcquireLockException;
+import org.springframework.dao.RecoverableDataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -91,6 +92,16 @@ class GlobalExceptionHandlerTest {
     assertThat(problem.getProperties()).containsEntry("code", "SERVICE_UNAVAILABLE");
     assertThat(problem.getDetail()).doesNotContain("secret");
     assertThat(log.list).singleElement().extracting(ILoggingEvent::getLevel).isEqualTo(Level.WARN);
+  }
+
+  @Test
+  void connectionLostDuringWorkIsServiceUnavailable() {
+    assertThat(
+            handler
+                .storageUnavailable(new RecoverableDataAccessException("connection reset"))
+                .getStatusCode()
+                .value())
+        .isEqualTo(503);
   }
 
   @Test

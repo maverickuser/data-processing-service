@@ -4,6 +4,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.RecoverableDataAccessException;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
@@ -74,6 +75,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
   @ExceptionHandler({
     TransientDataAccessException.class,
     DataAccessResourceFailureException.class,
+    RecoverableDataAccessException.class,
     CannotCreateTransactionException.class
   })
   public ResponseEntity<ProblemDetail> storageUnavailable(Exception exception) {

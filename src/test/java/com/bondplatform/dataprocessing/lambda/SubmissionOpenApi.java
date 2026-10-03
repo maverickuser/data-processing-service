@@ -23,14 +23,22 @@ final class SubmissionOpenApi {
 
   /**
    * Returns how the JSON text breaks the named component schema; empty when it satisfies it.
-   * OpenAPI 3.1 schemas are JSON Schema 2020-12, so they are checked as written.
+   * OpenAPI 3.1 schemas are JSON Schema 2020-12, so they are checked as written, including {@code
+   * format} keywords such as {@code date-time} and {@code uri}.
    */
   static List<String> violations(String schemaName, String json) {
     ObjectNode root = JSON.createObjectNode();
     root.put("$ref", "#/components/schemas/" + schemaName);
     root.set("components", DOCUMENT.get("components"));
     Schema schema = SCHEMAS.getSchema(root);
-    return schema.validate(json, InputFormat.JSON).stream().map(Object::toString).toList();
+    return schema
+        .validate(
+            json,
+            InputFormat.JSON,
+            context -> context.executionConfig(config -> config.formatAssertionsEnabled(true)))
+        .stream()
+        .map(Object::toString)
+        .toList();
   }
 
   /** Returns the documented response of the submission operation for a status. */
