@@ -40,6 +40,15 @@ public class S3SourceStore implements ManifestSource, SourceObjectReader {
 
   private static final int BUFFER_BYTES = 64 * 1024;
 
+  /** Client errors that pass on their own: an expiring credential, clock skew, a slow upload. */
+  private static final Set<String> PASSING_ERROR_CODES =
+      Set.of(
+          "RequestTimeout",
+          "RequestTimeTooSkewed",
+          "ExpiredToken",
+          "TokenRefreshRequired",
+          "InvalidToken");
+
   private final S3Client s3;
   private final Set<String> allowedBuckets;
 
@@ -60,10 +69,12 @@ public class S3SourceStore implements ManifestSource, SourceObjectReader {
         get(location.bucket(), location.key(), location.versionId())) {
       Long length = object.response().contentLength();
       if (length != null && length > maxBytes) {
+        object.abort();
         throw tooLarge(length, maxBytes);
       }
       Content content = readAtMost(object, maxBytes);
       if (content.bytes().length > maxBytes) {
+        object.abort();
         throw tooLarge(content.bytes().length, maxBytes);
       }
       return content.bytes();
@@ -78,10 +89,12 @@ public class S3SourceStore implements ManifestSource, SourceObjectReader {
     try (ResponseInputStream<GetObjectResponse> object = get(file.bucket(), file.key(), null)) {
       Long length = object.response().contentLength();
       if (length != null && length != file.sizeBytes()) {
+        object.abort();
         return mismatch(file, "size " + length + " bytes, listed as " + file.sizeBytes());
       }
       Content content = readAtMost(object, file.sizeBytes());
       if (content.bytes().length != file.sizeBytes()) {
+        object.abort();
         return mismatch(
             file,
             "size "
@@ -107,13 +120,15 @@ public class S3SourceStore implements ManifestSource, SourceObjectReader {
     try {
       return s3.getObject(request -> request.bucket(bucket).key(key).versionId(versionId));
     } catch (S3Exception e) {
-      if (e.statusCode() >= 500 || e.statusCode() == 429) {
+      if (e.statusCode() >= 500
+          || e.statusCode() == 429
+          || PASSING_ERROR_CODES.contains(errorCodeOf(e))) {
         throw unavailable(e);
       }
       throw new PermanentFailureException(
           SOURCE_NOT_FOUND,
           "Object "
-              + key
+              + key.substring(key.lastIndexOf('/') + 1)
               + " could not be read: "
               + errorCodeOf(e)
               + " (HTTP "
@@ -144,7 +159,7 @@ public class S3SourceStore implements ManifestSource, SourceObjectReader {
     if (!allowedBuckets.contains(bucket)) {
       throw new PermanentFailureException(
           SourceProblem.Code.INVALID_MANIFEST.name(),
-          "Bucket " + bucket + " is not one the service reads from");
+          "The manifest names a bucket the service does not read from");
     }
   }
 

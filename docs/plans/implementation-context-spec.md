@@ -41,7 +41,7 @@ Versions marked assumed must be checked against the current stable releases and 
 | Static analysis | Checkstyle 14.3.0 (Google checks), Error Prone 2.50.0, NullAway 0.14.2, JSpecify 1.0.1; `-Werror` | known: pinned in PR 02 |
 | Architecture tests | ArchUnit 1.5.1 | known: pinned in PR 02 |
 | Coverage | JaCoCo 0.8.15 report, gate in `scripts/check_coverage.py` | known: pinned in PR 02 |
-| Tests | JUnit 5, AssertJ, Mockito (sparingly), Testcontainers (PostgreSQL 16, LocalStack) | assumed |
+| Tests | JUnit 5, AssertJ, Mockito (sparingly), Testcontainers: PostgreSQL 16, ElasticMQ 1.7.1 for SQS, Adobe S3Mock 5.2.3 for S3 (LocalStack images now need an account token) | known (2026-10-03) |
 | CSV parsing | Apache Commons CSV | assumed |
 | JSON | Jackson 3 (`tools.jackson`, managed by Spring Boot) with `BigDecimal` numbers; strict duplicate detection is added with the JSON reader in PR 30 | known |
 | AWS access | AWS SDK for Java v2 (S3, SQS) | assumed |
@@ -72,6 +72,7 @@ Versions marked assumed must be checked against the current stable releases and 
 | Owner of the shared network | PR 44, PR 47 | known (2026-10-02): the separate repository [cloud-platform-network](https://github.com/maverickuser/cloud-platform-network). State bucket `cloud-platform-network-terraform-state`, key `network/terraform.tfstate`. Called through its reusable workflow `apply.yml`. This supersedes the earlier decision to keep `infra/network` in this repository |
 | `processing` Lambda security group in the network repository | PR 44, PR 47 | pending: needs a pull request there adding `processing` to `lambda_security_groups`, then a version tag |
 | Network repository version tag | PR 47 | pending: `v1` is not tagged yet |
+| Function environment variables | PR 45, PR 47 | known (2026-10-03): every function shares one application context, so all five need `FILE_PROCESSING_QUEUE_URL` (must end in `.fifo`), `SECURITY_DETAILS_QUEUE_URL`, and `SOURCE_BUCKETS` (the fetch service's artifact bucket) or they fail to start; optional `PUBLIC_BASE_URL`. `AWS_REGION` is set by Lambda |
 | Route 53 hosted-zone ID for `kagent.app` | PR 46 | pending |
 | Security-details queue ARN, URL, and type (Standard or FIFO) | PR 46, PR 29 configuration | pending: from data-fetch-service Terraform outputs |
 | Fetch-service artifact bucket name | PR 46 | pending: `data-fetch-service-artifacts` appears in examples; confirm the deployed name |

@@ -1,8 +1,8 @@
 package com.bondplatform.dataprocessing.source.domain;
 
 /**
- * Why a job's sources cannot be processed. Every code fails the job without a retry: listed objects
- * are immutable, so a retry would meet the same problem.
+ * Why a job's sources cannot be processed. Every code but {@link Code#SOURCE_UNAVAILABLE} fails the
+ * job without a retry: listed objects are immutable, so a retry would meet the same problem.
  *
  * @param detail an explanation for the job's error record; never source data
  */

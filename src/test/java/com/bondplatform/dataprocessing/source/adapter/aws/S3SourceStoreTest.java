@@ -23,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
@@ -136,7 +137,8 @@ class S3SourceStoreTest {
   void missingOrRefusedObjectIsSourceNotFound() {
     failsWith(s3Error(404, "NoSuchKey"));
     assertFails(() -> store.read(file(1, "0".repeat(64))), "SOURCE_NOT_FOUND")
-        .hasMessageContaining("NoSuchKey (HTTP 404)");
+        .hasMessageContaining("BSE_fgroup21092026.csv could not be read: NoSuchKey (HTTP 404)")
+        .hasMessageNotContaining("runs/run_101");
 
     failsWith(s3Error(403, "AccessDenied"));
     assertFails(() -> store.read(manifest(), 10), "SOURCE_NOT_FOUND");
@@ -151,6 +153,13 @@ class S3SourceStoreTest {
             TemporaryFailureException.class,
             failure -> assertThat(failure.code()).isEqualTo("SOURCE_UNAVAILABLE"))
         .hasMessageContaining("SlowDown (HTTP 503)");
+
+    for (String passing : List.of("ExpiredToken", "RequestTimeTooSkewed", "RequestTimeout")) {
+      failsWith(s3Error(passing.equals("ExpiredToken") ? 403 : 400, passing));
+      assertThatThrownBy(() -> store.read(manifest(), 10))
+          .isInstanceOf(TemporaryFailureException.class)
+          .hasMessageContaining(passing);
+    }
 
     failsWith(SdkClientException.create("Read timed out"));
     assertThatThrownBy(() -> store.read(manifest(), 10))
@@ -190,7 +199,7 @@ class S3SourceStoreTest {
     assertFails(
             () -> store.read(new ManifestLocation("someone-elses-bucket", "k", null), 10),
             "INVALID_MANIFEST")
-        .hasMessageContaining("someone-elses-bucket");
+        .hasMessageNotContaining("someone-elses-bucket");
 
     verifyNoInteractions(s3);
   }
