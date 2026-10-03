@@ -1,8 +1,10 @@
 package com.bondplatform.dataprocessing.job.adapter.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -19,6 +21,9 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
+import org.springframework.dao.CannotAcquireLockException;
+import org.springframework.jdbc.UncategorizedSQLException;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcOperations;
 import org.springframework.jdbc.core.namedparam.SqlParameterSource;
@@ -106,6 +111,70 @@ class JdbcIngestionRequestRepositoryTest {
     assertThat(parameters.getValue().getValue("orderingGroup")).isEqualTo("isin:INE121A07QY9");
     assertThat(JdbcIngestionRequestRepository.LOCK_ORDERING_GROUP)
         .contains("pg_advisory_xact_lock", ":orderingGroup");
+  }
+
+  @Test
+  void limitsLockWaitsBeforeTakingTheLock() {
+    repository.lockOrderingGroup(new OrderingGroup("isin:INE121A07QY9"));
+
+    InOrder order = inOrder(jdbc);
+    order
+        .verify(jdbc)
+        .query(
+            eq(JdbcIngestionRequestRepository.LIMIT_LOCK_WAIT),
+            any(SqlParameterSource.class),
+            any(RowMapper.class));
+    order
+        .verify(jdbc)
+        .query(
+            eq(JdbcIngestionRequestRepository.LOCK_ORDERING_GROUP),
+            any(SqlParameterSource.class),
+            any(RowMapper.class));
+    assertThat(JdbcIngestionRequestRepository.LIMIT_LOCK_WAIT)
+        .contains("set_config('lock_timeout'", "true");
+  }
+
+  @Test
+  void lockWaitThatTimesOutIsTemporaryFailure() {
+    lockFailsWith(new SQLException("canceling statement due to lock timeout", "55P03"));
+
+    assertThatThrownBy(() -> repository.lockOrderingGroup(new OrderingGroup("isin:INE121A07QY9")))
+        .isInstanceOf(CannotAcquireLockException.class)
+        .hasMessageContaining("lock_timeout");
+  }
+
+  @Test
+  void otherLockFailureIsPassedOnUnchanged() {
+    UncategorizedSQLException failure =
+        lockFailsWith(new SQLException("out of shared memory", "53200"));
+
+    assertThatThrownBy(() -> repository.lockOrderingGroup(new OrderingGroup("isin:INE121A07QY9")))
+        .isSameAs(failure);
+  }
+
+  @Test
+  void insertThatWaitedTooLongForRowLockIsTemporaryFailure() {
+    when(jdbc.query(
+            eq(JdbcIngestionRequestRepository.INSERT_IF_ABSENT),
+            any(SqlParameterSource.class),
+            anyRowMapper()))
+        .thenThrow(
+            new UncategorizedSQLException(
+                "insert", "INSERT", new SQLException("lock timeout", "55P03")));
+
+    assertThatThrownBy(
+            () -> repository.insertIfAbsent(IngestionRequests.nsdl(ID, "run_202", "event")))
+        .isInstanceOf(CannotAcquireLockException.class);
+  }
+
+  private UncategorizedSQLException lockFailsWith(SQLException cause) {
+    UncategorizedSQLException failure = new UncategorizedSQLException("lock", "SELECT", cause);
+    when(jdbc.query(
+            eq(JdbcIngestionRequestRepository.LOCK_ORDERING_GROUP),
+            any(SqlParameterSource.class),
+            any(RowMapper.class)))
+        .thenThrow(failure);
+    return failure;
   }
 
   @Test

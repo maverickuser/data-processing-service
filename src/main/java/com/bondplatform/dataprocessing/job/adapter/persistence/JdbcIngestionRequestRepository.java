@@ -13,6 +13,9 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
+import org.springframework.dao.CannotAcquireLockException;
+import org.springframework.jdbc.UncategorizedSQLException;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcOperations;
@@ -51,6 +54,12 @@ public class JdbcIngestionRequestRepository implements IngestionRequestRepositor
          OR (event_source = :eventSource AND event_id = :eventId)
       ORDER BY acceptance_sequence
       """;
+
+  /** Bounds every lock wait of the transaction, so a stuck admission cannot hold others up. */
+  static final String LIMIT_LOCK_WAIT = "SELECT set_config('lock_timeout', '5s', true)";
+
+  /** PostgreSQL's SQLSTATE for a lock wait that reached {@code lock_timeout}. */
+  private static final String LOCK_NOT_AVAILABLE = "55P03";
 
   /** A transaction-scoped advisory lock keyed by the group; released at commit or rollback. */
   static final String LOCK_ORDERING_GROUP =
@@ -91,15 +100,35 @@ public class JdbcIngestionRequestRepository implements IngestionRequestRepositor
             .addValue("mappingContractVersion", request.contracts().mapping().version())
             .addValue("mappingContractHash", request.contracts().mappingHash())
             .addValue("submittedAt", request.submittedAt().atOffset(ZoneOffset.UTC));
-    return jdbc.query(INSERT_IF_ABSENT, parameters, ROW_MAPPER).stream().findFirst();
+    // The insert can wait on a row lock: the same key, submitted in another group, not yet
+    // committed.
+    return withLockTimeoutAsTemporary(() -> jdbc.query(INSERT_IF_ABSENT, parameters, ROW_MAPPER))
+        .stream()
+        .findFirst();
   }
 
   @Override
   public void lockOrderingGroup(OrderingGroup group) {
-    jdbc.query(
-        LOCK_ORDERING_GROUP,
-        new MapSqlParameterSource("orderingGroup", group.value()),
-        (row, rowNumber) -> row.getObject(1));
+    MapSqlParameterSource parameters = new MapSqlParameterSource("orderingGroup", group.value());
+    jdbc.query(LIMIT_LOCK_WAIT, parameters, (row, rowNumber) -> row.getString(1));
+    withLockTimeoutAsTemporary(
+        () -> jdbc.query(LOCK_ORDERING_GROUP, parameters, (row, rowNumber) -> row.getObject(1)));
+  }
+
+  /**
+   * Runs a statement, turning a lock wait that reached {@code lock_timeout} into the temporary
+   * failure it is. PostgreSQL reports it with an SQLSTATE that Spring leaves uncategorized.
+   */
+  private static <T> T withLockTimeoutAsTemporary(Supplier<T> statement) {
+    try {
+      return statement.get();
+    } catch (UncategorizedSQLException e) {
+      SQLException cause = e.getSQLException();
+      if (cause != null && LOCK_NOT_AVAILABLE.equals(cause.getSQLState())) {
+        throw new CannotAcquireLockException("A lock wait reached lock_timeout", e);
+      }
+      throw e;
+    }
   }
 
   @Override

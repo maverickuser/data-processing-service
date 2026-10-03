@@ -78,6 +78,9 @@ class AdmitSubmissionTest {
     assertThat(stored.contracts().mappingHash()).isNotEqualTo(stored.contracts().sourceHash());
     assertThat(stored.submittedAt()).isEqualTo(NOW);
     assertThat(requests.locked).containsExactly(new OrderingGroup("isin:INE121A07QY9"));
+    // The group is locked before anything is read or stored, or acceptance order could differ
+    // from commit order.
+    assertThat(requests.calls).containsExactly("lock", "find", "insert");
     assertThat(outbox)
         .containsExactly(
             new NewOutboxEvent(
@@ -193,12 +196,14 @@ class AdmitSubmissionTest {
     private final List<NewIngestionRequest> inserted = new ArrayList<>();
     private final List<AcceptedRequest> stored = new ArrayList<>();
     private final List<OrderingGroup> locked = new ArrayList<>();
+    private final List<String> calls = new ArrayList<>();
     private boolean hideNextLookup;
     private boolean refuseInserts;
     private Map<String, Object> existingBeforeInsert = Map.of();
 
     @Override
     public Optional<AcceptedRequest> insertIfAbsent(NewIngestionRequest request) {
+      calls.add("insert");
       if (!existingBeforeInsert.isEmpty()) {
         // Simulates another transaction committing the same submission just before this insert.
         Map<String, Object> event = existingBeforeInsert;
@@ -255,12 +260,14 @@ class AdmitSubmissionTest {
 
     @Override
     public void lockOrderingGroup(OrderingGroup group) {
+      calls.add("lock");
       locked.add(group);
     }
 
     @Override
     public List<AcceptedRequest> findByIdempotencyKeyOrEvent(
         String idempotencyKey, String eventSource, String eventId) {
+      calls.add("find");
       if (hideNextLookup) {
         hideNextLookup = false;
         return List.of();

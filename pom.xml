@@ -31,6 +31,7 @@
     <error-prone.version>2.50.0</error-prone.version>
     <nullaway.version>0.14.2</nullaway.version>
     <archunit.version>1.5.1</archunit.version>
+    <json-schema-validator.version>3.0.8</json-schema-validator.version>
     <spotless.version>3.10.3</spotless.version>
     <!-- Newest release that Spotless 3.10.3 can drive; 1.37.0 fails inside the plugin. -->
     <google-java-format.version>1.35.0</google-java-format.version>
@@ -112,6 +113,13 @@
       <groupId>com.tngtech.archunit</groupId>
       <artifactId>archunit-junit5</artifactId>
       <version>${archunit.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <!-- Checks HTTP responses against the schemas in the OpenAPI documents. -->
+    <dependency>
+      <groupId>com.networknt</groupId>
+      <artifactId>json-schema-validator</artifactId>
+      <version>${json-schema-validator.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>

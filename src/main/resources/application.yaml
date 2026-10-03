@@ -19,6 +19,11 @@ spring:
         connectTimeout: 10
         socketTimeout: 60
         # Do not add reWriteBatchedInserts: repositories rely on a row count per batched insert.
+  servlet:
+    encoding:
+      # RequestCharsetFilter decides the request character set: UTF-8, or 415. Spring's own filter
+      # would ask the container to resolve the declared name first, and a malformed one fails there.
+      enabled: false
   flyway:
     # Migrations are run by the migration function during deployment, never at application start.
     enabled: false
@@ -32,6 +37,9 @@ spring:
     locations: classpath:db/migration
 
 data-processing:
+  api:
+    # The public origin of the API; links in responses (Location, statusUrl) are built from it.
+    public-base-url: ${PUBLIC_BASE_URL:https://processing.kagent.app}
   # One entry per dataset: the stage-1 and stage-2 contract files, without the .yaml extension.
   contracts:
     - source: bse-debt-bhavcopy-csv-v1

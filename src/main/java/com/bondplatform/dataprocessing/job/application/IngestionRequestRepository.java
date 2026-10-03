@@ -26,6 +26,10 @@ public interface IngestionRequestRepository {
    * <p>Acceptance sequence numbers are handed out at insert, not at commit. Taking turns per group
    * makes the order of the numbers the order of the commits, so a later request can never be queued
    * ahead of an earlier one in the same group.
+   *
+   * <p>The wait for a turn is bounded. From this call on, no lock wait in the transaction lasts
+   * longer than a few seconds; one that does fails with a temporary data-access error, which the
+   * caller may retry.
    */
   void lockOrderingGroup(OrderingGroup group);
 

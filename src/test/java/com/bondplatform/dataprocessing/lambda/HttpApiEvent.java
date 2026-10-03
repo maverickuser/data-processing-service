@@ -48,6 +48,12 @@ final class HttpApiEvent {
     return header("content-type", contentType);
   }
 
+  /** Adds a body and leaves the content type unset. */
+  HttpApiEvent bodyWithoutContentType(String body) {
+    this.body = body;
+    return this;
+  }
+
   InputStream toStream() {
     Map<String, Object> http = new LinkedHashMap<>();
     http.put("method", method);
