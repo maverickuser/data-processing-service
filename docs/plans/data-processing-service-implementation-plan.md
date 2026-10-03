@@ -193,7 +193,7 @@ LLD sections 2.1, 13.1, 19, 21.
 
 | PR | Branch | Scope | Test cases | Exit evidence |
 |---|---|---|---|---|
-| 20 | `d/20-manifest` | `Manifest`, `ManifestLoader`, `ManifestVerifier`: 1 MB limit, agreement with the submission, `source_files` persistence | U-JOB-03, U-SRC-02 (manifest part) | — |
+| 20 | `d/20a-manifest`, `d/20b-load-manifest` (split 2026-10-03) | `Manifest`, `ManifestLoader`, `ManifestVerifier`: 1 MB limit, agreement with the submission, `source_files` persistence | U-JOB-03, U-SRC-02 (manifest part) | — |
 | 21 | `d/21-source-reader` | `SourceObjectReader` port, `S3SourceObjectReader` streaming with timeouts, size limits, SHA-256 verification | U-SRC-01..03 | Each failure maps to its agreed code and retry class |
 | 22 | `d/22-filenames` | `CsvFilename`, `JsonFilename`; manifest-input cross-check | U-VAL-03, U-SRC-04, U-JSON-04..05 | — |
 
@@ -242,7 +242,7 @@ LLD sections 18, 21, 23.
 | PR | Branch | Scope | Test cases | Exit evidence |
 |---|---|---|---|---|
 | 40 | `h/40-retention` | `RetentionCleaner` and `RetentionHandler` (daily schedule) | I-OPS-01..02 | — |
-| 41 | `h/41-sweeper` | `OutboxSweeperHandler` (every minute): ordered delivery of pending outbox events; `StuckJobFailer` for jobs past their final attempt limit | I-OPS-04, I-EVT-05 | Pending work left by a failed invocation is delivered once, in order |
+| 41 | `h/41-sweeper` | `OutboxSweeperHandler` (every minute): ordered delivery of pending outbox events; `StuckJobFailer` for jobs past their final attempt limit, and for any job left `QUEUED`, `PROCESSING`, or `RETRY_PENDING` past a time limit whatever its attempts (decided 2026-10-03, LLD 23.3); a sweep time budget (17b review S-2) | I-OPS-04, I-EVT-05 | Pending work left by a failed invocation is delivered once, in order |
 | 42 | `h/42-observability` | Structured JSON logs with `jobId` and `attemptNumber`; CloudWatch embedded-metric-format metrics for job outcomes, run duration, and oldest pending outbox age | I-OPS-05 | — |
 
 ## Stack I — Infrastructure and release
