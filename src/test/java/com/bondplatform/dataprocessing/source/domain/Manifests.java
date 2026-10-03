@@ -7,14 +7,14 @@ import java.util.Map;
 import java.util.Objects;
 
 /** Builds manifests as parsed JSON, in the shape the fetch service writes them, for tests. */
-final class Manifests {
+public final class Manifests {
 
-  static final String HASH = "a".repeat(64);
+  public static final String HASH = "a".repeat(64);
 
   private Manifests() {}
 
   /** Returns an NSDL manifest for run_202 listing the given JSON file names. */
-  static Map<String, Object> nsdl(String... fileNames) {
+  public static Map<String, Object> nsdl(String... fileNames) {
     Map<String, Object> inputs = new LinkedHashMap<>();
     inputs.put("isin_code", "INE121A07QY9");
     List<Object> files = new ArrayList<>();
@@ -30,7 +30,7 @@ final class Manifests {
   }
 
   /** Returns a BSE manifest for run_101 listing one CSV. */
-  static Map<String, Object> bse() {
+  public static Map<String, Object> bse() {
     Map<String, Object> inputs = new LinkedHashMap<>();
     inputs.put("exchangeName", "BSE");
     inputs.put("tradeDate", "2026-09-21");
@@ -50,7 +50,7 @@ final class Manifests {
   }
 
   /** Returns one file entry. */
-  static Map<String, Object> file(String jobId, String key, String format, long size) {
+  public static Map<String, Object> file(String jobId, String key, String format, long size) {
     Map<String, Object> file = new LinkedHashMap<>();
     file.put("job_id", jobId);
     file.put("bucket", "data-fetch-service-artifacts");
@@ -62,13 +62,15 @@ final class Manifests {
     return file;
   }
 
+  /** Returns the manifest's mutable {@code data} object. */
   @SuppressWarnings("unchecked")
-  static Map<String, Object> data(Map<String, Object> manifest) {
+  public static Map<String, Object> data(Map<String, Object> manifest) {
     return (Map<String, Object>) Objects.requireNonNull(manifest.get("data"));
   }
 
+  /** Returns the manifest's first mutable file entry. */
   @SuppressWarnings("unchecked")
-  static Map<String, Object> firstFile(Map<String, Object> manifest) {
+  public static Map<String, Object> firstFile(Map<String, Object> manifest) {
     return (Map<String, Object>)
         ((List<Object>) Objects.requireNonNull(data(manifest).get("files"))).get(0);
   }
