@@ -172,6 +172,9 @@ class ProcessingSchemaIT extends PostgresIntegrationTest {
         .containsExactly(
             "CREATE INDEX outbox_events_pending ON data_processing.outbox_events"
                 + " USING btree (status, next_attempt_at) WHERE (status = 'PENDING'::text)",
+            "CREATE INDEX outbox_events_pending_by_group ON data_processing.outbox_events"
+                + " USING btree (destination, message_group, ordering_key)"
+                + " WHERE (status = 'PENDING'::text)",
             "CREATE UNIQUE INDEX outbox_events_pkey ON data_processing.outbox_events"
                 + " USING btree (id)");
   }
