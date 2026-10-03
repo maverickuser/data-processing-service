@@ -18,8 +18,8 @@ import org.slf4j.LoggerFactory;
  * <p>An event is sent only when no older event of its group is pending. That alone keeps the order:
  * an event becomes delivered only after a successful send, so when a later event is sent every
  * earlier one is already in the queue. Two dispatchers may send the same event at once; the queue's
- * deduplication by event ID delivers it once. No database transaction is open while a message is
- * sent.
+ * deduplication by event ID delivers it once. The dispatcher opens no transaction of its own and
+ * holds no lock while a message is sent.
  *
  * <p>A failed send leaves the event pending with a later due time from {@link BackoffPolicy}; it is
  * retried indefinitely.
