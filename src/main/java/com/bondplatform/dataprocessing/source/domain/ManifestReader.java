@@ -3,11 +3,13 @@ package com.bondplatform.dataprocessing.source.domain;
 import com.bondplatform.dataprocessing.contract.domain.DatasetUrn;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 
@@ -156,13 +158,19 @@ public final class ManifestReader {
         return List.of();
       }
       List<ManifestFile> files = new ArrayList<>();
+      Set<String> locations = new HashSet<>();
       for (int index = 0; index < list.size(); index++) {
         String filePointer = child("files") + "/" + index;
         if (!(list.get(index) instanceof Map<?, ?> map)) {
           problems.add(filePointer + " must be an object");
           continue;
         }
-        file(new Fields(typed(map), filePointer, problems)).ifPresent(files::add);
+        Optional<ManifestFile> file = file(new Fields(typed(map), filePointer, problems));
+        if (file.isPresent() && !locations.add(file.get().bucket() + "/" + file.get().key())) {
+          problems.add(filePointer + " lists an object already listed");
+        } else {
+          file.ifPresent(files::add);
+        }
       }
       return files;
     }

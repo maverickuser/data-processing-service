@@ -149,6 +149,16 @@ class ManifestReaderTest {
             "/data/files/0/job_id must be text");
   }
 
+  // Review finding M-1: the same object twice would break the source-file uniqueness later.
+  @Test
+  void objectListedTwiceIsInvalid() {
+    Map<String, Object> manifest =
+        Manifests.nsdl("INE121A07QY9_isin-details.json", "INE121A07QY9_isin-details.json");
+
+    assertThat(ManifestReader.read(manifest))
+        .isEqualTo(new Reading.Unreadable(List.of("/data/files/1 lists an object already listed")));
+  }
+
   @Test
   void sizeMustBeWholeAndFitInBytes() {
     assertThat(problems(manifest -> Manifests.firstFile(manifest).put("size_bytes", 1.5)))

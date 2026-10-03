@@ -1467,6 +1467,7 @@ One build artifact (a single Java application) is deployed as five Lambda functi
 - On a temporary failure the worker records the failed run, sets the message's visibility timeout to the agreed delay (1 minute, then 5 minutes), and reports failure. The group stays blocked until that message is processed, which preserves ordering through retries.
 - On the third failed attempt the worker marks the job `FAILED` and reports failure; the queue's redrive policy (`maxReceiveCount` 3) moves the message to the dead-letter queue and the group continues.
 - If an invocation dies without recording anything (crash or timeout), the message reappears after the visibility timeout and the next invocation starts a new run. The sweeper marks a job `FAILED` when it is still non-terminal after its third run has exceeded the attempt time limit.
+- Agreed 2026-10-03: the processing queue and its dead-letter queue belong to this service and keep `maxReceiveCount` 3. A receive can end before an attempt is recorded (the database unreachable at the claim, or an invocation dying before it commits), so a message can reach the dead-letter queue while its job still waits to retry. The sweeper therefore also fails any job that has stayed `QUEUED`, `PROCESSING`, or `RETRY_PENDING` past a time limit, whatever its attempt count, so no job waits forever.
 - Content failures are terminal on first occurrence: the worker records the outcome and acknowledges the message.
 
 ### 23.4 Outbox without a polling loop
