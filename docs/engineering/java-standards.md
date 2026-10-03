@@ -107,7 +107,7 @@ A name that needs `And` or `Or` describes a class or method with two jobs. Split
 - The code runs on Lambda: no background threads, schedulers, or polling loops. Everything an invocation starts, it finishes before returning.
 - Initialisation must be safe for SnapStart: no connections, random seeds, or timestamps captured at init that would be wrong after a restore; open the database connection lazily or re-validate it on first use.
 - One database connection per execution environment (pool size 1).
-- Stream large inputs. Do not load a whole file into an object graph; canonical records are written and released as they are produced.
+- Stream large inputs. Do not load a whole file into an object graph; canonical records are written and released as they are produced. The one bounded exception is a verified source file, held as bytes after its size and SHA-256 are checked: at most 10 MiB per CSV or per request's JSON files together (LLD section 1).
 - Every stream, S3 response body, and JDBC resource is closed with try-with-resources.
 - Every outbound call (S3, SQS, JDBC) has an explicit timeout.
 
