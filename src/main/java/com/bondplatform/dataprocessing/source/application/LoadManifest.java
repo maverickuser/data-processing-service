@@ -16,6 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionOperations;
 
 /**
@@ -27,6 +28,7 @@ import org.springframework.transaction.support.TransactionOperations;
  * submission, {@code SOURCE_TOO_LARGE} for one over its limits. A retried attempt reads the same
  * manifest and records nothing twice.
  */
+@Service
 public class LoadManifest {
 
   private static final int PROBLEMS_SHOWN = 5;
@@ -89,6 +91,11 @@ public class LoadManifest {
         job.datasetFingerprint());
   }
 
+  /**
+   * Returns the format the dataset's source contract reads. The registry holds one version per
+   * dataset rather than the version pinned at admission, which is enough here: the format belongs
+   * to the dataset, since an incompatible contract needs a new dataset URN (LLD section 2.1).
+   */
   private SourceFormat formatOf(StoredJob job) {
     return switch (contracts.contractsFor(job.dataset()).source()) {
       case SourceContract.Csv csv -> SourceFormat.CSV;
