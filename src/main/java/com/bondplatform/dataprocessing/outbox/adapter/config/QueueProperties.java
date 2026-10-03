@@ -18,9 +18,10 @@ public record QueueProperties(
     String region, @Nullable URI endpoint, URI fileProcessingUrl, URI securityDetailsUrl) {
 
   /**
-   * Checks that the region and both queue URLs are given.
+   * Checks that the region and both queue URLs are given, and that the job queue is FIFO.
    *
-   * @throws IllegalArgumentException if one is missing
+   * @throws IllegalArgumentException if one is missing, or the job queue URL does not end in {@code
+   *     .fifo}
    */
   public QueueProperties(
       @Nullable String region,
@@ -33,6 +34,11 @@ public record QueueProperties(
     this.region = region;
     this.endpoint = endpoint;
     this.fileProcessingUrl = required(fileProcessingUrl, "file-processing-url");
+    if (!this.fileProcessingUrl.toString().endsWith(".fifo")) {
+      // Job order depends on FIFO message groups; a standard queue would lose it silently.
+      throw new IllegalArgumentException(
+          "data-processing.queues.file-processing-url must be a FIFO queue, ending in .fifo");
+    }
     this.securityDetailsUrl = required(securityDetailsUrl, "security-details-url");
   }
 

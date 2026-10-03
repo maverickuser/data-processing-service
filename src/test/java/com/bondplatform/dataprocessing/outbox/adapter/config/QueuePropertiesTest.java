@@ -22,6 +22,19 @@ class QueuePropertiesTest {
   }
 
   @Test
+  void jobQueueMustBeFifo() {
+    assertThatIllegalArgumentException()
+        .isThrownBy(
+            () ->
+                new QueueProperties(
+                    "ap-south-1",
+                    null,
+                    URI.create("https://sqs.ap-south-1.amazonaws.com/1/jobs"),
+                    DETAILS))
+        .withMessageContaining(".fifo");
+  }
+
+  @Test
   void regionAndBothQueuesAreRequired() {
     assertThatIllegalArgumentException()
         .isThrownBy(() -> new QueueProperties(" ", null, JOBS, DETAILS))

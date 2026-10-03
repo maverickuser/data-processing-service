@@ -19,6 +19,17 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * <p>The attempt runs in the same invocation, after the commit and before the caller returns. It
  * never fails the caller; whatever it does not deliver, the sweep does. An event recorded outside a
  * transaction is left to the sweep.
+ *
+ * <p>The attempt runs in the transaction's after-commit callback, while its connection is still
+ * bound to the thread (a Lambda has one connection, so a second transaction is not possible). The
+ * dispatcher's reads and updates therefore run on that connection outside the committed
+ * transaction, and are committed when the transaction manager restores auto-commit as it releases
+ * the connection. Were that ever to change, a delivered event would stay pending and the sweep
+ * would send it again, which queue deduplication absorbs.
+ *
+ * <p>Time budget: each send can take up to the SQS client's 10-second call timeout, on top of the
+ * admission lock's 5 seconds, inside API Gateway's 29 seconds for one event per request. Revisit
+ * this before a request records more events or a timeout grows.
  */
 @Component
 @Primary
