@@ -26,8 +26,8 @@ import org.slf4j.LoggerFactory;
  */
 public class OutboxDispatcher {
 
-  /** The most events one sweep delivers, so one invocation stays well inside its time limit. */
-  static final int MAX_EVENTS_PER_SWEEP = 500;
+  /** The most sends one sweep attempts, so one invocation stays well inside its time limit. */
+  static final int MAX_ATTEMPTS_PER_SWEEP = 500;
 
   static final int BATCH_SIZE = 50;
 
@@ -53,6 +53,8 @@ public class OutboxDispatcher {
    * caller's own outcome, such as a {@code 202}, must stand.
    */
   public void deliverCommitted(Collection<UUID> eventIds) {
+    // The broad catch below is the agreed exception to the standards' rule: this method is the
+    // outermost boundary of a best-effort step inside another use case's response path.
     try {
       List<OutboxEvent> pending =
           store.findPending(eventIds).stream()
@@ -68,33 +70,36 @@ public class OutboxDispatcher {
         }
       }
     } catch (RuntimeException e) {
-      // Outermost boundary of a best-effort step: the sweep delivers whatever is left.
       LOG.warn("Immediate outbox delivery stopped; the sweep will deliver the rest", e);
     }
   }
 
   /**
-   * Delivers pending events that are due, group by group in order, until none is left, a sweep's
-   * limit is reached, or no event could be delivered.
+   * Delivers pending events that are due, group by group in order, until none is left or the sweep
+   * has made {@link #MAX_ATTEMPTS_PER_SWEEP} attempts.
+   *
+   * <p>A batch in which every send fails does not end the sweep: each failed event is due again
+   * only later, so the next batch holds other events. One unavailable queue therefore cannot keep
+   * events for another queue waiting.
    *
    * @return how many events were delivered
    */
   public int sweep() {
+    int attempts = 0;
     int delivered = 0;
-    while (delivered < MAX_EVENTS_PER_SWEEP) {
+    while (attempts < MAX_ATTEMPTS_PER_SWEEP) {
       List<OutboxEvent> heads =
           store.findDueGroupHeads(
-              Instant.now(clock), Math.min(BATCH_SIZE, MAX_EVENTS_PER_SWEEP - delivered));
-      int deliveredNow = 0;
-      for (OutboxEvent event : heads) {
-        if (deliver(event)) {
-          deliveredNow++;
-        }
-      }
-      if (deliveredNow == 0) {
+              Instant.now(clock), Math.min(BATCH_SIZE, MAX_ATTEMPTS_PER_SWEEP - attempts));
+      if (heads.isEmpty()) {
         break;
       }
-      delivered += deliveredNow;
+      for (OutboxEvent event : heads) {
+        attempts++;
+        if (deliver(event)) {
+          delivered++;
+        }
+      }
     }
     return delivered;
   }

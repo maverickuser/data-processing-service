@@ -1222,7 +1222,7 @@ Agreed 2026-10-02.
 | Attempt time limit | 15 minutes (the worker Lambda timeout); the queue visibility timeout is 16 minutes so a crashed invocation's message becomes visible again |
 | Exhausted attempts | Job `FAILED`; message moves to a dead-letter queue with 14-day retention; later jobs in the same ordering group are released |
 | Internal file-processing queue and DLQ | SQS FIFO, created and owned by this service's Terraform. The external security-details queue remains supplied (section 14.2) |
-| Outbox dispatch | Attempted immediately after the creating transaction commits, when no older pending event exists in the same ordering group; a sweeper Lambda runs every minute and delivers anything still pending, in order. Failed sends retry indefinitely with exponential backoff capped at 5 minutes, preserving the original event |
+| Outbox dispatch | Attempted immediately after the creating transaction commits, when no older pending event exists in the same ordering group; a sweeper Lambda runs every minute and delivers anything still pending, in order. Failed sends retry indefinitely with exponential backoff, starting at 10 seconds and doubling to a cap of 5 minutes (start fixed 2026-10-03), preserving the original event |
 | Expired or missing upstream object | Job `FAILED` with `SOURCE_NOT_FOUND`, no automatic retry; the fetch-service artifact bucket expires objects after 30 days, so replay beyond that window requires a new fetch run |
 
 ### 21.1 Retention and backups

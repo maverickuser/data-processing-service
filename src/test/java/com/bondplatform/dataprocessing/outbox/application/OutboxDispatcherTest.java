@@ -191,13 +191,40 @@ class OutboxDispatcherTest {
 
   @Test
   void sweepStopsAtItsLimit() {
-    for (int i = 0; i < OutboxDispatcher.MAX_EVENTS_PER_SWEEP + 5; i++) {
+    for (int i = 0; i < OutboxDispatcher.MAX_ATTEMPTS_PER_SWEEP + 5; i++) {
       store.appendUngrouped();
     }
 
-    assertThat(dispatcher.sweep()).isEqualTo(OutboxDispatcher.MAX_EVENTS_PER_SWEEP);
+    assertThat(dispatcher.sweep()).isEqualTo(OutboxDispatcher.MAX_ATTEMPTS_PER_SWEEP);
     assertThat(dispatcher.sweep()).isEqualTo(5);
     assertThat(dispatcher.sweep()).isZero();
+  }
+
+  // Review finding O-1: one unavailable queue must not hold back another queue's events.
+  @Test
+  void batchesOfFailingEventsDoNotStopTheSweepBeforeOtherEventsAreTried() {
+    for (int i = 0; i < 2 * OutboxDispatcher.BATCH_SIZE + 10; i++) {
+      store.appendUngrouped();
+    }
+    clock.advance(Duration.ofSeconds(1));
+    final UUID job = store.append(GROUP, 1L);
+    queue.failNext(2 * OutboxDispatcher.BATCH_SIZE + 10);
+
+    assertThat(dispatcher.sweep()).isEqualTo(1);
+
+    assertThat(queue.sentIds()).containsExactly(job);
+  }
+
+  @Test
+  void sweepStopsAfterItsAttemptsEvenWhenEverySendFails() {
+    for (int i = 0; i < OutboxDispatcher.MAX_ATTEMPTS_PER_SWEEP + 5; i++) {
+      store.appendUngrouped();
+    }
+    queue.failNext(Integer.MAX_VALUE);
+
+    assertThat(dispatcher.sweep()).isZero();
+
+    assertThat(queue.attempts).hasSize(OutboxDispatcher.MAX_ATTEMPTS_PER_SWEEP);
   }
 
   @Test
