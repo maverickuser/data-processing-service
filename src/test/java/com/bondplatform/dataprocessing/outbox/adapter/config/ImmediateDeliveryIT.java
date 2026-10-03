@@ -23,6 +23,7 @@ import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.Message;
 import software.amazon.awssdk.services.sqs.model.MessageSystemAttributeName;
 import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * LLD section 23.4 end to end: a committed admission is sent to the job queue before the use case
@@ -30,6 +31,7 @@ import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
  */
 class ImmediateDeliveryIT extends PostgresIntegrationTest {
 
+  private static final JsonMapper JSON = JsonMapper.builder().build();
   private static final SqsClient SQS = ElasticMq.client();
   private static final String JOBS =
       SQS.createQueue(
@@ -63,7 +65,10 @@ class ImmediateDeliveryIT extends PostgresIntegrationTest {
         .singleElement()
         .satisfies(
             message -> {
-              assertThat(message.body()).isEqualTo("{\"jobId\":\"" + receipt.jobId() + "\"}");
+              // The payload is stored as jsonb, which may change spacing and key order, never
+              // content.
+              assertThat(JSON.readTree(message.body()))
+                  .isEqualTo(JSON.readTree("{\"jobId\":\"" + receipt.jobId() + "\"}"));
               assertThat(message.attributes())
                   .containsEntry(MessageSystemAttributeName.MESSAGE_GROUP_ID, "isin:INE121A07QY9");
             });
@@ -89,8 +94,8 @@ class ImmediateDeliveryIT extends PostgresIntegrationTest {
     assertThat(dispatcher.sweep()).isEqualTo(1);
 
     assertThat(receive(DETAILS))
-        .extracting(Message::body)
-        .containsExactly("{\"isin\":\"INE121A07QY9\"}");
+        .extracting(message -> JSON.readTree(message.body()))
+        .containsExactly(JSON.readTree("{\"isin\":\"INE121A07QY9\"}"));
   }
 
   private static List<Message> receive(String queue) {
