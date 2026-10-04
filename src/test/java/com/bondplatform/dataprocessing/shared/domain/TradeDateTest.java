@@ -53,4 +53,22 @@ class TradeDateTest {
   void rejectsImpossibleOrDifferentlyFormattedDates(String text) {
     assertThatIllegalArgumentException().isThrownBy(() -> TradeDate.parseIso(text));
   }
+
+  // U-VAL-03
+  @Test
+  void parsesTheDayMonthYearDateOfBhavcopyFilename() {
+    assertThat(TradeDate.parseDayMonthYear("01012026").value()).isEqualTo(LocalDate.of(2026, 1, 1));
+    assertThat(TradeDate.parseDayMonthYear("29022028").value())
+        .isEqualTo(LocalDate.of(2028, 2, 29));
+  }
+
+  // U-VAL-03
+  @ParameterizedTest
+  @ValueSource(
+      strings = {"32132026", "29022026", "0101202", "010120261", "2026-01-01", "", "abcdefgh"})
+  void rejectsAnythingButRealEightDigitDayMonthYearDate(String text) {
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> TradeDate.parseDayMonthYear(text))
+        .withMessageContaining("DDMMYYYY");
+  }
 }

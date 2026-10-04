@@ -16,6 +16,9 @@ public record TradeDate(LocalDate value) {
 
   private static final DateTimeFormatter ISO_STRICT =
       DateTimeFormatter.ofPattern("uuuu-MM-dd").withResolverStyle(ResolverStyle.STRICT);
+  private static final DateTimeFormatter DAY_MONTH_YEAR_STRICT =
+      DateTimeFormatter.ofPattern("ddMMuuuu").withResolverStyle(ResolverStyle.STRICT);
+  private static final Pattern EIGHT_DIGITS = Pattern.compile("[0-9]{8}");
   private static final Pattern FOUR_DIGIT_YEAR_DATE = Pattern.compile("[0-9]{4}-[0-9]{2}-[0-9]{2}");
 
   /** Rejects a missing date. */
@@ -37,6 +40,23 @@ public record TradeDate(LocalDate value) {
       return new TradeDate(LocalDate.parse(text, ISO_STRICT));
     } catch (DateTimeParseException e) {
       throw new IllegalArgumentException("Trade date must be a valid YYYY-MM-DD date: " + text, e);
+    }
+  }
+
+  /**
+   * Parses the {@code DDMMYYYY} date of a bhavcopy filename strictly, for example {@code 01012026}
+   * for 1 January 2026 (LLD section 2.1). An impossible date such as {@code 32132026} is rejected.
+   *
+   * @throws IllegalArgumentException if the text is not eight digits forming a real date
+   */
+  public static TradeDate parseDayMonthYear(String text) {
+    if (!EIGHT_DIGITS.matcher(text).matches()) {
+      throw new IllegalArgumentException("Trade date must be a valid DDMMYYYY date: " + text);
+    }
+    try {
+      return new TradeDate(LocalDate.parse(text, DAY_MONTH_YEAR_STRICT));
+    } catch (DateTimeParseException e) {
+      throw new IllegalArgumentException("Trade date must be a valid DDMMYYYY date: " + text, e);
     }
   }
 
