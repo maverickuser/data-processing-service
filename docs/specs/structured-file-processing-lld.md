@@ -219,7 +219,7 @@ A structurally rejected file has no accepted rows. Partial diagnostic records, i
 - Ignore additional columns for value validation, while still checking overall CSV structure.
 - Reject a filename/trading-date mismatch.
 
-Agreed parser settings: CSV and JSON are UTF-8; a leading UTF-8 byte-order mark is accepted and ignored. CSV follows RFC 4180 (comma delimiter, double-quote quoting, doubled quote as escape, CRLF or LF record ends). Fully blank physical lines are skipped; they are not records, are not counted, and are not errors. Bytes that are not valid UTF-8 make a CSV `MALFORMED_CSV` and a JSON file malformed (skipped with an error). Embedded grouping commas must be correctly quoted by the source CSV.
+Agreed parser settings: CSV and JSON are UTF-8; a leading UTF-8 byte-order mark is accepted and ignored. CSV follows RFC 4180 (comma delimiter, double-quote quoting, doubled quote as escape, CRLF or LF record ends). Fully blank physical lines, including lines of only whitespace, are skipped; they are not records, are not counted, and are not errors. A stray double quote inside an unquoted cell is kept as part of the cell text and fails only that field's validation, not the whole file. Bytes that are not valid UTF-8 make a CSV `MALFORMED_CSV` and a JSON file malformed (skipped with an error). Embedded grouping commas must be correctly quoted by the source CSV.
 
 ### 5.2 Field-level rules
 

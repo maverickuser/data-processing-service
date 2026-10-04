@@ -24,9 +24,10 @@ import org.apache.commons.csv.CSVRecord;
  * time (LLD section 5.1).
  *
  * <p>The file is UTF-8 RFC 4180: comma-separated, double-quoted, a doubled quote as escape, CRLF or
- * LF record ends. A leading byte-order mark is ignored and fully blank lines are skipped. The whole
- * file is rejected if it is not valid UTF-8, has broken quoting, has a record with another number
- * of cells than the header, lacks a selected header, repeats a header, or has no data record.
+ * LF record ends. A leading byte-order mark is ignored, and blank lines, including lines of only
+ * whitespace, are skipped. The whole file is rejected if it is not valid UTF-8, has broken quoting,
+ * has a record with another number of cells than the header, lacks a selected header, repeats a
+ * header, or has no data record.
  *
  * <p>A rejection can come after rows were handed over, because a problem late in the file is only
  * found there. The caller must therefore treat rows as provisional until the read completes.
@@ -48,7 +49,8 @@ public final class CsvFileReader {
       InputStream content, SourceContract.Csv contract, Consumer<CsvRow> rows) {
     try (Reader reader = withoutByteOrderMark(strictUtf8(content));
         CSVParser parser = RFC_4180.parse(reader)) {
-      Iterator<CSVRecord> records = parser.iterator();
+      Iterator<CSVRecord> records =
+          parser.stream().filter(record -> !isBlankLine(record)).iterator();
       if (!records.hasNext()) {
         return rejected(ErrorCode.EMPTY_FILE, "The file is empty");
       }
@@ -91,10 +93,20 @@ public final class CsvFileReader {
     }
   }
 
-  private static Map<String, String> selected(CSVRecord record, CsvHeader header) {
-    Map<String, String> cells = new HashMap<>();
-    header.positions().forEach((field, column) -> cells.put(field, record.get(column)));
+  private static Map<String, CsvCell> selected(CSVRecord record, CsvHeader header) {
+    Map<String, CsvCell> cells = new HashMap<>();
+    header
+        .positions()
+        .forEach((field, column) -> cells.put(field, new CsvCell(column + 1, record.get(column))));
     return cells;
+  }
+
+  /**
+   * Returns whether a record is a line holding only whitespace, which counts as blank (LLD section
+   * 5.1). A record with more than one cell has a separator, so it is never blank.
+   */
+  private static boolean isBlankLine(CSVRecord record) {
+    return record.size() == 1 && record.get(0).isBlank();
   }
 
   private static Reader strictUtf8(InputStream content) {

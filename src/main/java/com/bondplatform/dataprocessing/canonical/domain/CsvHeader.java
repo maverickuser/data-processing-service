@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 /**
  * Where each selected field is in a CSV's records (LLD section 5.1).
@@ -17,7 +18,7 @@ import java.util.TreeSet;
  * allowed, but no two headers may be the same after that normalization, selected or not.
  *
  * @param columnCount how many cells every record must have
- * @param positions the column index of each selected field, by canonical field name
+ * @param positions the zero-based column index of each selected field, by canonical field name
  */
 public record CsvHeader(int columnCount, Map<String, Integer> positions) {
 
@@ -39,7 +40,7 @@ public record CsvHeader(int columnCount, Map<String, Integer> positions) {
     if (!duplicates.isEmpty()) {
       return new Resolution.Rejected(
           new FileRejection(
-              ErrorCode.DUPLICATE_HEADER, "Headers appear more than once: " + duplicates));
+              ErrorCode.DUPLICATE_HEADER, "Headers appear more than once: " + quoted(duplicates)));
     }
     Map<String, Integer> positions = new LinkedHashMap<>();
     TreeSet<String> missing = new TreeSet<>();
@@ -58,6 +59,15 @@ public record CsvHeader(int columnCount, Map<String, Integer> positions) {
     return new Resolution.Resolved(new CsvHeader(headers.size(), positions));
   }
 
+  /** Quotes each name, so that a repeated blank header is visible. */
+  private static String quoted(TreeSet<String> names) {
+    return names.stream().map(name -> '"' + name + '"').collect(Collectors.joining(", ", "[", "]"));
+  }
+
+  /**
+   * Trims and lowercases a header without regard to the default locale. This is simple lowercasing,
+   * not full Unicode case folding, which is enough for the contracts' ASCII headers.
+   */
   private static String normalized(String header) {
     return header.strip().toLowerCase(Locale.ROOT);
   }

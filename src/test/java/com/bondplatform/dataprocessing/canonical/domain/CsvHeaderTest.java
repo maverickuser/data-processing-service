@@ -54,7 +54,7 @@ class CsvHeaderTest {
     assertThat(rejection(unselected))
         .isEqualTo(
             new FileRejection(
-                ErrorCode.DUPLICATE_HEADER, "Headers appear more than once: [extra]"));
+                ErrorCode.DUPLICATE_HEADER, "Headers appear more than once: [\"extra\"]"));
   }
 
   private static List<String> headers() {
