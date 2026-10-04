@@ -52,6 +52,8 @@ public record RowCounts(
    * @throws ArithmeticException if the error count does not fit the job record
    */
   public JobOutcome outcome(long errorCount) {
+    // Four whole numbers need no escaping, so the domain builds this JSON without a library.
+    // Anything with text values must use a JSON writer instead.
     String counts =
         "{\"sourceRecords\":"
             + sourceRecords

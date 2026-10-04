@@ -47,7 +47,9 @@ public class PublishDailyMarketSummaries {
    * @param job the attempt being finished
    * @param accepted the summaries of every accepted row, in file order
    * @param outcome the job's final status, counts, and error count
-   * @return the ISINs whose securities this call created, so that their details can be requested
+   * @return the ISINs whose securities this call created, for information only: their
+   *     security-details events must be written inside this transaction, never by the caller after
+   *     it commits (LLD section 14.3; added in plan PR 29)
    * @throws IllegalStateException if the job is not running this attempt; nothing is stored
    */
   @Transactional
