@@ -41,6 +41,10 @@ data-processing:
     # The fetch service's artifact bucket; no other bucket is read (LLD section 19).
     region: ${AWS_REGION:ap-south-1}
     allowed-buckets: ${SOURCE_BUCKETS:}
+  events:
+    # The CloudEvent source of every event this service produces, including the environment
+    # (LLD section 14.2), for example urn:bond-platform:structured-file-processing:prod.
+    source: ${EVENT_SOURCE:}
   canonical:
     # The service's own bucket for each run's canonical JSON Lines file (LLD section 17.5).
     bucket: ${CANONICAL_BUCKET:}

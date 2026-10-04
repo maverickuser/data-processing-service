@@ -22,13 +22,17 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.support.TransactionOperations;
 
-/** Publishing a CSV file's summaries against PostgreSQL (I-CSV-04, I-CSV-05). */
+/** Publishing a CSV file's summaries against PostgreSQL (I-CSV-04, I-CSV-05, I-EVT-01..04). */
 class PublishDailyMarketSummariesIT extends PostgresIntegrationTest {
 
   private static final String ALPHA = "INE001A07AB1";
@@ -39,8 +43,9 @@ class PublishDailyMarketSummariesIT extends PostgresIntegrationTest {
   @Autowired private TransactionOperations transactions;
   @Autowired private PublishDailyMarketSummaries publish;
 
+  /** I-EVT-01 (outbox part). */
   @Test
-  void publishesSummariesCreatesSecuritiesAndFinishesJob() {
+  void publishesSummariesCreatesSecuritiesRequestsTheirDetailsAndFinishesJob() {
     ClaimedJob job = start("run_101");
 
     var created =
@@ -52,9 +57,10 @@ class PublishDailyMarketSummariesIT extends PostgresIntegrationTest {
     assertThat(created).containsExactlyInAnyOrder(Isin.of(ALPHA), Isin.of(BETA));
     assertThat(stored(ALPHA)).containsEntry("source_request_id", job.job().id().value());
     assertThat(jobStatus(job)).isEqualTo("COMPLETED");
+    assertThat(detailRequests()).containsExactly("isin/" + ALPHA, "isin/" + BETA);
   }
 
-  /** I-CSV-04. */
+  /** I-CSV-04, and I-EVT-02: an existing ISIN-only security gets no new request. */
   @Test
   void resubmissionReplacesItsKeysWithNullsAndLeavesOthersUnchanged() {
     ClaimedJob first = start("run_101");
@@ -74,6 +80,31 @@ class PublishDailyMarketSummariesIT extends PostgresIntegrationTest {
         .containsEntry("source_request_id", second.job().id().value());
     assertThat((BigDecimal) stored(BETA).get("close_price")).isEqualByComparingTo("99");
     assertThat(stored(BETA)).containsEntry("source_request_id", first.job().id().value());
+    assertThat(detailRequests()).containsExactly("isin/" + ALPHA, "isin/" + BETA);
+  }
+
+  /** I-EVT-03. */
+  @Test
+  void twoJobsIntroducingOneIsinTogetherCreateOneSecurityAndOneRequest() throws Exception {
+    ClaimedJob first = start("run_101");
+    ClaimedJob second = start("run_102");
+
+    try (ExecutorService pool = Executors.newFixedThreadPool(2)) {
+      List<Future<Set<Isin>>> results =
+          pool.invokeAll(
+              List.of(
+                  () -> publish.publish(first, List.of(summary(first, ALPHA, "1")), completed()),
+                  () ->
+                      publish.publish(second, List.of(summary(second, ALPHA, "2")), completed())));
+      int created = 0;
+      for (Future<Set<Isin>> result : results) {
+        created += result.get().size();
+      }
+      assertThat(created).isEqualTo(1);
+    }
+
+    assertThat(count("securities")).isEqualTo(1);
+    assertThat(detailRequests()).containsExactly("isin/" + ALPHA);
   }
 
   /** I-CSV-05. */
@@ -93,6 +124,7 @@ class PublishDailyMarketSummariesIT extends PostgresIntegrationTest {
     assertThat(count("securities")).isZero();
     assertThat(count("security_daily_market_summaries")).isZero();
     assertThat(jobStatus(job)).isEqualTo("PROCESSING");
+    assertThat(detailRequests()).isEmpty();
   }
 
   private ClaimedJob start(String fetchRunId) {
@@ -124,6 +156,20 @@ class PublishDailyMarketSummariesIT extends PostgresIntegrationTest {
         null,
         new BigDecimal("1000"),
         new SourceReference(job.job().id(), "BSE_fgroup01012026.csv", "2"));
+  }
+
+  private static JobOutcome completed() {
+    return outcome(JobStatus.COMPLETED);
+  }
+
+  private List<String> detailRequests() {
+    return jdbc.sql(
+            """
+            SELECT payload ->> 'subject' FROM data_processing.outbox_events
+            WHERE destination = 'SECURITY_DETAILS' ORDER BY payload ->> 'subject'
+            """)
+        .query(String.class)
+        .list();
   }
 
   private static JobOutcome outcome(JobStatus status) {

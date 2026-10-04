@@ -5,6 +5,8 @@ data-processing:
     region: ap-south-1
     endpoint: http://127.0.0.1:1
     allowed-buckets: data-fetch-service-artifacts
+  events:
+    source: urn:bond-platform:structured-file-processing:test
   canonical:
     bucket: data-processing-service-canonical
   queues:

@@ -21,6 +21,7 @@ import org.mockito.ArgumentCaptor;
 import software.amazon.awssdk.awscore.exception.AwsErrorDetails;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.MessageAttributeValue;
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 import software.amazon.awssdk.services.sqs.model.SqsException;
 
@@ -51,6 +52,7 @@ class SqsQueuePublisherTest {
     assertThat(sent.messageBody()).isEqualTo("{\"jobId\":\"j\"}");
     assertThat(sent.messageGroupId()).isEqualTo("trade-date:2026-09-21");
     assertThat(sent.messageDeduplicationId()).isEqualTo(ID.toString());
+    assertThat(sent.messageAttributes()).isEmpty();
   }
 
   @Test
@@ -74,6 +76,18 @@ class SqsQueuePublisherTest {
     assertThat(sent.queueUrl()).isEqualTo(STANDARD.toString());
     assertThat(sent.messageGroupId()).isNull();
     assertThat(sent.messageDeduplicationId()).isNull();
+  }
+
+  @Test
+  void securityDetailsEventIsMarkedAsCloudEvent() {
+    publisher.publish(event(OutboxDestination.SECURITY_DETAILS, null));
+
+    assertThat(sent().messageAttributes().get("contentType"))
+        .isEqualTo(
+            MessageAttributeValue.builder()
+                .dataType("String")
+                .stringValue("application/cloudevents+json")
+                .build());
   }
 
   @Test

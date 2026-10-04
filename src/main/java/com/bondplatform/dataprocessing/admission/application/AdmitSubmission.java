@@ -1,6 +1,5 @@
 package com.bondplatform.dataprocessing.admission.application;
 
-import com.bondplatform.dataprocessing.admission.domain.CanonicalJson;
 import com.bondplatform.dataprocessing.admission.domain.Submission;
 import com.bondplatform.dataprocessing.contract.application.ContractRegistry;
 import com.bondplatform.dataprocessing.contract.application.PinnedContracts;
@@ -12,6 +11,7 @@ import com.bondplatform.dataprocessing.job.domain.NewIngestionRequest.PinnedCont
 import com.bondplatform.dataprocessing.outbox.application.OutboxEventStore;
 import com.bondplatform.dataprocessing.outbox.domain.NewOutboxEvent;
 import com.bondplatform.dataprocessing.outbox.domain.OutboxDestination;
+import com.bondplatform.dataprocessing.shared.domain.CanonicalJson;
 import com.bondplatform.dataprocessing.shared.domain.JobId;
 import com.bondplatform.dataprocessing.shared.supplier.IdSupplier;
 import java.nio.charset.StandardCharsets;
