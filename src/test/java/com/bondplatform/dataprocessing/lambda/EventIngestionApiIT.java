@@ -3,8 +3,8 @@ package com.bondplatform.dataprocessing.lambda;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.bondplatform.dataprocessing.admission.SubmissionEvents;
-import com.bondplatform.dataprocessing.admission.domain.CanonicalJson;
 import com.bondplatform.dataprocessing.persistence.PostgresIntegrationTest;
+import com.bondplatform.dataprocessing.shared.domain.CanonicalJson;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;

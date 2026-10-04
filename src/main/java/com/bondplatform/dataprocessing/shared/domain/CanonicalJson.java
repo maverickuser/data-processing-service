@@ -1,4 +1,4 @@
-package com.bondplatform.dataprocessing.admission.domain;
+package com.bondplatform.dataprocessing.shared.domain;
 
 import java.util.List;
 import java.util.Map;

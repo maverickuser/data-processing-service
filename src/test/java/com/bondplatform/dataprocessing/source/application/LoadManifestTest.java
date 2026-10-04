@@ -3,7 +3,6 @@ package com.bondplatform.dataprocessing.source.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.bondplatform.dataprocessing.admission.domain.CanonicalJson;
 import com.bondplatform.dataprocessing.contract.adapter.config.ClasspathContractCatalog;
 import com.bondplatform.dataprocessing.contract.adapter.config.ContractProperties.ContractPair;
 import com.bondplatform.dataprocessing.contract.adapter.yaml.YamlContractLoader;
@@ -20,6 +19,7 @@ import com.bondplatform.dataprocessing.job.domain.ManifestLocation;
 import com.bondplatform.dataprocessing.job.domain.NewIngestionRequest.PinnedContractVersions;
 import com.bondplatform.dataprocessing.job.domain.OrderingGroup;
 import com.bondplatform.dataprocessing.job.domain.StoredJob;
+import com.bondplatform.dataprocessing.shared.domain.CanonicalJson;
 import com.bondplatform.dataprocessing.shared.domain.JobId;
 import com.bondplatform.dataprocessing.source.adapter.json.StrictJsonObjectParser;
 import com.bondplatform.dataprocessing.source.domain.Manifest;

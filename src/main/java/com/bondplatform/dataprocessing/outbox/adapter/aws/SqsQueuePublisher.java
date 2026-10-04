@@ -9,6 +9,7 @@ import java.util.Map;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.MessageAttributeValue;
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 
 /**
@@ -17,11 +18,18 @@ import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
  * <p>A queue whose name ends in {@code .fifo} is a FIFO queue, as AWS requires. For one, the
  * event's group is the message group, or, for an event without a group, its own ID, and the event
  * ID is the deduplication ID: a repeated send within the queue's five-minute window is delivered
- * once. A standard queue receives the body alone.
+ * once. A standard queue receives no group or deduplication ID.
+ *
+ * <p>A security-details event is a complete CloudEvent, so it carries the string message attribute
+ * {@code contentType=application/cloudevents+json}, this service's SQS convention for the envelope
+ * (LLD section 14.2). File-processing messages are internal and carry no attribute.
  */
 public class SqsQueuePublisher implements QueuePublisher {
 
   private static final String FIFO_SUFFIX = ".fifo";
+
+  static final String CONTENT_TYPE = "contentType";
+  static final String CLOUD_EVENT_JSON = "application/cloudevents+json";
 
   private final SqsClient sqs;
   private final Map<OutboxDestination, URI> queueUrls;
@@ -47,6 +55,15 @@ public class SqsQueuePublisher implements QueuePublisher {
     String queueUrl = String.valueOf(queueUrls.get(event.destination()));
     SendMessageRequest.Builder request =
         SendMessageRequest.builder().queueUrl(queueUrl).messageBody(event.payloadJson());
+    if (event.destination() == OutboxDestination.SECURITY_DETAILS) {
+      request.messageAttributes(
+          Map.of(
+              CONTENT_TYPE,
+              MessageAttributeValue.builder()
+                  .dataType("String")
+                  .stringValue(CLOUD_EVENT_JSON)
+                  .build()));
+    }
     if (queueUrl.endsWith(FIFO_SUFFIX)) {
       String group = event.messageGroup();
       request

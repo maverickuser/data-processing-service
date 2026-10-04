@@ -1,4 +1,4 @@
-package com.bondplatform.dataprocessing.admission.domain;
+package com.bondplatform.dataprocessing.shared.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
