@@ -30,5 +30,7 @@ public enum ErrorCode {
   /** A field the contract requires is blank, such as a CSV row without an ISIN. */
   REQUIRED_VALUE_MISSING,
   /** Two prices in one row contradict each other, such as a high price below the low price. */
-  PRICE_INCONSISTENT
+  PRICE_INCONSISTENT,
+  /** A valid CSV row is replaced by a later valid row with the same ISIN in the same file. */
+  DUPLICATE_ISIN_SUPERSEDED
 }
