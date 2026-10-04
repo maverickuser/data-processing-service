@@ -8,7 +8,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Finishes a job from inside the transaction that publishes its data (LLD section 8.1). */
+/**
+ * Records what an attempt produced: where its canonical file is stored, and the job's outcome from
+ * inside the transaction that publishes its data (LLD section 8.1).
+ */
 @Service
 public class JobCompletion {
 
@@ -19,6 +22,15 @@ public class JobCompletion {
   public JobCompletion(JobRunRepository runs, Clock clock) {
     this.runs = runs;
     this.clock = clock;
+  }
+
+  /**
+   * Records where the attempt's canonical file is stored, in its own transaction: the file stays
+   * the attempt's evidence even if publication later fails (LLD sections 8.1 and 17.5).
+   */
+  @Transactional
+  public void recordCanonicalFile(ClaimedJob job, String objectKey) {
+    runs.recordCanonicalFile(job.runId(), objectKey);
   }
 
   /**

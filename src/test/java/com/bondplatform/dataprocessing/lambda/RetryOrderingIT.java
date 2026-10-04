@@ -2,9 +2,6 @@ package com.bondplatform.dataprocessing.lambda;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.amazonaws.services.lambda.runtime.events.SQSBatchResponse;
-import com.amazonaws.services.lambda.runtime.events.SQSEvent;
-import com.amazonaws.services.lambda.runtime.events.SQSEvent.SQSMessage;
 import com.bondplatform.dataprocessing.admission.SubmissionEvents;
 import com.bondplatform.dataprocessing.admission.application.AdmitSubmission;
 import com.bondplatform.dataprocessing.contract.domain.DatasetUrn;
@@ -18,14 +15,12 @@ import com.bondplatform.dataprocessing.job.domain.JobStatus;
 import com.bondplatform.dataprocessing.outbox.adapter.aws.ElasticMq;
 import com.bondplatform.dataprocessing.persistence.PostgresIntegrationTest;
 import com.bondplatform.dataprocessing.shared.domain.JobId;
-import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.BooleanSupplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -59,13 +54,11 @@ class RetryOrderingIT extends PostgresIntegrationTest {
               "{\"maxReceiveCount\":\"3\",\"deadLetterTargetArn\":\""
                   + arnOf(DEAD_LETTERS)
                   + "\"}"));
-  private static final Duration TIME_LIMIT = Duration.ofSeconds(30);
-
   @Autowired private AdmitSubmission admitSubmission;
   @Autowired private RunJob runJob;
   @Autowired private ScriptedHandler handler;
 
-  private ProcessingQueueHandler worker;
+  private WorkerPump pump;
 
   @DynamicPropertySource
   static void useTestQueuesAndShortDelays(DynamicPropertyRegistry registry) {
@@ -79,16 +72,7 @@ class RetryOrderingIT extends PostgresIntegrationTest {
     SQS.purgeQueue(request -> request.queueUrl(JOBS));
     SQS.purgeQueue(request -> request.queueUrl(DEAD_LETTERS));
     handler.reset();
-    worker =
-        new ProcessingQueueHandler(
-            runJob::run,
-            (receiptHandle, delay) ->
-                SQS.changeMessageVisibility(
-                    request ->
-                        request
-                            .queueUrl(JOBS)
-                            .receiptHandle(receiptHandle)
-                            .visibilityTimeout(Math.toIntExact(delay.toSeconds()))));
+    pump = new WorkerPump(SQS, JOBS, runJob);
   }
 
   // I-CSV-06, I-CSV-07
@@ -99,7 +83,7 @@ class RetryOrderingIT extends PostgresIntegrationTest {
     final JobId otherGroup = admit("run_b1", "INE002A08534");
     handler.failTemporarily(first, 1);
 
-    pumpUntil(() -> handler.completed.size() == 3);
+    pump.until(() -> handler.completed.size() == 3);
 
     assertThat(handler.completed).containsSubsequence(first, second);
     assertThat(handler.completed.indexOf(otherGroup)).isLessThan(handler.completed.indexOf(first));
@@ -125,7 +109,7 @@ class RetryOrderingIT extends PostgresIntegrationTest {
     JobId next = admit("run_c2", "INE121A07QY9");
     handler.failTemporarily(failing, 3);
 
-    pumpUntil(() -> handler.completed.contains(next));
+    pump.until(() -> handler.completed.contains(next));
 
     assertThat(statusOf(failing)).isEqualTo("FAILED");
     assertThat(runsOf(failing))
@@ -136,31 +120,6 @@ class RetryOrderingIT extends PostgresIntegrationTest {
     assertThat(deadLettered)
         .singleElement()
         .satisfies(message -> assertThat(message.body()).contains(failing.toString()));
-  }
-
-  /** Polls the job queue as the event source mapping would, until the condition holds. */
-  private void pumpUntil(BooleanSupplier done) {
-    long deadline = System.nanoTime() + TIME_LIMIT.toNanos();
-    while (!done.getAsBoolean()) {
-      assertThat(System.nanoTime()).as("time limit reached").isLessThan(deadline);
-      List<Message> messages =
-          SQS.receiveMessage(
-                  request -> request.queueUrl(JOBS).maxNumberOfMessages(1).waitTimeSeconds(1))
-              .messages();
-      for (Message message : messages) {
-        SQSMessage record = new SQSMessage();
-        record.setMessageId(message.messageId());
-        record.setReceiptHandle(message.receiptHandle());
-        record.setBody(message.body());
-        SQSEvent event = new SQSEvent();
-        event.setRecords(List.of(record));
-        SQSBatchResponse response = worker.handleRequest(event, new FixedLambdaContext());
-        if (response.getBatchItemFailures().isEmpty()) {
-          SQS.deleteMessage(
-              request -> request.queueUrl(JOBS).receiptHandle(message.receiptHandle()));
-        }
-      }
-    }
   }
 
   private JobId admit(String runId, String isin) {

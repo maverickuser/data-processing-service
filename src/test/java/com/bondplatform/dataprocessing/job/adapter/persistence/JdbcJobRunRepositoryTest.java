@@ -107,6 +107,18 @@ class JdbcJobRunRepositoryTest {
   }
 
   @Test
+  void recordsTheCanonicalFileOnlyWhileTheRunIsRunning() {
+    UUID runId = UUID.fromString("0190f3a0-0000-7000-8000-0000000000aa");
+
+    repository.recordCanonicalFile(runId, "canonical/j/attempt-1/canonical.jsonl");
+
+    SqlParameterSource bound = updated(JdbcJobRunRepository.RECORD_CANONICAL_FILE);
+    assertThat(bound.getValue("runId")).isEqualTo(runId);
+    assertThat(bound.getValue("objectKey")).isEqualTo("canonical/j/attempt-1/canonical.jsonl");
+    assertThat(JdbcJobRunRepository.RECORD_CANONICAL_FILE).contains("status = 'RUNNING'");
+  }
+
+  @Test
   void startsTheJobThenRecordsTheRun() {
     when(jdbc.update(eq(JdbcJobRunRepository.START_JOB), any(SqlParameterSource.class)))
         .thenReturn(1);
