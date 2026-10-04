@@ -62,17 +62,19 @@ public final class CsvFileReader {
       while (records.hasNext()) {
         CSVRecord record = records.next();
         count++;
+        // The header is record 1 (LLD section 4.2); blank lines are not records.
+        long recordNumber = count + 1;
         if (record.size() != header.columnCount()) {
           return rejected(
               ErrorCode.MALFORMED_CSV,
               "Record "
-                  + count
+                  + recordNumber
                   + " has "
                   + record.size()
                   + " cells, but the header has "
                   + header.columnCount());
         }
-        rows.accept(new CsvRow(count, selected(record, header)));
+        rows.accept(new CsvRow(recordNumber, selected(record, header)));
       }
       if (count == 0) {
         return rejected(ErrorCode.EMPTY_FILE, "The file has a header and no data record");

@@ -27,7 +27,7 @@ class CsvFileReaderTest {
         read(BhavcopyContract.HEADER + "\n" + ROW_1 + "\r\n" + ROW_2 + "\n");
 
     assertThat(outcome).isEqualTo(new CsvFileReader.Outcome.Completed(2));
-    assertThat(rows).extracting(CsvRow::recordNumber).containsExactly(1L, 2L);
+    assertThat(rows).extracting(CsvRow::recordNumber).containsExactly(2L, 3L);
     CsvRow first = rows.get(0);
     assertThat(first.cells()).hasSize(10);
     assertThat(first.cell("isin")).contains("INE121A07QY9");
@@ -52,7 +52,7 @@ class CsvFileReaderTest {
         read("﻿" + BhavcopyContract.HEADER + "\n\n" + ROW_1 + "\n\r\n\n" + ROW_2 + "\n\n");
 
     assertThat(outcome).isEqualTo(new CsvFileReader.Outcome.Completed(2));
-    assertThat(rows).extracting(CsvRow::recordNumber).containsExactly(1L, 2L);
+    assertThat(rows).extracting(CsvRow::recordNumber).containsExactly(2L, 3L);
     assertThat(rows.get(0).cell("security_code")).contains("1001");
   }
 
@@ -94,7 +94,17 @@ class CsvFileReaderTest {
 
     assertThat(outcome)
         .isEqualTo(
-            rejected(ErrorCode.MALFORMED_CSV, "Record 3 has 4 cells, but the header has 11"));
+            rejected(ErrorCode.MALFORMED_CSV, "Record 4 has 4 cells, but the header has 11"));
+  }
+
+  // U-CSV-11
+  @Test
+  void recordSpanningTwoLinesHasOneNumber() {
+    String spanning = "1001,INE121A07QY9,1,1,1,1,1,1,1,1,\"two\nlines\"";
+
+    read(BhavcopyContract.HEADER + "\n" + spanning + "\n" + ROW_2 + "\n");
+
+    assertThat(rows).extracting(CsvRow::recordNumber).containsExactly(2L, 3L);
   }
 
   // U-CSV-05
