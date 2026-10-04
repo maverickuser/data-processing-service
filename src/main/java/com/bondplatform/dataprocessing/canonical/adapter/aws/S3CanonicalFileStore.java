@@ -23,6 +23,10 @@ import software.amazon.awssdk.services.s3.S3Client;
  * the file is uploaded in one request on commit. A failed upload is {@value #UNAVAILABLE}, a
  * temporary failure; no message from S3 is passed on. A local disk failure is not expected and
  * surfaces as {@link UncheckedIOException}.
+ *
+ * <p>The upload is a single PUT on the shared S3 client, so it is bound by that client's timeouts
+ * and by the 5 GB limit of one request. A bhavcopy's canonical file is a few megabytes; a larger
+ * source would need a multipart upload and a longer timeout.
  */
 public class S3CanonicalFileStore implements CanonicalFileStore {
 
@@ -46,7 +50,12 @@ public class S3CanonicalFileStore implements CanonicalFileStore {
   public CanonicalFile create(CanonicalRun run) {
     try {
       Path path = Files.createTempFile(workDirectory, "canonical-", ".jsonl");
-      return new LocalFile(run, path, Files.newBufferedWriter(path, StandardCharsets.UTF_8));
+      try {
+        return new LocalFile(run, path, Files.newBufferedWriter(path, StandardCharsets.UTF_8));
+      } catch (IOException e) {
+        Files.deleteIfExists(path);
+        throw e;
+      }
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     }
@@ -94,8 +103,7 @@ public class S3CanonicalFileStore implements CanonicalFileStore {
 
     @Override
     public void close() {
-      try {
-        writer.close();
+      try (BufferedWriter closing = writer) {
         Files.deleteIfExists(path);
       } catch (IOException e) {
         throw new UncheckedIOException(e);

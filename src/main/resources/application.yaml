@@ -43,7 +43,7 @@ data-processing:
     allowed-buckets: ${SOURCE_BUCKETS:}
   canonical:
     # The service's own bucket for each run's canonical JSON Lines file (LLD section 17.5).
-    bucket: ${CANONICAL_BUCKET:data-processing-service-canonical}
+    bucket: ${CANONICAL_BUCKET:}
   queues:
     # Lambda sets AWS_REGION. The queue URLs come from Terraform; the security-details queue is
     # owned elsewhere (LLD section 14.2). A URL ending in .fifo is sent to as a FIFO queue.
