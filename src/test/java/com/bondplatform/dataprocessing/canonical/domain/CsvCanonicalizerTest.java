@@ -6,9 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.bondplatform.dataprocessing.contract.domain.RuleRegistry;
 import com.bondplatform.dataprocessing.shared.domain.ErrorCode;
 import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.io.InputStream;
-import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -103,13 +101,6 @@ class CsvCanonicalizerTest {
   }
 
   private static byte[] resource(String path) {
-    try (InputStream in = CsvCanonicalizerTest.class.getResourceAsStream(path)) {
-      if (in == null) {
-        throw new IllegalStateException("Missing test resource " + path);
-      }
-      return in.readAllBytes();
-    } catch (IOException e) {
-      throw new UncheckedIOException(e);
-    }
+    return GoldenBhavcopy.resource(path);
   }
 }

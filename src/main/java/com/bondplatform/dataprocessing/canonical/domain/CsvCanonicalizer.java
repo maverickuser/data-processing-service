@@ -13,7 +13,8 @@ import java.util.function.Supplier;
  * <p>The content is read twice so that memory stays bounded by the number of distinct ISINs, not
  * the number of records. The first pass checks the file's structure and finds each ISIN's last
  * valid row; the second hands every row, with its final disposition, to the caller in file order. A
- * structurally rejected file therefore hands over no rows at all.
+ * structurally rejected file therefore hands over no rows at all. The price is that every row is
+ * validated twice, which is cheap for a file of at most 10 MiB.
  */
 public final class CsvCanonicalizer {
 
@@ -29,7 +30,8 @@ public final class CsvCanonicalizer {
   /**
    * Canonicalizes a file.
    *
-   * @param content opens a new stream over the same bytes on every call
+   * @param content opens a new stream over identical bytes on every call; a change between the
+   *     reads is detected only when it changes the record count or an ISIN's last valid row
    * @param rows receives every row in file order, only once the whole file has been checked
    * @return the counts, or why the file is rejected
    * @throws IllegalStateException if the second read differs from the first
