@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.bondplatform.dataprocessing.contract.domain.RuleRegistry;
+import com.bondplatform.dataprocessing.job.domain.JobOutcome;
 import com.bondplatform.dataprocessing.job.domain.JobStatus;
 import java.util.Map;
 import java.util.OptionalLong;
@@ -31,6 +32,20 @@ class RowCountsTest {
     assertThat(new RowCounts(2, 1, 0, 1).status()).isEqualTo(JobStatus.COMPLETED_WITH_ERRORS);
     assertThat(new RowCounts(2, 0, 2, 0).status()).isEqualTo(JobStatus.FAILED);
     assertThat(RowCounts.NONE.status()).isEqualTo(JobStatus.FAILED);
+  }
+
+  @Test
+  void outcomeCarriesStatusCountsAndErrors() {
+    JobOutcome outcome = new RowCounts(5, 3, 1, 1).outcome(4);
+
+    assertThat(outcome)
+        .isEqualTo(
+            new JobOutcome(
+                JobStatus.COMPLETED_WITH_ERRORS,
+                "{\"sourceRecords\":5,\"acceptedRows\":3,\"invalidRows\":1,\"supersededRows\":1}",
+                4));
+    assertThatThrownBy(() -> new RowCounts(1, 1, 0, 0).outcome(Long.MAX_VALUE))
+        .isInstanceOf(ArithmeticException.class);
   }
 
   @Test

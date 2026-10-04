@@ -1,5 +1,6 @@
 package com.bondplatform.dataprocessing.canonical.domain;
 
+import com.bondplatform.dataprocessing.job.domain.JobOutcome;
 import com.bondplatform.dataprocessing.job.domain.JobStatus;
 
 /**
@@ -41,6 +42,27 @@ public record RowCounts(
       return JobStatus.FAILED;
     }
     return acceptedRows == sourceRecords ? JobStatus.COMPLETED : JobStatus.COMPLETED_WITH_ERRORS;
+  }
+
+  /**
+   * Returns the job outcome of a completely evaluated file: its {@link #status()}, these counts as
+   * the status API shows them (LLD section 20.3), and the error count.
+   *
+   * @param errorCount the issues the attempt recorded, superseded rows included
+   * @throws ArithmeticException if the error count does not fit the job record
+   */
+  public JobOutcome outcome(long errorCount) {
+    String counts =
+        "{\"sourceRecords\":"
+            + sourceRecords
+            + ",\"acceptedRows\":"
+            + acceptedRows
+            + ",\"invalidRows\":"
+            + invalidRows
+            + ",\"supersededRows\":"
+            + supersededRows
+            + "}";
+    return new JobOutcome(status(), counts, Math.toIntExact(errorCount));
   }
 
   /** Returns these counts with one more record of the given disposition. */
