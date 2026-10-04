@@ -184,6 +184,8 @@ For readability this example shows one of the nine selected fields. A complete c
 
 Record numbers are one-based logical CSV record numbers, including the header as record 1. Column indexes are one-based and follow the actual file order. A CSV record can span physical lines; physical start/end line information may also be recorded if the parser supplies it.
 
+Stored lines (implemented in PR 26a) carry no separate `canonicalRowId`: a line is identified by `jobId`, `attemptNumber`, the source key, and `recordNumber`, the origin reference of section 7. Every line also has `supersededBy`, the winning record number for a superseded row and `null` otherwise.
+
 `rawValue` is the decoded cell string before normalization, not an exact slice of CSV syntax: quoting and escaping are handled by the CSV parser. Exact source bytes remain in S3.
 
 Proposed durable canonical representation: decimal and integer parsed values are stored as strings with an explicit `dataType`, avoiding precision loss through generic JSON handling. Java reconstructs exact typed values from them. This is separate from API serialization: decimal API values are JSON numbers, as agreed. No server-side floating-point conversion or rounding is allowed.
