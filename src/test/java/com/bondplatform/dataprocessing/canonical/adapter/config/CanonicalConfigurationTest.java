@@ -20,6 +20,11 @@ class CanonicalConfigurationTest {
         .isNotNull();
   }
 
+  @Test
+  void jsonSourcesAreReadStrictly() {
+    assertThat(new CanonicalConfiguration().strictJsonReader()).isNotNull();
+  }
+
   @ParameterizedTest
   @NullAndEmptySource
   @ValueSource(strings = " ")
