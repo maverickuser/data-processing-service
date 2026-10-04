@@ -10,7 +10,7 @@ import java.util.Optional;
  *     data record is 2; blank lines are not counted and a record spanning lines has one number
  * @param cells each selected field's cell, by canonical field name
  */
-public record CsvRow(long recordNumber, Map<String, String> cells) {
+public record CsvRow(long recordNumber, Map<String, CsvCell> cells) {
 
   /** Copies the cells. */
   public CsvRow {
@@ -19,6 +19,6 @@ public record CsvRow(long recordNumber, Map<String, String> cells) {
 
   /** Returns a selected field's cell, or empty for a field this row does not carry. */
   public Optional<String> cell(String field) {
-    return Optional.ofNullable(cells.get(field));
+    return Optional.ofNullable(cells.get(field)).map(CsvCell::value);
   }
 }

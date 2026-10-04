@@ -34,6 +34,18 @@ class CsvFileReaderTest {
     assertThat(first.cell("security_code")).contains("1001");
     assertThat(first.cell("face_value")).contains("1000");
     assertThat(first.cell("extra")).isEmpty();
+    assertThat(first.cells().get("security_code")).isEqualTo(new CsvCell(1, "1001"));
+    assertThat(first.cells().get("face_value")).isEqualTo(new CsvCell(10, "1000"));
+  }
+
+  // Review C-1: a line of only whitespace is blank, before the header and between records.
+  @Test
+  void whitespaceOnlyLinesAreBlank() {
+    CsvFileReader.Outcome outcome =
+        read("  \n" + BhavcopyContract.HEADER + "\n \t \n" + ROW_1 + "\n   \n" + ROW_2 + "\n");
+
+    assertThat(outcome).isEqualTo(new CsvFileReader.Outcome.Completed(2));
+    assertThat(rows).extracting(CsvRow::recordNumber).containsExactly(2L, 3L);
   }
 
   // U-CSV-07

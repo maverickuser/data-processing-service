@@ -26,5 +26,9 @@ public enum ErrorCode {
   /** A CSV lacks a header the source contract selects. */
   REQUIRED_HEADER_MISSING,
   /** Two CSV headers are the same after trimming and case-folding, selected or not. */
-  DUPLICATE_HEADER
+  DUPLICATE_HEADER,
+  /** A field the contract requires is blank, such as a CSV row without an ISIN. */
+  REQUIRED_VALUE_MISSING,
+  /** Two prices in one row contradict each other, such as a high price below the low price. */
+  PRICE_INCONSISTENT
 }
