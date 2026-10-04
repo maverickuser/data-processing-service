@@ -1,5 +1,8 @@
-package com.bondplatform.dataprocessing.canonical.domain;
+package com.bondplatform.dataprocessing.mapping.domain;
 
+import com.bondplatform.dataprocessing.canonical.domain.CanonicalRow;
+import com.bondplatform.dataprocessing.canonical.domain.CanonicalRun;
+import com.bondplatform.dataprocessing.canonical.domain.Disposition;
 import com.bondplatform.dataprocessing.contract.domain.InternalModel;
 import com.bondplatform.dataprocessing.contract.domain.MappingContract;
 import com.bondplatform.dataprocessing.publication.domain.DailyMarketSummary;
@@ -12,6 +15,7 @@ import java.math.BigInteger;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -27,18 +31,39 @@ public final class DailyMarketSummaryMapper {
 
   private static final String ISIN = "isin";
 
+  /** The internal fields this mapper reads; the same set {@link InternalModel} allows. */
+  static final Set<String> FIELDS =
+      Set.of(
+          ISIN,
+          "securityCode",
+          "openPrice",
+          "highPrice",
+          "lowPrice",
+          "closePrice",
+          "tradedVolume",
+          "numberOfTrades",
+          "turnover",
+          "faceValue");
+
   private final Map<String, String> fields;
 
   /**
    * Creates a mapper for a daily market summary contract.
    *
-   * @throws IllegalArgumentException if the contract targets another table or does not map the ISIN
+   * @throws IllegalArgumentException if the contract targets another table, maps to a field this
+   *     mapper does not read, or does not map the ISIN
    */
   public DailyMarketSummaryMapper(MappingContract contract) {
     MappingContract.RecordMapping primary = contract.primary();
     if (!primary.target().equals(InternalModel.DAILY_MARKET_SUMMARIES)) {
       throw new IllegalArgumentException(
           "Contract " + contract.id() + " does not target daily market summaries");
+    }
+    for (String internal : primary.fields().values()) {
+      if (!FIELDS.contains(internal)) {
+        throw new IllegalArgumentException(
+            "Contract " + contract.id() + " maps to unknown field " + internal);
+      }
     }
     if (!primary.fields().containsValue(ISIN)) {
       throw new IllegalArgumentException("Contract " + contract.id() + " does not map the ISIN");

@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 /** The real bhavcopy source and mapping contracts, loaded once for tests. */
-final class BhavcopyContract {
+public final class BhavcopyContract {
 
   /** The real bhavcopy contracts, source and mapping. */
   static final PinnedContracts PINNED =
@@ -27,7 +27,7 @@ final class BhavcopyContract {
   static final SourceContract.Csv CONTRACT = (SourceContract.Csv) PINNED.source();
 
   /** The real bhavcopy mapping contract. */
-  static final MappingContract MAPPING = PINNED.mapping();
+  public static final MappingContract MAPPING = PINNED.mapping();
 
   /** The ten selected headers, in the order a real bhavcopy has them, with one extra column. */
   static final String HEADER =

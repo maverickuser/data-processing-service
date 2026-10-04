@@ -1,8 +1,12 @@
-package com.bondplatform.dataprocessing.canonical.domain;
+package com.bondplatform.dataprocessing.mapping.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.bondplatform.dataprocessing.canonical.domain.BhavcopyContract;
+import com.bondplatform.dataprocessing.canonical.domain.CanonicalRow;
+import com.bondplatform.dataprocessing.canonical.domain.Disposition;
+import com.bondplatform.dataprocessing.canonical.domain.GoldenBhavcopy;
 import com.bondplatform.dataprocessing.contract.domain.InternalModel;
 import com.bondplatform.dataprocessing.contract.domain.MappingContract;
 import com.bondplatform.dataprocessing.publication.domain.DailyMarketSummary;
@@ -97,6 +101,28 @@ class DailyMarketSummaryMapperTest {
                     contract(InternalModel.SECURITIES, Map.of("isin", "isin"))))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("does not target daily market summaries");
+  }
+
+  @Test
+  void readsEveryFieldTheInternalModelAllows() {
+    assertThat(DailyMarketSummaryMapper.FIELDS)
+        .isEqualTo(
+            InternalModel.target(InternalModel.DAILY_MARKET_SUMMARIES)
+                .orElseThrow()
+                .fields()
+                .keySet());
+  }
+
+  @Test
+  void rejectsContractMappingToUnknownField() {
+    assertThatThrownBy(
+            () ->
+                new DailyMarketSummaryMapper(
+                    contract(
+                        InternalModel.DAILY_MARKET_SUMMARIES,
+                        Map.of("isin", "isin", "close_price", "closingPrice"))))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("maps to unknown field closingPrice");
   }
 
   @Test
