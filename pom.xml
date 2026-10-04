@@ -34,6 +34,7 @@
     <json-schema-validator.version>3.0.8</json-schema-validator.version>
     <aws-sdk.version>2.55.11</aws-sdk.version>
     <aws-lambda-java-events.version>3.16.1</aws-lambda-java-events.version>
+    <commons-csv.version>1.14.1</commons-csv.version>
     <spotless.version>3.10.3</spotless.version>
     <!-- Newest release that Spotless 3.10.3 can drive; 1.37.0 fails inside the plugin. -->
     <google-java-format.version>1.35.0</google-java-format.version>
@@ -138,6 +139,12 @@
       <groupId>org.postgresql</groupId>
       <artifactId>postgresql</artifactId>
       <scope>runtime</scope>
+    </dependency>
+    <!-- RFC 4180 parsing of bhavcopy files; the service writes no CSV parser of its own. -->
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-csv</artifactId>
+      <version>${commons-csv.version}</version>
     </dependency>
     <dependency>
       <groupId>org.yaml</groupId>
