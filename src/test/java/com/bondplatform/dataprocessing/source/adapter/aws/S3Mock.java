@@ -5,6 +5,7 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.BucketAlreadyOwnedByYouException;
 
 /** An S3-compatible server for tests (Adobe S3Mock), started once per test run. */
 public final class S3Mock {
@@ -26,6 +27,18 @@ public final class S3Mock {
         .endpointOverride(endpoint())
         .forcePathStyle(true)
         .build();
+  }
+
+  /**
+   * Creates a bucket unless it already exists; test classes share the server, so another class may
+   * have created it first.
+   */
+  public static void createBucket(S3Client s3, String bucket) {
+    try {
+      s3.createBucket(request -> request.bucket(bucket));
+    } catch (BucketAlreadyOwnedByYouException e) {
+      // Created earlier on the shared server.
+    }
   }
 
   private static GenericContainer<?> start() {

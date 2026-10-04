@@ -34,7 +34,7 @@ class S3SourceStoreIT {
   @BeforeAll
   static void createBucketAndObjects() {
     s3 = S3Mock.client();
-    s3.createBucket(request -> request.bucket(BUCKET));
+    S3Mock.createBucket(s3, BUCKET);
     put("runs/run_101/raw/debt-bhavcopy/1/BSE_fgroup21092026.csv", CSV);
     put("runs/run_101/manifest.json", "{\"id\": \"m\"}".getBytes(StandardCharsets.UTF_8));
     put("runs/run_102/manifest.json", new byte[(int) Manifest.MAX_BYTES + 1]);

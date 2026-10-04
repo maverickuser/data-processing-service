@@ -157,14 +157,29 @@ public class BhavcopyHandler implements DatasetHandler {
 
   /** Fails the attempt if the job's pinned contracts are not the ones this handler holds. */
   private void requireDeployedContracts(PinnedContractVersions pinned) {
-    requireSame(pinned.source(), sourceContract.id());
-    requireSame(pinned.mapping(), contracts.mapping().id());
+    requireSame(pinned.source(), pinned.sourceHash(), sourceContract.id(), contracts.sourceHash());
+    requireSame(
+        pinned.mapping(), pinned.mappingHash(), contracts.mapping().id(), contracts.mappingHash());
   }
 
-  private static void requireSame(ContractId pinned, ContractId deployed) {
+  /**
+   * Fails unless the pinned contract is the deployed one. The content hash catches a version that
+   * was changed in place after the job was accepted (LLD section 6.2).
+   */
+  private static void requireSame(
+      ContractId pinned, String pinnedHash, ContractId deployed, String deployedHash) {
     if (!pinned.equals(deployed)) {
       throw new IllegalStateException(
           "The job is pinned to " + pinned + ", but this deployment holds " + deployed);
+    }
+    if (!pinnedHash.equals(deployedHash)) {
+      throw new IllegalStateException(
+          "The job is pinned to "
+              + pinned
+              + " with hash "
+              + pinnedHash
+              + ", but this deployment's copy has hash "
+              + deployedHash);
     }
   }
 

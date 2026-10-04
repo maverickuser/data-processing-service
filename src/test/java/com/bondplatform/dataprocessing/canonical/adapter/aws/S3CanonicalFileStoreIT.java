@@ -29,7 +29,7 @@ class S3CanonicalFileStoreIT {
   @BeforeAll
   static void createBucket() {
     s3 = S3Mock.client();
-    s3.createBucket(request -> request.bucket(BUCKET));
+    S3Mock.createBucket(s3, BUCKET);
   }
 
   @AfterAll

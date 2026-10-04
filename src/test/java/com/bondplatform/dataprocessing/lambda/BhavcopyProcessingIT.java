@@ -28,7 +28,6 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.BucketAlreadyOwnedByYouException;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.Message;
 import software.amazon.awssdk.services.sqs.model.MessageAttributeValue;
@@ -78,8 +77,8 @@ class BhavcopyProcessingIT extends PostgresIntegrationTest {
   void emptyQueuesAndCreateBuckets() {
     SQS.purgeQueue(request -> request.queueUrl(JOBS));
     SQS.purgeQueue(request -> request.queueUrl(DETAILS));
-    createBucket(SOURCE_BUCKET);
-    createBucket(CANONICAL_BUCKET);
+    S3Mock.createBucket(S3, SOURCE_BUCKET);
+    S3Mock.createBucket(S3, CANONICAL_BUCKET);
     pump = new WorkerPump(SQS, JOBS, runJob);
   }
 
@@ -299,13 +298,5 @@ class BhavcopyProcessingIT extends PostgresIntegrationTest {
 
   private static void put(String key, byte[] content) {
     S3.putObject(request -> request.bucket(SOURCE_BUCKET).key(key), RequestBody.fromBytes(content));
-  }
-
-  private static void createBucket(String bucket) {
-    try {
-      S3.createBucket(request -> request.bucket(bucket));
-    } catch (BucketAlreadyOwnedByYouException e) {
-      // Another test class, or an earlier test, created it on the shared server.
-    }
   }
 }

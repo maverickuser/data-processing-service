@@ -234,6 +234,36 @@ class BhavcopyHandlerTest {
   }
 
   @Test
+  void jobPinnedToContractChangedInPlaceIsNotProcessed() {
+    PinnedContracts deployed = CONTRACTS;
+    ClaimedJob sourceChanged =
+        claimed(
+            new PinnedContractVersions(
+                deployed.source().id(),
+                "sha256:old",
+                deployed.mapping().id(),
+                deployed.mappingHash()));
+    ClaimedJob mappingChanged =
+        claimed(
+            new PinnedContractVersions(
+                deployed.source().id(),
+                deployed.sourceHash(),
+                deployed.mapping().id(),
+                "sha256:old"));
+
+    assertThatThrownBy(() -> handler.process(sourceChanged))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage(
+            "The job is pinned to bse-debt-bhavcopy-csv-v1 with hash sha256:old,"
+                + " but this deployment's copy has hash "
+                + deployed.sourceHash());
+    assertThatThrownBy(() -> handler.process(mappingChanged))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("bse-debt-bhavcopy-mapping-v1 with hash sha256:old");
+    verifyNoInteractions(manifests);
+  }
+
+  @Test
   void manifestMissingAnExpectedInputIsDefect() {
     ClaimedJob job = claimed(pinnedVersions());
     when(manifests.load(job)).thenReturn(manifest(Map.of("exchangeName", "BSE")));
