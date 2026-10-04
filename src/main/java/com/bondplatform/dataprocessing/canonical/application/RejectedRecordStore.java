@@ -12,7 +12,8 @@ import java.util.UUID;
 public interface RejectedRecordStore {
 
   /**
-   * Stores one batch of a run's quarantined rows with their issues.
+   * Stores one batch of a run's quarantined rows with their issues, in the caller's transaction:
+   * rows and issues are written separately, so only the transaction keeps them together.
    *
    * @param run the run the rows come from
    * @param processingRunId the attempt's processing run
