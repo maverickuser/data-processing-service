@@ -40,6 +40,12 @@ public interface JobRunRepository {
   void failJob(JobId id, int attemptCount, Instant now);
 
   /**
+   * Records the object key of the attempt's canonical file on its run (LLD section 17.5). An
+   * attempt that is no longer running changes nothing.
+   */
+  void recordCanonicalFile(UUID runId, String objectKey);
+
+  /**
    * Records that the attempt finished the job with this outcome.
    *
    * @throws IllegalStateException if the job is not running this attempt: another attempt has taken

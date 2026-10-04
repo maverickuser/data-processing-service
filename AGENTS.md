@@ -43,6 +43,7 @@ src/main/java/com/bondplatform/dataprocessing/
   mapping/                      stage 2: canonical record to internal model
   publication/                  atomic writes to securities_data, new-security detection
   outbox/                       outbox table, dispatcher, SQS publishers
+  pipeline/                     dataset handlers joining source, both stages, and publication for a job
   review/                       public read APIs
   operations/                   retention cleanup, failing of stuck jobs
   lambda/                       thin Lambda entry points: API, queue, sweeper, retention, migration

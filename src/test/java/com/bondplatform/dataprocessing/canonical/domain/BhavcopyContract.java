@@ -17,7 +17,7 @@ import java.util.Map;
 public final class BhavcopyContract {
 
   /** The real bhavcopy contracts, source and mapping. */
-  static final PinnedContracts PINNED =
+  public static final PinnedContracts PINNED =
       new ClasspathContractCatalog(
               new YamlContractLoader(), new ContractValidator(RuleRegistry.standard()))
           .load(

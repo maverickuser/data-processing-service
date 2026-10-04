@@ -363,6 +363,11 @@ class RunJobTest {
     }
 
     @Override
+    public void recordCanonicalFile(UUID runId, String objectKey) {
+      throw new UnsupportedOperationException("RunJob never records a canonical file");
+    }
+
+    @Override
     public void completeRun(
         JobId id, UUID runId, int attemptNumber, JobOutcome jobOutcome, Instant now) {
       status = jobOutcome.status();

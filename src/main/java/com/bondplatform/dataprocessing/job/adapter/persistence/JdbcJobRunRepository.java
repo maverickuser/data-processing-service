@@ -63,6 +63,13 @@ public class JdbcJobRunRepository implements JobRunRepository {
       VALUES (:runId, :id, :attemptNumber, 'RUNNING', :now)
       """;
 
+  static final String RECORD_CANONICAL_FILE =
+      """
+      UPDATE data_processing.processing_runs
+      SET canonical_object_key = :objectKey
+      WHERE id = :runId AND status = 'RUNNING'
+      """;
+
   static final String COMPLETE_JOB =
       """
       UPDATE data_processing.ingestion_requests
@@ -140,6 +147,13 @@ public class JdbcJobRunRepository implements JobRunRepository {
             .addValue("id", id.value())
             .addValue("attemptNumber", attemptCount)
             .addValue("now", utc(now)));
+  }
+
+  @Override
+  public void recordCanonicalFile(UUID runId, String objectKey) {
+    jdbc.update(
+        RECORD_CANONICAL_FILE,
+        new MapSqlParameterSource().addValue("runId", runId).addValue("objectKey", objectKey));
   }
 
   @Override
