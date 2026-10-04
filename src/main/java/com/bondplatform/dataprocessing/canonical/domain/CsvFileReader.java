@@ -103,7 +103,9 @@ public final class CsvFileReader {
 
   /**
    * Returns whether a record is a line holding only whitespace, which counts as blank (LLD section
-   * 5.1). A record with more than one cell has a separator, so it is never blank.
+   * 5.1). A record with more than one cell has a separator, so it is never blank. A line holding
+   * only a quoted empty cell ({@code ""}) is blank too; a single cell could never match a
+   * multi-column header anyway.
    */
   private static boolean isBlankLine(CSVRecord record) {
     return record.size() == 1 && record.get(0).isBlank();

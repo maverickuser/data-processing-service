@@ -17,20 +17,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 /** Test cases U-CSV-08..10 and the field rules of LLD section 5.2. */
 class CsvRowValidatorTest {
 
-  /** The selected fields in the column order of {@link BhavcopyContract#HEADER}. */
-  private static final List<String> COLUMNS =
-      List.of(
-          "security_code",
-          "isin",
-          "open_price",
-          "high_price",
-          "low_price",
-          "close_price",
-          "traded_volume",
-          "number_of_trades",
-          "turnover",
-          "face_value");
-
   private final CsvRowValidator validator =
       new CsvRowValidator(BhavcopyContract.CONTRACT, RuleRegistry.standard());
 
@@ -257,24 +243,7 @@ class CsvRowValidatorTest {
     return validator.validate(row(overrides)).field(name);
   }
 
-  /** A valid row with low 99 and high 101, with the given fields replaced. */
   private static CsvRow row(Map<String, String> overrides) {
-    Map<String, String> values =
-        new HashMap<>(
-            Map.of(
-                "security_code", "1001",
-                "isin", "INE121A07QY9",
-                "open_price", "100",
-                "high_price", "101",
-                "low_price", "99",
-                "close_price", "100.5",
-                "traded_volume", "10",
-                "number_of_trades", "2",
-                "turnover", "1,000.00",
-                "face_value", "100"));
-    values.putAll(overrides);
-    Map<String, CsvCell> cells = new HashMap<>();
-    values.forEach((name, raw) -> cells.put(name, new CsvCell(COLUMNS.indexOf(name) + 1, raw)));
-    return new CsvRow(2, cells);
+    return BhavcopyContract.row(2, overrides);
   }
 }
