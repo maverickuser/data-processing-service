@@ -13,6 +13,7 @@ import com.bondplatform.dataprocessing.shared.supplier.IdSupplier;
 import java.net.URI;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -71,7 +72,8 @@ public class PublishDailyMarketSummaries {
    */
   @Transactional
   public Set<Isin> publish(ClaimedJob job, List<DailyMarketSummary> accepted, JobOutcome outcome) {
-    Instant now = Instant.now(clock);
+    // PostgreSQL keeps microseconds, so the event's time equals the stored creation time.
+    Instant now = Instant.now(clock).truncatedTo(ChronoUnit.MICROS);
     Set<Isin> isins = new LinkedHashSet<>();
     accepted.forEach(summary -> isins.add(summary.isin()));
     Set<Isin> created = securities.insertMissing(isins, now);

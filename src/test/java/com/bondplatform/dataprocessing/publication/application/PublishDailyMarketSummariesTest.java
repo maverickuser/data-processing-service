@@ -107,6 +107,23 @@ class PublishDailyMarketSummariesTest {
   }
 
   @Test
+  void timesAreKeptToMicroseconds() {
+    PublishDailyMarketSummaries nanoClock =
+        new PublishDailyMarketSummaries(
+            securities,
+            summaries,
+            completion,
+            outbox,
+            new SequentialIds(),
+            Clock.fixed(NOW.plusNanos(123_456_789), ZoneOffset.UTC),
+            SOURCE);
+
+    nanoClock.publish(job, List.of(), OUTCOME);
+
+    verify(summaries).upsertAll(List.of(), NOW.plusNanos(123_456_000));
+  }
+
+  @Test
   void fileWithoutAcceptedRowsOnlyFinishesJob() {
     JobOutcome failed = new JobOutcome(JobStatus.FAILED, "{\"sourceRecords\":1}", 1);
 

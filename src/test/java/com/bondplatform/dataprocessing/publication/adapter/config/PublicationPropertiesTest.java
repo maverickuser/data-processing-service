@@ -25,6 +25,19 @@ class PublicationPropertiesTest {
   }
 
   @Test
+  void sourceIsNotWebAddress() {
+    assertThatThrownBy(
+            () ->
+                new PublicationProperties(
+                    URI.create(
+                        "https://sqs.ap-south-1.amazonaws.com/123456789012/security-details")))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("not a URL");
+    assertThatThrownBy(() -> new PublicationProperties(URI.create("http://example.com")))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
   void configurationCreatesPublisher() {
     PublicationProperties properties =
         new PublicationProperties(URI.create("urn:bond-platform:structured-file-processing:test"));
