@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.bondplatform.dataprocessing.contract.domain.RuleRegistry;
+import com.bondplatform.dataprocessing.job.domain.JobStatus;
 import java.util.Map;
 import java.util.OptionalLong;
 import org.junit.jupiter.api.Test;
@@ -20,6 +21,16 @@ class RowCountsTest {
             .plus(Disposition.QUARANTINED_SUPERSEDED);
 
     assertThat(counts).isEqualTo(new RowCounts(4, 1, 2, 1));
+  }
+
+  /** U-OUT-01. */
+  @Test
+  void statusFollowsAcceptedAndQuarantinedRows() {
+    assertThat(new RowCounts(2, 2, 0, 0).status()).isEqualTo(JobStatus.COMPLETED);
+    assertThat(new RowCounts(3, 1, 1, 1).status()).isEqualTo(JobStatus.COMPLETED_WITH_ERRORS);
+    assertThat(new RowCounts(2, 1, 0, 1).status()).isEqualTo(JobStatus.COMPLETED_WITH_ERRORS);
+    assertThat(new RowCounts(2, 0, 2, 0).status()).isEqualTo(JobStatus.FAILED);
+    assertThat(RowCounts.NONE.status()).isEqualTo(JobStatus.FAILED);
   }
 
   @Test

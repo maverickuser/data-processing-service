@@ -1,5 +1,7 @@
 package com.bondplatform.dataprocessing.canonical.domain;
 
+import com.bondplatform.dataprocessing.job.domain.JobStatus;
+
 /**
  * How many data records a completely evaluated CSV had, by disposition (LLD section 20.3).
  *
@@ -27,6 +29,18 @@ public record RowCounts(
               + " != "
               + sourceRecords);
     }
+  }
+
+  /**
+   * Returns the job status these counts give a completely evaluated file (LLD section 9): {@link
+   * JobStatus#COMPLETED} when every row was accepted, {@link JobStatus#COMPLETED_WITH_ERRORS} when
+   * some were quarantined, and {@link JobStatus#FAILED} when none was accepted.
+   */
+  public JobStatus status() {
+    if (acceptedRows == 0) {
+      return JobStatus.FAILED;
+    }
+    return acceptedRows == sourceRecords ? JobStatus.COMPLETED : JobStatus.COMPLETED_WITH_ERRORS;
   }
 
   /** Returns these counts with one more record of the given disposition. */
