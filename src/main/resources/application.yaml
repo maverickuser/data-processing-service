@@ -36,6 +36,13 @@ spring:
     schemas: data_processing,securities_data
     locations: classpath:db/migration
 
+logging:
+  structured:
+    format:
+      # One JSON object per line, so CloudWatch Logs Insights can query fields; MDC entries such as
+      # jobId and attemptNumber become top-level fields (LLD section 23.8).
+      console: logstash
+
 data-processing:
   sources:
     # The fetch service's artifact bucket; no other bucket is read (LLD section 19).

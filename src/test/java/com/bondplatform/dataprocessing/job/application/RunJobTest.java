@@ -14,10 +14,13 @@ import com.bondplatform.dataprocessing.job.domain.OrderingGroup;
 import com.bondplatform.dataprocessing.job.domain.RetryPolicy;
 import com.bondplatform.dataprocessing.job.domain.RunStatus;
 import com.bondplatform.dataprocessing.job.domain.StoredJob;
+import com.bondplatform.dataprocessing.shared.application.Metric;
+import com.bondplatform.dataprocessing.shared.application.Metrics;
 import com.bondplatform.dataprocessing.shared.domain.JobId;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -29,6 +32,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.slf4j.MDC;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
@@ -46,7 +51,8 @@ class RunJobTest {
 
   private final InMemoryRuns runs = new InMemoryRuns();
   private final AtomicLong nextId = new AtomicLong(1);
-  private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+  private final MovableClock clock = new MovableClock();
+  private final RecordedMetrics metrics = new RecordedMetrics();
   private final JobCompletion completion = new JobCompletion(runs, clock);
   private final FakeHandler handler = new FakeHandler();
   private final RunJob runJob =
@@ -56,7 +62,8 @@ class RunJobTest {
           new DirectTransactions(),
           RetryPolicy.STANDARD,
           clock,
-          () -> new UUID(0, nextId.getAndIncrement()));
+          () -> new UUID(0, nextId.getAndIncrement()),
+          metrics);
 
   @Test
   void runsTheHandlerInNewAttemptThatFinishesTheJob() {
@@ -229,7 +236,8 @@ class RunJobTest {
             new DirectTransactions(),
             RetryPolicy.STANDARD,
             clock,
-            () -> new UUID(0, 1));
+            () -> new UUID(0, 1),
+            metrics);
 
     assertThat(withoutHandlers.run(JOB)).isEqualTo(RunResult.FINISHED);
 
@@ -249,7 +257,131 @@ class RunJobTest {
                     new DirectTransactions(),
                     RetryPolicy.STANDARD,
                     clock,
-                    UUID::randomUUID));
+                    UUID::randomUUID,
+                    metrics));
+  }
+
+  @Test
+  void finishedAttemptRecordsTheJobsOutcomeAndHowLongItRan() {
+    runs.add(JobStatus.QUEUED, 0);
+    handler.behaviour =
+        job -> {
+          clock.now = NOW.plusMillis(1500);
+          completion.complete(job, COMPLETED);
+        };
+
+    runJob.run(JOB);
+
+    assertThat(metrics.recorded)
+        .containsExactly(
+            new Recorded(
+                Metric.JOB_OUTCOME, 1, Map.of("Dataset", NSDL.value(), "Outcome", "COMPLETED")),
+            new Recorded(Metric.RUN_DURATION, 1500, Map.of("Dataset", NSDL.value())));
+  }
+
+  @Test
+  void failedAttemptsRecordTheStatusTheJobIsLeftIn() {
+    runs.add(JobStatus.RETRY_PENDING, 1);
+    handler.behaviour =
+        job -> {
+          throw new TemporaryFailureException(
+              "SOURCE_UNAVAILABLE", "S3 did not answer", new IllegalStateException());
+        };
+
+    assertThat(runJob.run(JOB)).isEqualTo(RunResult.retryAfter(Duration.ofMinutes(5)));
+    assertThat(runJob.run(JOB)).isEqualTo(RunResult.ATTEMPTS_EXHAUSTED);
+
+    assertThat(metrics.outcomes()).containsExactly("RETRY_PENDING", "FAILED");
+    assertThat(metrics.recorded).filteredOn(r -> r.metric() == Metric.RUN_DURATION).hasSize(2);
+  }
+
+  @ParameterizedTest
+  @CsvSource({"PERMANENT, FAILED", "UNEXPECTED, RETRY_PENDING", "UNFINISHED, FAILED"})
+  void everyAttemptRecordsItsOutcomeAndDurationOnce(String path, String outcome) {
+    runs.add(JobStatus.QUEUED, 0);
+    handler.behaviour =
+        job -> {
+          clock.now = NOW.plusMillis(20);
+          switch (path) {
+            case "PERMANENT" -> throw new PermanentFailureException("CHECKSUM_MISMATCH", "differs");
+            case "UNEXPECTED" -> throw new IllegalArgumentException("unexpected");
+            default -> {}
+          }
+        };
+
+    runJob.run(JOB);
+
+    assertThat(metrics.recorded)
+        .containsExactly(
+            new Recorded(
+                Metric.JOB_OUTCOME, 1, Map.of("Dataset", NSDL.value(), "Outcome", outcome)),
+            new Recorded(Metric.RUN_DURATION, 20, Map.of("Dataset", NSDL.value())));
+  }
+
+  @Test
+  void jobOfDatasetWithoutHandlerRecordsFailedAndDuration() {
+    runs.add(JobStatus.QUEUED, 0);
+
+    new RunJob(
+            runs,
+            List.of(),
+            new DirectTransactions(),
+            RetryPolicy.STANDARD,
+            clock,
+            () -> new UUID(0, 1),
+            metrics)
+        .run(JOB);
+
+    assertThat(metrics.outcomes()).containsExactly("FAILED");
+    assertThat(metrics.recorded).hasSize(2);
+  }
+
+  @Test
+  void unknownJobRecordsNothing() {
+    runJob.run(JOB);
+
+    assertThat(metrics.recorded).isEmpty();
+  }
+
+  @Test
+  void metricThatCannotBeRecordedChangesNothing() {
+    runs.add(JobStatus.QUEUED, 0);
+    handler.behaviour = job -> completion.complete(job, COMPLETED);
+    RunJob withBrokenMetrics =
+        new RunJob(
+            runs,
+            List.of(handler),
+            new DirectTransactions(),
+            RetryPolicy.STANDARD,
+            clock,
+            () -> new UUID(0, 1),
+            (metric, value, dimensions) -> {
+              throw new IllegalStateException("cannot write");
+            });
+
+    assertThat(withBrokenMetrics.run(JOB)).isEqualTo(RunResult.FINISHED);
+    assertThat(runs.status).isEqualTo(JobStatus.COMPLETED);
+  }
+
+  @Test
+  void jobFailedForUsedAttemptsRecordsOnlyItsOutcome() {
+    runs.add(JobStatus.PROCESSING, 3);
+
+    runJob.run(JOB);
+
+    assertThat(metrics.recorded)
+        .containsExactly(
+            new Recorded(
+                Metric.JOB_OUTCOME, 1, Map.of("Dataset", NSDL.value(), "Outcome", "FAILED")));
+  }
+
+  @Test
+  void redeliveryRecordsNothing() {
+    runs.add(JobStatus.COMPLETED, 1);
+
+    runJob.run(JOB);
+
+    assertThat(metrics.recorded).isEmpty();
   }
 
   @Test
@@ -270,6 +402,46 @@ class RunJobTest {
   }
 
   private record Run(UUID id, int attemptNumber, RunStatus status, @Nullable String code) {}
+
+  private record Recorded(Metric metric, long value, Map<String, String> dimensions) {}
+
+  private static final class RecordedMetrics implements Metrics {
+
+    private final List<Recorded> recorded = new ArrayList<>();
+
+    @Override
+    public void record(Metric metric, long value, Map<String, String> dimensions) {
+      recorded.add(new Recorded(metric, value, dimensions));
+    }
+
+    List<String> outcomes() {
+      return recorded.stream()
+          .filter(r -> r.metric() == Metric.JOB_OUTCOME)
+          .map(r -> r.dimensions().get("Outcome"))
+          .toList();
+    }
+  }
+
+  /** A clock a test moves by hand; it starts at {@link #NOW}. */
+  private static final class MovableClock extends Clock {
+
+    private Instant now = NOW;
+
+    @Override
+    public ZoneId getZone() {
+      return ZoneOffset.UTC;
+    }
+
+    @Override
+    public Clock withZone(ZoneId zone) {
+      return this;
+    }
+
+    @Override
+    public Instant instant() {
+      return now;
+    }
+  }
 
   /** Runs callbacks directly, standing in for a transaction manager. */
   private static final class DirectTransactions implements TransactionOperations {

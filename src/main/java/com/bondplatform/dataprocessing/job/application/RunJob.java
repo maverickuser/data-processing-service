@@ -6,6 +6,8 @@ import com.bondplatform.dataprocessing.job.domain.JobStatus;
 import com.bondplatform.dataprocessing.job.domain.RetryPolicy;
 import com.bondplatform.dataprocessing.job.domain.RunStatus;
 import com.bondplatform.dataprocessing.job.domain.StoredJob;
+import com.bondplatform.dataprocessing.shared.application.Metric;
+import com.bondplatform.dataprocessing.shared.application.Metrics;
 import com.bondplatform.dataprocessing.shared.domain.JobId;
 import com.bondplatform.dataprocessing.shared.supplier.IdSupplier;
 import java.time.Clock;
@@ -30,6 +32,10 @@ import org.springframework.transaction.support.TransactionOperations;
  * invocation that died is ended, and a new run is recorded. The dataset handler then does the work
  * and finishes the job in its publication transaction. A message for a job that has already
  * finished does nothing, so a redelivery never publishes twice.
+ *
+ * <p>Each attempt that ends, and each job failed because its attempts were used, records the job's
+ * status as a {@link Metric#JOB_OUTCOME}; an attempt also records its {@link Metric#RUN_DURATION}
+ * (LLD section 23.8).
  */
 @Service
 public class RunJob {
@@ -46,6 +52,12 @@ public class RunJob {
   /** Code of a failure no handler anticipated; treated as temporary. */
   static final String UNEXPECTED_FAILURE = "UNEXPECTED_FAILURE";
 
+  /** Metric dimension: the job's dataset URN. */
+  static final String DATASET = "Dataset";
+
+  /** Metric dimension: the job's status once the attempt ended. */
+  static final String OUTCOME = "Outcome";
+
   private static final Logger LOG = LoggerFactory.getLogger(RunJob.class);
 
   private final JobRunRepository runs;
@@ -54,6 +66,7 @@ public class RunJob {
   private final RetryPolicy retryPolicy;
   private final Clock clock;
   private final IdSupplier idSupplier;
+  private final Metrics metrics;
 
   /**
    * Creates the use case.
@@ -66,7 +79,8 @@ public class RunJob {
       TransactionOperations transactions,
       RetryPolicy retryPolicy,
       Clock clock,
-      IdSupplier idSupplier) {
+      IdSupplier idSupplier,
+      Metrics metrics) {
     this.runs = runs;
     this.handlers =
         handlers.stream().collect(Collectors.toMap(DatasetHandler::dataset, Function.identity()));
@@ -74,6 +88,7 @@ public class RunJob {
     this.retryPolicy = retryPolicy;
     this.clock = clock;
     this.idSupplier = idSupplier;
+    this.metrics = metrics;
   }
 
   /**
@@ -96,6 +111,7 @@ public class RunJob {
         }
         case Claim.AttemptsUsedUp usedUp -> {
           LOG.warn("Every attempt was used; the job is failed");
+          recordOutcome(usedUp.dataset(), JobStatus.FAILED);
           yield RunResult.FINISHED;
         }
         case Claim.Started started -> attempt(started.job());
@@ -108,6 +124,34 @@ public class RunJob {
 
   private RunResult attempt(ClaimedJob job) {
     MDC.put("attemptNumber", String.valueOf(job.attemptNumber()));
+    Instant started = Instant.now(clock);
+    Attempt ended = runAttempt(job);
+    DatasetUrn dataset = job.job().dataset();
+    recordOutcome(dataset, ended.jobStatus());
+    record(
+        Metric.RUN_DURATION,
+        Duration.between(started, Instant.now(clock)).toMillis(),
+        Map.of(DATASET, dataset.value()));
+    return ended.result();
+  }
+
+  private void recordOutcome(DatasetUrn dataset, JobStatus status) {
+    record(Metric.JOB_OUTCOME, 1, Map.of(DATASET, dataset.value(), OUTCOME, status.name()));
+  }
+
+  /**
+   * Records a metric after the job's state is committed; a failure to record is logged and does not
+   * change how the message is handled.
+   */
+  private void record(Metric metric, long value, Map<String, String> dimensions) {
+    try {
+      metrics.record(metric, value, dimensions);
+    } catch (RuntimeException e) {
+      LOG.warn("Metric not recorded, metric={}, type={}", metric, e.getClass().getName());
+    }
+  }
+
+  private Attempt runAttempt(ClaimedJob job) {
     DatasetHandler handler = handlers.get(job.job().dataset());
     if (handler == null) {
       // A deployment defect, but failing the job once beats a message that loops forever.
@@ -116,13 +160,13 @@ public class RunJob {
           RunStatus.FAILED_PERMANENT,
           NO_DATASET_HANDLER,
           "No handler processes dataset " + job.job().dataset().value());
-      return RunResult.FINISHED;
+      return Attempt.FAILED;
     }
     try {
       handler.process(job);
     } catch (PermanentFailureException e) {
       fail(job, RunStatus.FAILED_PERMANENT, e.code(), String.valueOf(e.getMessage()));
-      return RunResult.FINISHED;
+      return Attempt.FAILED;
     } catch (TemporaryFailureException e) {
       return failTemporarily(job, e.code(), String.valueOf(e.getMessage()));
     } catch (RuntimeException e) {
@@ -135,14 +179,16 @@ public class RunJob {
           e.getStackTrace().length > 0 ? e.getStackTrace()[0] : "unknown");
       return failTemporarily(job, UNEXPECTED_FAILURE, e.getClass().getName());
     }
-    if (!isFinished(job.job().id())) {
+    Optional<JobStatus> finished = finishedStatus(job.job().id());
+    if (finished.isEmpty()) {
       fail(
           job,
           RunStatus.FAILED_PERMANENT,
           JOB_NOT_FINISHED,
           "The dataset handler returned without finishing the job");
+      return Attempt.FAILED;
     }
-    return RunResult.FINISHED;
+    return new Attempt(RunResult.FINISHED, finished.get());
   }
 
   private Claim claim(JobId jobId) {
@@ -159,32 +205,32 @@ public class RunJob {
     if (job.attemptCount() >= retryPolicy.maxAttempts()) {
       // Every attempt was used, the last one by an invocation that died without recording an end.
       runs.failJob(jobId, job.attemptCount(), now);
-      return new Claim.AttemptsUsedUp();
+      return new Claim.AttemptsUsedUp(job.dataset());
     }
     ClaimedJob claimed = new ClaimedJob(job, idSupplier.nextId(), job.attemptCount() + 1);
     runs.startRun(jobId, claimed.runId(), claimed.attemptNumber(), now);
     return new Claim.Started(claimed);
   }
 
-  private boolean isFinished(JobId jobId) {
-    Boolean finished =
+  /** Returns the job's status if it has finished. */
+  private Optional<JobStatus> finishedStatus(JobId jobId) {
+    return Objects.requireNonNull(
         transactions.execute(
-            status -> runs.lockForRun(jobId).map(job -> job.status().isTerminal()).orElse(false));
-    return Boolean.TRUE.equals(finished);
+            status -> runs.lockForRun(jobId).map(StoredJob::status).filter(JobStatus::isTerminal)));
   }
 
   /**
    * Records a temporary failure: the job runs again after the policy's delay, or, after its last
    * attempt, is failed.
    */
-  private RunResult failTemporarily(ClaimedJob job, String code, String detail) {
+  private Attempt failTemporarily(ClaimedJob job, String code, String detail) {
     Optional<Duration> delay = retryPolicy.delayAfterFailedAttempt(job.attemptNumber());
     if (delay.isEmpty()) {
       fail(job, RunStatus.FAILED_TEMPORARY, code, detail, JobStatus.FAILED);
-      return RunResult.ATTEMPTS_EXHAUSTED;
+      return new Attempt(RunResult.ATTEMPTS_EXHAUSTED, JobStatus.FAILED);
     }
     fail(job, RunStatus.FAILED_TEMPORARY, code, detail, JobStatus.RETRY_PENDING);
-    return RunResult.retryAfter(delay.get());
+    return new Attempt(RunResult.retryAfter(delay.get()), JobStatus.RETRY_PENDING);
   }
 
   private void fail(ClaimedJob job, RunStatus runStatus, String code, String detail) {
@@ -207,6 +253,12 @@ public class RunJob {
     LOG.warn("Attempt failed, code={}, jobStatus={}", code, jobStatus);
   }
 
+  /** How an attempt ended: the message's fate and the job's status. */
+  private record Attempt(RunResult result, JobStatus jobStatus) {
+
+    static final Attempt FAILED = new Attempt(RunResult.FINISHED, JobStatus.FAILED);
+  }
+
   /** What claiming a job found. */
   private sealed interface Claim {
 
@@ -214,7 +266,7 @@ public class RunJob {
     record UnknownJob() implements Claim {}
 
     /** Every attempt had been used; the job is now failed. */
-    record AttemptsUsedUp() implements Claim {}
+    record AttemptsUsedUp(DatasetUrn dataset) implements Claim {}
 
     /** The job has already finished; the message is a redelivery. */
     record AlreadyFinished(JobStatus status) implements Claim {}
