@@ -5,11 +5,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.amazonaws.services.lambda.runtime.events.ScheduledEvent;
 import com.bondplatform.dataprocessing.persistence.PostgresIntegrationTest;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Supplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
 /**
@@ -20,6 +25,7 @@ import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 class FunctionStartupIT extends PostgresIntegrationTest {
 
   private static final String URL = "spring.datasource.url";
+  private static final Pattern VERSIONED_FILE = Pattern.compile("^V(\\d+)__");
 
   @Value("${spring.datasource.url}")
   private String databaseUrl;
@@ -58,18 +64,30 @@ class FunctionStartupIT extends PostgresIntegrationTest {
   void migrationAppliesEveryMigrationToANewDatabaseOnce() throws IOException {
     jdbc.sql("DROP DATABASE IF EXISTS migration_check").update();
     jdbc.sql("CREATE DATABASE migration_check").update();
-    final int migrations =
-        new PathMatchingResourcePatternResolver()
-            .getResources("classpath:db/migration/*.sql")
-            .length;
+    Resource[] files =
+        new PathMatchingResourcePatternResolver().getResources("classpath:db/migration/*.sql");
+    final int migrations = files.length;
+    final int latestVersion = latestVersionOf(files);
     String newDatabase = databaseUrl.replaceFirst("/[^/?]+(\\?|$)", "/migration_check$1");
     MigrationHandler migration = startedOn(newDatabase, MigrationHandler::new);
 
     assertThat(migration.handleRequest(Map.of(), new FixedLambdaContext()))
         .as("every migration is applied on the first invocation, none at startup")
-        .isEqualTo("applied migrations=" + migrations + " schemaVersion=" + migrations);
+        .isEqualTo("applied migrations=" + migrations + " schemaVersion=" + latestVersion);
     assertThat(migration.handleRequest(Map.of(), new FixedLambdaContext()))
-        .isEqualTo("applied migrations=0 schemaVersion=" + migrations);
+        .isEqualTo("applied migrations=0 schemaVersion=" + latestVersion);
+  }
+
+  /** The highest {@code V<n>__} number among the migration files. */
+  private static int latestVersionOf(Resource[] files) {
+    return Arrays.stream(files)
+        .map(Resource::getFilename)
+        .filter(Objects::nonNull)
+        .map(VERSIONED_FILE::matcher)
+        .filter(Matcher::find)
+        .mapToInt(matcher -> Integer.parseInt(matcher.group(1)))
+        .max()
+        .orElseThrow();
   }
 
   /** Starts a function as Lambda would, with the database settings Lambda's environment gives. */

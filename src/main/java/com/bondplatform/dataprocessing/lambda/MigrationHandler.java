@@ -35,9 +35,8 @@ public class MigrationHandler implements RequestHandler<Map<String, Object>, Str
     this(
         new SpringApplicationBuilder(DataProcessingApplication.class)
                 .web(WebApplicationType.NONE)
-                .properties("spring.flyway.enabled=true")
                 .initializers(MigrationHandler::deferMigration)
-                .run()
+                .run("--spring.flyway.enabled=true")
                 .getBean(Flyway.class)
             ::migrate);
   }
@@ -52,7 +51,7 @@ public class MigrationHandler implements RequestHandler<Map<String, Object>, Str
     MigrateResult result = migrate.get();
     String version =
         Objects.requireNonNullElse(
-            result.targetSchemaVersion, String.valueOf(result.initialSchemaVersion));
+            result.targetSchemaVersion, Objects.toString(result.initialSchemaVersion, "none"));
     LOG.info(
         "Migrations applied, migrationsExecuted={}, schemaVersion={}",
         result.migrationsExecuted,

@@ -1460,7 +1460,7 @@ The artifact is one zip with the compiled classes at its root and the dependenci
 
 - No database connection is opened: the pool opens its one connection on first use (minimum idle 0, no connection checked at startup).
 - No migration runs at startup. The migration function migrates only when invoked, so publishing its version changes no schema.
-- IDs come from `UUID.randomUUID`, whose `SecureRandom` the Lambda Java runtime keeps unique across restored environments; no other random source is used.
+- IDs come from `UUID.randomUUID`, whose `SecureRandom` the Lambda Java runtime keeps unique across restored environments; no other random source is used in this service's code.
 - Times are read from the clock at each use, never kept from startup.
 
 ### 23.2 API Gateway and access
