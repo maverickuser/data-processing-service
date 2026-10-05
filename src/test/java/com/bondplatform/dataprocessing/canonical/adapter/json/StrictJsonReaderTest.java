@@ -146,6 +146,18 @@ class StrictJsonReaderTest {
   }
 
   @Test
+  void nestingDeeperThanTheLimitIsMalformed() {
+    int limit = StrictJsonReader.MAX_NESTING_DEPTH;
+
+    assertThat(read("[".repeat(limit) + "]".repeat(limit))).isInstanceOf(JsonRead.Parsed.class);
+    assertThat(read("[".repeat(limit + 1) + "]".repeat(limit + 1)))
+        .isEqualTo(
+            new JsonRead.Malformed(
+                "The file exceeds a limit of the JSON reader, such as nesting deeper than 32"
+                    + " levels"));
+  }
+
+  @Test
   void fileThatIsNotUtf8IsMalformed() {
     byte[] latin1 = "{\"issuerName\": \"Société\"}".getBytes(StandardCharsets.ISO_8859_1);
 

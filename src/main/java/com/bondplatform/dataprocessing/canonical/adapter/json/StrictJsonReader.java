@@ -15,7 +15,10 @@ import org.jspecify.annotations.Nullable;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.JsonParser;
 import tools.jackson.core.JsonToken;
+import tools.jackson.core.StreamReadConstraints;
 import tools.jackson.core.TokenStreamLocation;
+import tools.jackson.core.exc.StreamConstraintsException;
+import tools.jackson.core.json.JsonFactory;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -24,13 +27,24 @@ import tools.jackson.databind.json.JsonMapper;
  * <p>The file must be UTF-8, optionally starting with a byte order mark, and hold exactly one JSON
  * value. A property name repeated inside one object makes the file malformed rather than letting
  * one value win; the same name in different objects is fine. Every number is read as a {@code
- * BigDecimal} from its text. Error details give a line and column but never quote the file, which
- * may hold values not meant for error messages.
+ * BigDecimal} from its text. Nesting deeper than {@value #MAX_NESTING_DEPTH} levels is malformed.
+ * Error details give a line and column but never quote the file, which may hold values not meant
+ * for error messages.
  */
 public final class StrictJsonReader implements JsonDocumentReader {
 
   private static final char BYTE_ORDER_MARK = '﻿';
-  private static final JsonMapper JSON = JsonMapper.builder().build();
+
+  /** Far deeper than any NSDL payload, which nests about five levels. */
+  public static final int MAX_NESTING_DEPTH = 32;
+
+  private static final JsonMapper JSON =
+      JsonMapper.builder(
+              JsonFactory.builder()
+                  .streamReadConstraints(
+                      StreamReadConstraints.builder().maxNestingDepth(MAX_NESTING_DEPTH).build())
+                  .build())
+          .build();
 
   @Override
   public JsonRead read(byte[] content) {
@@ -60,8 +74,13 @@ public final class StrictJsonReader implements JsonDocumentReader {
             "More content follows the JSON value " + at(parser.currentTokenLocation()));
       }
       return new JsonRead.Parsed(root);
-    } catch (DuplicateProperty e) {
+    } catch (MalformedContent e) {
       return new JsonRead.Malformed(e.detail);
+    } catch (StreamConstraintsException e) {
+      return new JsonRead.Malformed(
+          "The file exceeds a limit of the JSON reader, such as nesting deeper than "
+              + MAX_NESTING_DEPTH
+              + " levels");
     } catch (JacksonException e) {
       // The parser's own message may quote the file, so only its location is passed on.
       return new JsonRead.Malformed("The file is not well-formed JSON " + at(e.getLocation()));
@@ -78,7 +97,9 @@ public final class StrictJsonReader implements JsonDocumentReader {
       case VALUE_TRUE -> new JsonValue.JsonBoolean(true);
       case VALUE_FALSE -> new JsonValue.JsonBoolean(false);
       case VALUE_NULL -> new JsonValue.JsonNull();
-      default -> throw new IllegalStateException("Unexpected token " + token);
+      default ->
+          throw new MalformedContent(
+              "The file has an unexpected token " + at(parser.currentTokenLocation()));
     };
   }
 
@@ -89,7 +110,8 @@ public final class StrictJsonReader implements JsonDocumentReader {
       TokenStreamLocation location = parser.currentTokenLocation();
       JsonValue value = value(parser, parser.nextToken());
       if (properties.putIfAbsent(name, value) != null) {
-        throw new DuplicateProperty(name, location);
+        throw new MalformedContent(
+            "The property '" + name + "' appears twice in one object " + at(location));
       }
     }
     return new JsonValue.JsonObject(properties);
@@ -111,16 +133,16 @@ public final class StrictJsonReader implements JsonDocumentReader {
         : "at line " + location.getLineNr() + ", column " + location.getColumnNr();
   }
 
-  /** A property name appears twice in one object. */
-  private static final class DuplicateProperty extends RuntimeException {
+  /** The file is well-formed for the parser but not acceptable, such as a repeated property. */
+  private static final class MalformedContent extends RuntimeException {
 
     private static final long serialVersionUID = 1L;
 
     private final String detail;
 
-    DuplicateProperty(String name, TokenStreamLocation location) {
+    MalformedContent(String detail) {
       super(null, null, false, false);
-      this.detail = "The property '" + name + "' appears twice in one object " + at(location);
+      this.detail = detail;
     }
   }
 }
