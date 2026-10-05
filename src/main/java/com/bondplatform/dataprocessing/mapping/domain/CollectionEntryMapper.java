@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 
@@ -34,7 +35,8 @@ import org.jspecify.annotations.Nullable;
  * <ul>
  *   <li>Only usable fields carry a value. A field that is missing, {@code null}, a placeholder, or
  *       invalid is absent, so entries differing only in that way are the same entry.
- *   <li>Entries with equal values are one entry; the first one given keeps its source.
+ *   <li>Entries with equal values are one entry; the first one given keeps its source and its
+ *       numbers as written. Numbers are equal regardless of trailing zeros, as in the database.
  *   <li>A rating's source category comes from its collection's constant, so the same values in the
  *       current and the earlier list are two entries.
  *   <li>Skipped entries, which have no usable field, are left out.
@@ -96,10 +98,13 @@ public final class CollectionEntryMapper {
       String fileName = source.objectKey().substring(source.objectKey().lastIndexOf('/') + 1);
       for (JsonCollectionEntry entry : source.entries()) {
         if (entry.disposition() == EntryDisposition.ACCEPTED) {
-          Object value = value(entry);
-          distinct.putIfAbsent(
-              value,
-              new SecurityEntry<>(isin, value, new SourceReference(jobId, fileName, entry.path())));
+          distinct.computeIfAbsent(
+              value(entry, CollectionEntryMapper::withoutTrailingZeros),
+              key ->
+                  new SecurityEntry<>(
+                      isin,
+                      value(entry, UnaryOperator.identity()),
+                      new SourceReference(jobId, fileName, entry.path())));
         }
       }
     }
@@ -110,12 +115,18 @@ public final class CollectionEntryMapper {
         entries(distinct, CollateralAsset.class));
   }
 
-  private Object value(JsonCollectionEntry entry) {
+  /**
+   * Returns the entry's value.
+   *
+   * @param decimals applied to every number: stripping trailing zeros gives the entry's identity,
+   *     and the identity function gives the value to store, with the source's own scale
+   */
+  private Object value(JsonCollectionEntry entry, UnaryOperator<BigDecimal> decimals) {
     CollectionMapping collection = collections.get(entry.collection());
     if (collection == null) {
       throw new IllegalStateException("No mapping for collection " + entry.collection());
     }
-    Values values = new Values(collection.fields(), entry.fields());
+    Values values = new Values(collection.fields(), entry.fields(), decimals);
     return switch (collection.target()) {
       case InternalModel.CASH_FLOWS ->
           new CashFlow(
@@ -158,8 +169,13 @@ public final class CollectionEntryMapper {
   private static final class Values {
 
     private final Map<String, String> parsed = new HashMap<>();
+    private final UnaryOperator<BigDecimal> decimals;
 
-    Values(Map<String, String> mapping, List<JsonCanonicalField> fields) {
+    Values(
+        Map<String, String> mapping,
+        List<JsonCanonicalField> fields,
+        UnaryOperator<BigDecimal> decimals) {
+      this.decimals = decimals;
       for (JsonCanonicalField field : fields) {
         String internal = mapping.get(field.name());
         if (internal != null && field.isUsable()) {
@@ -177,18 +193,18 @@ public final class CollectionEntryMapper {
       return value == null ? null : LocalDate.parse(value);
     }
 
-    /**
-     * Returns the number without trailing fraction zeros, so {@code 89400} and {@code 89400.00}
-     * make equal entries; a whole number keeps a scale of zero rather than becoming {@code
-     * 8.94E+4}.
-     */
     @Nullable BigDecimal decimal(String internal) {
       String value = parsed.get(internal);
-      if (value == null) {
-        return null;
-      }
-      BigDecimal stripped = new BigDecimal(value).stripTrailingZeros();
-      return stripped.scale() < 0 ? stripped.setScale(0) : stripped;
+      return value == null ? null : decimals.apply(new BigDecimal(value));
     }
+  }
+
+  /**
+   * Returns the number without trailing fraction zeros, so {@code 89400} and {@code 89400.00} make
+   * equal entries; a whole number keeps a scale of zero rather than becoming {@code 8.94E+4}.
+   */
+  private static BigDecimal withoutTrailingZeros(BigDecimal number) {
+    BigDecimal stripped = number.stripTrailingZeros();
+    return stripped.scale() < 0 ? stripped.setScale(0) : stripped;
   }
 }

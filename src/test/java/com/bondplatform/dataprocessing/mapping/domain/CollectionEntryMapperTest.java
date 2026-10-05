@@ -108,7 +108,7 @@ class CollectionEntryMapperTest {
                 "Full Redemption",
                 LocalDate.of(2029, 5, 24),
                 LocalDate.of(2029, 6, 8),
-                new BigDecimal("1000000"),
+                new BigDecimal("1000000.0"),
                 LocalDate.of(2029, 6, 8),
                 null));
     assertThat(collections.listings())
@@ -120,7 +120,9 @@ class CollectionEntryMapperTest {
     assertThat(collections.collateralAssets()).isEmpty();
   }
 
-  // U-COLL-01: missing, null, placeholder, and invalid are all "no value"; 89400 equals "89,400.00"
+  // U-COLL-01: missing, null, placeholder, and invalid are all "no value"; 89400 equals
+  // "89,400.00",
+  // and the first entry is stored with its own scale (review AH-1)
   @Test
   void entriesDifferingOnlyInHowValuesAreAbsentAreOneEntry() {
     JsonCanonicalField interest = text("event_type", "Interest");
@@ -178,7 +180,7 @@ class CollectionEntryMapperTest {
                     "Interest",
                     null,
                     LocalDate.of(2027, 6, 8),
-                    new BigDecimal("89400"),
+                    new BigDecimal("89400.00"),
                     null,
                     null),
                 new SourceReference(JOB, "a.json", "$.cf[0]")));
