@@ -1456,6 +1456,13 @@ One build artifact (a single Java application) is deployed as five Lambda functi
 | Retention | EventBridge schedule, daily | The cleanup in section 21.1 | 5 minutes | 1 |
 | Migration | Invoked by the deployment workflow | Runs Flyway | 5 minutes | 1 |
 
+The artifact is one zip with the compiled classes at its root and the dependencies under `lib/`; CI loads each handler class from it before uploading it. Initialization is SnapStart-safe. A function starts its application context while it initializes, and SnapStart runs that once, when a version is published, then restores every execution environment from the snapshot. So nothing made during initialization may be reused after a restore as if it were new:
+
+- No database connection is opened: the pool opens its one connection on first use (minimum idle 0, no connection checked at startup).
+- No migration runs at startup. The migration function migrates only when invoked, so publishing its version changes no schema.
+- IDs come from `UUID.randomUUID`, whose `SecureRandom` the Lambda Java runtime keeps unique across restored environments; no other random source is used in this service's code.
+- Times are read from the clock at each use, never kept from startup.
+
 ### 23.2 API Gateway and access
 
 - One HTTP API with the custom domain `processing.kagent.app`.
