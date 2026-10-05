@@ -11,6 +11,9 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class OutboxSweeperHandlerTest {
 
@@ -37,13 +40,22 @@ class OutboxSweeperHandlerTest {
     assertThat(budgets).containsExactly(Duration.ofSeconds(5));
   }
 
-  @Test
-  void sweepsNothingWhenNoTimeIsLeft() {
-    String result = handler.handleRequest(new ScheduledEvent(), remaining(Duration.ofSeconds(15)));
+  @ParameterizedTest
+  @CsvSource({"16, 1", "44, 29", "45, 30", "46, 30", "60, 30"})
+  void budgetIsTheRemainingTimeLessTheReserveAtMostTheDefault(long remainingSeconds, long budget) {
+    handler.handleRequest(new ScheduledEvent(), remaining(Duration.ofSeconds(remainingSeconds)));
+
+    assertThat(budgets).containsExactly(Duration.ofSeconds(budget));
+  }
+
+  @ParameterizedTest
+  @ValueSource(longs = {15, 4})
+  void sweepsNothingWhenNoTimeIsLeft(long remainingSeconds) {
+    String result =
+        handler.handleRequest(
+            new ScheduledEvent(), remaining(Duration.ofSeconds(remainingSeconds)));
 
     assertThat(result).isEqualTo("delivered outboxEvents=0");
-    assertThat(budgets).isEmpty();
-    handler.handleRequest(new ScheduledEvent(), remaining(Duration.ofSeconds(4)));
     assertThat(budgets).isEmpty();
   }
 

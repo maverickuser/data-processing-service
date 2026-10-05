@@ -79,8 +79,12 @@ class OutboxSweeperIT extends PostgresIntegrationTest {
                         "true",
                         QueueAttributeName.VISIBILITY_TIMEOUT,
                         "60")));
-    // As if the failed first send's backoff had passed
-    jdbc.sql("UPDATE data_processing.outbox_events SET next_attempt_at = now()").update();
+    // As if the failed first send's backoff had passed; an hour back, so a database clock that
+    // runs ahead of the JVM's cannot leave the events not yet due
+    jdbc.sql(
+            "UPDATE data_processing.outbox_events"
+                + " SET next_attempt_at = now() - INTERVAL '1 hour'")
+        .update();
     OutboxSweeperHandler sweeper = new OutboxSweeperHandler(dispatcher::sweep);
 
     assertThat(sweeper.handleRequest(new ScheduledEvent(), new FixedLambdaContext()))

@@ -23,7 +23,10 @@ import org.springframework.boot.builder.SpringApplicationBuilder;
  */
 public class OutboxSweeperHandler implements RequestHandler<ScheduledEvent, String> {
 
-  /** Room left after the budget: one send's 10-second call timeout and its database write. */
+  /**
+   * Room left after the budget: one send's 10-second call timeout and its database write. Database
+   * calls have no time bound of their own; the database is assumed to answer promptly.
+   */
   static final Duration RESERVE = Duration.ofSeconds(15);
 
   private static final Logger LOG = LoggerFactory.getLogger(OutboxSweeperHandler.class);
@@ -48,7 +51,11 @@ public class OutboxSweeperHandler implements RequestHandler<ScheduledEvent, Stri
   @Override
   public String handleRequest(ScheduledEvent event, Context context) {
     Duration budget = budget(context);
-    int delivered = budget.isPositive() ? sweep.applyAsInt(budget) : 0;
+    if (!budget.isPositive()) {
+      LOG.warn("Outbox sweep skipped: no time left in the invocation");
+      return "delivered outboxEvents=0";
+    }
+    int delivered = sweep.applyAsInt(budget);
     LOG.info("Outbox sweep done, delivered={}, budgetMillis={}", delivered, budget.toMillis());
     return "delivered outboxEvents=" + delivered;
   }
