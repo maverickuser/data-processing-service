@@ -1488,3 +1488,19 @@ The deployment workflow uploads the build artifact to S3, applies Terraform, pub
 ### 23.7 Consequences for data-fetch-service
 
 Its Terraform currently requires the processor's internal load balancer and security group. It must instead consume this service's API endpoint and route ARN, sign the submission request, and grant its delivery role `execute-api:Invoke`. The shared network contract (VPC, subnets, NAT gateway, endpoints) is unchanged.
+
+### 23.8 Logs and metrics
+
+Every function writes its logs to standard output as one JSON object per line, in Spring Boot's Logstash format. Lambda sends standard output to CloudWatch Logs. Each line in a job's scope carries `jobId` as a top-level field, and `attemptNumber` once an attempt has started. Logs never quote source values, or exception messages that may contain them (section 19).
+
+Metrics are written to standard output as CloudWatch embedded metric format lines, in the namespace `BondPlatform/DataProcessing`. Recording a metric makes no network call, so it cannot fail a job. Dimensions take only a small, fixed set of values; job IDs and source values are never dimensions.
+
+| Metric | Unit | Dimensions | Recorded |
+|---|---|---|---|
+| `JobOutcome` | Count | `Dataset`, `Outcome` (the job's status: `COMPLETED`, `COMPLETED_WITH_ERRORS`, `RETRY_PENDING` or `FAILED`) | By the worker when an attempt ends, and when it fails a job whose attempts were used |
+| `RunDuration` | Milliseconds | `Dataset` | By the worker when an attempt ends, from its start to its end |
+| `StuckJobsFailed` | Count | none | By the sweeper every minute (section 23.3) |
+| `OldestPendingOutboxAge` | Seconds | none | By the sweeper every minute, after its sweep; zero when nothing is pending |
+
+Alarms on these metrics are part of the deployment (plan stack I): `JobOutcome` with `Outcome` = `FAILED`, any `StuckJobsFailed`, and `OldestPendingOutboxAge` above ten minutes.
+

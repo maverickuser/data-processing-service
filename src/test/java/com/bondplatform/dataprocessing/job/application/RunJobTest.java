@@ -14,10 +14,13 @@ import com.bondplatform.dataprocessing.job.domain.OrderingGroup;
 import com.bondplatform.dataprocessing.job.domain.RetryPolicy;
 import com.bondplatform.dataprocessing.job.domain.RunStatus;
 import com.bondplatform.dataprocessing.job.domain.StoredJob;
+import com.bondplatform.dataprocessing.shared.application.Metric;
+import com.bondplatform.dataprocessing.shared.application.Metrics;
 import com.bondplatform.dataprocessing.shared.domain.JobId;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -46,7 +49,8 @@ class RunJobTest {
 
   private final InMemoryRuns runs = new InMemoryRuns();
   private final AtomicLong nextId = new AtomicLong(1);
-  private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+  private final MovableClock clock = new MovableClock();
+  private final RecordedMetrics metrics = new RecordedMetrics();
   private final JobCompletion completion = new JobCompletion(runs, clock);
   private final FakeHandler handler = new FakeHandler();
   private final RunJob runJob =
@@ -56,7 +60,8 @@ class RunJobTest {
           new DirectTransactions(),
           RetryPolicy.STANDARD,
           clock,
-          () -> new UUID(0, nextId.getAndIncrement()));
+          () -> new UUID(0, nextId.getAndIncrement()),
+          metrics);
 
   @Test
   void runsTheHandlerInNewAttemptThatFinishesTheJob() {
@@ -229,7 +234,8 @@ class RunJobTest {
             new DirectTransactions(),
             RetryPolicy.STANDARD,
             clock,
-            () -> new UUID(0, 1));
+            () -> new UUID(0, 1),
+            metrics);
 
     assertThat(withoutHandlers.run(JOB)).isEqualTo(RunResult.FINISHED);
 
@@ -249,7 +255,72 @@ class RunJobTest {
                     new DirectTransactions(),
                     RetryPolicy.STANDARD,
                     clock,
-                    UUID::randomUUID));
+                    UUID::randomUUID,
+                    metrics));
+  }
+
+  @Test
+  void finishedAttemptRecordsTheJobsOutcomeAndHowLongItRan() {
+    runs.add(JobStatus.QUEUED, 0);
+    handler.behaviour =
+        job -> {
+          clock.now = NOW.plusMillis(1500);
+          completion.complete(job, COMPLETED);
+        };
+
+    runJob.run(JOB);
+
+    assertThat(metrics.recorded)
+        .containsExactly(
+            new Recorded(
+                Metric.JOB_OUTCOME, 1, Map.of("Dataset", NSDL.value(), "Outcome", "COMPLETED")),
+            new Recorded(Metric.RUN_DURATION, 1500, Map.of("Dataset", NSDL.value())));
+  }
+
+  @Test
+  void failedAttemptsRecordTheStatusTheJobIsLeftIn() {
+    runs.add(JobStatus.RETRY_PENDING, 1);
+    handler.behaviour =
+        job -> {
+          throw new TemporaryFailureException(
+              "SOURCE_UNAVAILABLE", "S3 did not answer", new IllegalStateException());
+        };
+
+    runJob.run(JOB);
+    runJob.run(JOB);
+
+    assertThat(metrics.outcomes()).containsExactly("RETRY_PENDING", "FAILED");
+  }
+
+  @Test
+  void permanentFailureAndUnfinishedJobRecordFailed() {
+    runs.add(JobStatus.QUEUED, 0);
+    handler.behaviour = job -> {};
+
+    runJob.run(JOB);
+
+    assertThat(metrics.outcomes()).containsExactly("FAILED");
+  }
+
+  @Test
+  void jobFailedForUsedAttemptsRecordsOnlyItsOutcome() {
+    runs.add(JobStatus.PROCESSING, 3);
+
+    runJob.run(JOB);
+
+    assertThat(metrics.recorded)
+        .containsExactly(
+            new Recorded(
+                Metric.JOB_OUTCOME, 1, Map.of("Dataset", NSDL.value(), "Outcome", "FAILED")));
+  }
+
+  @Test
+  void redeliveryRecordsNothing() {
+    runs.add(JobStatus.COMPLETED, 1);
+
+    runJob.run(JOB);
+
+    assertThat(metrics.recorded).isEmpty();
   }
 
   @Test
@@ -272,6 +343,46 @@ class RunJobTest {
   private record Run(UUID id, int attemptNumber, RunStatus status, @Nullable String code) {}
 
   /** Runs callbacks directly, standing in for a transaction manager. */
+  private record Recorded(Metric metric, long value, Map<String, String> dimensions) {}
+
+  private static final class RecordedMetrics implements Metrics {
+
+    private final List<Recorded> recorded = new ArrayList<>();
+
+    @Override
+    public void record(Metric metric, long value, Map<String, String> dimensions) {
+      recorded.add(new Recorded(metric, value, dimensions));
+    }
+
+    List<String> outcomes() {
+      return recorded.stream()
+          .filter(r -> r.metric() == Metric.JOB_OUTCOME)
+          .map(r -> r.dimensions().get("Outcome"))
+          .toList();
+    }
+  }
+
+  /** A clock a test moves by hand; it starts at {@link #NOW}. */
+  private static final class MovableClock extends Clock {
+
+    private Instant now = NOW;
+
+    @Override
+    public ZoneId getZone() {
+      return ZoneOffset.UTC;
+    }
+
+    @Override
+    public Clock withZone(ZoneId zone) {
+      return this;
+    }
+
+    @Override
+    public Instant instant() {
+      return now;
+    }
+  }
+
   private static final class DirectTransactions implements TransactionOperations {
     @Override
     public <T> T execute(TransactionCallback<T> action) {
