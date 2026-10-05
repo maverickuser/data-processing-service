@@ -57,9 +57,12 @@ public record JobStatusView(
     }
   }
 
-  /** Returns whether the job has errors beyond the preview. */
+  /**
+   * Returns whether the job has errors beyond the preview. A job whose error list was cleaned up
+   * keeps its error count but has none to show, so it has no more (LLD section 21.1).
+   */
   public boolean hasMoreErrors() {
-    return errorCount > errors.size();
+    return !errors.isEmpty() && errorCount > errors.size();
   }
 
   /** Returns where the job's full error list is, as a path. */

@@ -32,6 +32,11 @@ class JobStatusViewTest {
   }
 
   @Test
+  void errorCountKeptAfterCleanupOfTheListIsNotMore() {
+    assertThat(view(4, List.of()).hasMoreErrors()).isFalse();
+  }
+
+  @Test
   void previewHoldsAtMostFiveErrors() {
     assertThatThrownBy(() -> view(6, errors(6))).isInstanceOf(IllegalArgumentException.class);
   }
