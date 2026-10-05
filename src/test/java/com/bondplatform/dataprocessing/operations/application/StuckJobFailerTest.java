@@ -50,4 +50,16 @@ class StuckJobFailerTest {
     verify(store).failIfStuck(FIRST, RULE, "ATTEMPT_ABANDONED", NOW);
     verify(store).failIfStuck(SECOND, RULE, "ATTEMPT_ABANDONED", NOW);
   }
+
+  @Test
+  void jobThatCannotBeFailedHoldsNoOtherBack() {
+    when(store.findStuck(any(), eq(100))).thenReturn(List.of(FIRST, SECOND));
+    when(store.failIfStuck(FIRST, RULE, "ATTEMPT_ABANDONED", NOW))
+        .thenThrow(new IllegalStateException("deadlock"));
+    when(store.failIfStuck(SECOND, RULE, "ATTEMPT_ABANDONED", NOW)).thenReturn(true);
+
+    assertThat(failer.failStuckJobs()).isEqualTo(1);
+
+    verify(store).failIfStuck(SECOND, RULE, "ATTEMPT_ABANDONED", NOW);
+  }
 }

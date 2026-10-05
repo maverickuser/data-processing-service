@@ -22,8 +22,8 @@ import org.springframework.transaction.support.TransactionOperations;
  *
  * <p>A stuck job becomes {@code FAILED}; a run still recorded as running ends as a temporary
  * failure with {@code ATTEMPT_ABANDONED}, which the job's error list shows. A job failed before any
- * attempt has no run, so it reports no error. Each job is failed in its own transaction, and a job
- * a worker holds at that moment is left for the next sweep.
+ * attempt has no run, so it reports no error. Each job is failed in its own transaction; a job a
+ * worker holds at that moment, or one that cannot be failed, is left for the next sweep.
  */
 public final class StuckJobFailer {
 
@@ -63,13 +63,22 @@ public final class StuckJobFailer {
     List<JobId> stuck = store.findStuck(rule, BATCH_SIZE);
     int failed = 0;
     for (JobId job : stuck) {
-      Boolean done =
-          transactions.execute(status -> store.failIfStuck(job, rule, ATTEMPT_ABANDONED, now));
-      if (Boolean.TRUE.equals(done)) {
+      if (failOne(job, rule, now)) {
         failed++;
         LOG.warn("Stuck job failed, jobId={}", job);
       }
     }
     return failed;
+  }
+
+  /** Fails one job; a job that cannot be failed is logged and left, so it holds no other back. */
+  private boolean failOne(JobId job, StuckJobRule rule, Instant now) {
+    try {
+      return Boolean.TRUE.equals(
+          transactions.execute(status -> store.failIfStuck(job, rule, ATTEMPT_ABANDONED, now)));
+    } catch (RuntimeException e) {
+      LOG.error("Stuck job could not be failed, jobId={}, type={}", job, e.getClass().getName());
+      return false;
+    }
   }
 }

@@ -41,7 +41,10 @@ class StuckJobIT extends PostgresIntegrationTest {
     final JobId neverRun = submitted("2 hours");
     final JobId recentlyQueued = submitted("30 minutes");
     JobId retryLost = submitted("3 hours");
-    endTemporarily(retryLost, start(retryLost, 1, "2 hours"));
+    endTemporarily(retryLost, start(retryLost, 1, "2 hours"), "2 hours");
+    // An attempt that began long ago but ended recently is progress
+    JobId retryJustEnded = submitted("3 hours");
+    endTemporarily(retryJustEnded, start(retryJustEnded, 1, "2 hours"), "10 minutes");
     JobId finalAttemptDied = submitted("40 minutes");
     final UUID deadRun = start(finalAttemptDied, 3, "20 minutes");
     JobId earlierAttemptRunning = submitted("40 minutes");
@@ -67,6 +70,7 @@ class StuckJobIT extends PostgresIntegrationTest {
     assertThat(status(retryLost)).isEqualTo("FAILED");
     assertThat(status(finalAttemptDied)).isEqualTo("FAILED");
     assertThat(status(recentlyQueued)).isEqualTo("QUEUED");
+    assertThat(status(retryJustEnded)).isEqualTo("RETRY_PENDING");
     assertThat(status(earlierAttemptRunning)).isEqualTo("PROCESSING");
     assertThat(status(finalAttemptRunning)).isEqualTo("PROCESSING");
     assertThat(status(completed)).isEqualTo("COMPLETED");
@@ -123,8 +127,8 @@ class StuckJobIT extends PostgresIntegrationTest {
     return run;
   }
 
-  /** Ends the attempt as a temporary failure at its start time, leaving the job to retry. */
-  private void endTemporarily(JobId job, UUID run) {
+  /** Ends the attempt as a temporary failure the given interval ago, leaving the job to retry. */
+  private void endTemporarily(JobId job, UUID run, String ago) {
     jobRuns.failRun(
         job,
         run,
@@ -134,7 +138,10 @@ class StuckJobIT extends PostgresIntegrationTest {
         "S3 could not be read: throttled",
         JobStatus.RETRY_PENDING,
         Instant.now());
-    jdbc.sql("UPDATE data_processing.processing_runs SET completed_at = started_at WHERE id = :id")
+    jdbc.sql(
+            "UPDATE data_processing.processing_runs"
+                + " SET completed_at = now() - CAST(:ago AS INTERVAL) WHERE id = :id")
+        .param("ago", ago)
         .param("id", run)
         .update();
   }

@@ -54,13 +54,15 @@ class JdbcStuckJobStoreTest {
 
   @Test
   void endsRunningRunsAndFailsTheJobWhenItIsStillStuck() {
-    when(jdbc.queryForList(
-            eq(JdbcStuckJobStore.LOCK_IF_STUCK), any(SqlParameterSource.class), eq(UUID.class)))
-        .thenReturn(List.of(JOB));
+    answer(JdbcStuckJobStore.LOCK_UNFINISHED, List.of(JOB));
+    answer(JdbcStuckJobStore.IS_STUCK, List.of(JOB));
 
     assertThat(store.failIfStuck(new JobId(JOB), RULE, "ATTEMPT_ABANDONED", NOW)).isTrue();
 
-    assertThat(captured(JdbcStuckJobStore.LOCK_IF_STUCK).getValue("id")).isEqualTo(JOB);
+    assertThat(captured(JdbcStuckJobStore.LOCK_UNFINISHED).getValue("id")).isEqualTo(JOB);
+    SqlParameterSource check = captured(JdbcStuckJobStore.IS_STUCK);
+    assertThat(check.getValue("id")).isEqualTo(JOB);
+    assertThat(check.getValue("finalAttempt")).isEqualTo(3);
     ArgumentCaptor<SqlParameterSource> change = ArgumentCaptor.forClass(SqlParameterSource.class);
     verify(jdbc).update(eq(JdbcStuckJobStore.END_RUNNING_RUNS), change.capture());
     assertThat(change.getValue().getValue("code")).isEqualTo("ATTEMPT_ABANDONED");
@@ -70,10 +72,21 @@ class JdbcStuckJobStoreTest {
   }
 
   @Test
-  void changesNothingWhenTheJobIsNoLongerStuckOrIsHeld() {
-    when(jdbc.queryForList(
-            eq(JdbcStuckJobStore.LOCK_IF_STUCK), any(SqlParameterSource.class), eq(UUID.class)))
-        .thenReturn(List.of());
+  void changesNothingWhenTheJobIsHeldOrFinished() {
+    answer(JdbcStuckJobStore.LOCK_UNFINISHED, List.of());
+
+    assertThat(store.failIfStuck(new JobId(JOB), RULE, "ATTEMPT_ABANDONED", NOW)).isFalse();
+
+    verify(jdbc, never())
+        .queryForList(
+            eq(JdbcStuckJobStore.IS_STUCK), any(SqlParameterSource.class), eq(UUID.class));
+    verify(jdbc, never()).update(any(String.class), any(SqlParameterSource.class));
+  }
+
+  @Test
+  void changesNothingWhenTheLockedJobIsNoLongerStuck() {
+    answer(JdbcStuckJobStore.LOCK_UNFINISHED, List.of(JOB));
+    answer(JdbcStuckJobStore.IS_STUCK, List.of());
 
     assertThat(store.failIfStuck(new JobId(JOB), RULE, "ATTEMPT_ABANDONED", NOW)).isFalse();
 
@@ -81,8 +94,13 @@ class JdbcStuckJobStoreTest {
   }
 
   @Test
-  void skipsJobsAnotherTransactionHolds() {
-    assertThat(JdbcStuckJobStore.LOCK_IF_STUCK).endsWith("FOR UPDATE SKIP LOCKED");
+  void skipsJobsAnotherTransactionHoldsAndChecksStuckAfterLocking() {
+    assertThat(JdbcStuckJobStore.LOCK_UNFINISHED.strip()).endsWith("FOR UPDATE SKIP LOCKED");
+    assertThat(JdbcStuckJobStore.IS_STUCK).doesNotContain("FOR UPDATE");
+  }
+
+  private void answer(String sql, List<UUID> ids) {
+    when(jdbc.queryForList(eq(sql), any(SqlParameterSource.class), eq(UUID.class))).thenReturn(ids);
   }
 
   private SqlParameterSource captured(String sql) {

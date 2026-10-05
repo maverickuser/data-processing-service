@@ -41,10 +41,20 @@ public class JdbcStuckJobStore implements StuckJobStore {
           + STUCK
           + " ORDER BY j.acceptance_sequence LIMIT :limit";
 
-  static final String LOCK_IF_STUCK =
-      "SELECT j.id FROM data_processing.ingestion_requests j WHERE j.id = :id AND "
-          + STUCK
-          + " FOR UPDATE SKIP LOCKED";
+  /**
+   * Locks an unfinished job unless a worker holds it. The stuck check follows as its own statement,
+   * so it reads the job's runs as of after the lock: a run a worker committed while this waited for
+   * the lock is seen (in one statement, the runs would be read from before the wait).
+   */
+  static final String LOCK_UNFINISHED =
+      """
+      SELECT id FROM data_processing.ingestion_requests
+      WHERE id = :id AND status IN ('QUEUED', 'PROCESSING', 'RETRY_PENDING')
+      FOR UPDATE SKIP LOCKED
+      """;
+
+  static final String IS_STUCK =
+      "SELECT j.id FROM data_processing.ingestion_requests j WHERE j.id = :id AND " + STUCK;
 
   static final String END_RUNNING_RUNS =
       """
@@ -78,8 +88,9 @@ public class JdbcStuckJobStore implements StuckJobStore {
 
   @Override
   public boolean failIfStuck(JobId id, StuckJobRule rule, String abandonedRunCode, Instant now) {
-    if (jdbc.queryForList(LOCK_IF_STUCK, parameters(rule).addValue("id", id.value()), UUID.class)
-        .isEmpty()) {
+    MapSqlParameterSource job = parameters(rule).addValue("id", id.value());
+    if (jdbc.queryForList(LOCK_UNFINISHED, job, UUID.class).isEmpty()
+        || jdbc.queryForList(IS_STUCK, job, UUID.class).isEmpty()) {
       return false;
     }
     MapSqlParameterSource change =
