@@ -23,9 +23,9 @@ import com.bondplatform.dataprocessing.shared.domain.Isin;
 import com.bondplatform.dataprocessing.shared.domain.JobId;
 import com.bondplatform.dataprocessing.shared.domain.Percent;
 import java.math.BigDecimal;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -91,7 +91,7 @@ class PublishSecurityDetailsIT extends PostgresIntegrationTest {
   void changedFieldUpdatesOnlyThatFieldAndItsSource() {
     ClaimedJob first = start("run_201");
     publish.publish(first, details(first, "Simple", List.of()), FILES, completed(), 0);
-    OffsetDateTime firstUpdate = (OffsetDateTime) security().get("updated_at");
+    Instant firstUpdate = updatedAt();
 
     ClaimedJob second = start("run_202");
     JobOutcome outcome =
@@ -101,7 +101,7 @@ class PublishSecurityDetailsIT extends PostgresIntegrationTest {
     assertThat(security().get("coupon_type")).isEqualTo("Compound");
     assertThat(source("couponType", "sourceRequestId")).isEqualTo(second.job().id().toString());
     assertThat(source("issuerName", "sourceRequestId")).isEqualTo(first.job().id().toString());
-    assertThat((OffsetDateTime) security().get("updated_at")).isAfterOrEqualTo(firstUpdate);
+    assertThat(updatedAt()).isAfterOrEqualTo(firstUpdate);
   }
 
   /** I-JSON-07, at publication: clearing removes coverage and its source, assets stay stored. */
@@ -260,6 +260,10 @@ class PublishSecurityDetailsIT extends PostgresIntegrationTest {
         .param("isin", ISIN.value())
         .query()
         .singleRow();
+  }
+
+  private Instant updatedAt() {
+    return ((Timestamp) Objects.requireNonNull(security().get("updated_at"))).toInstant();
   }
 
   private @Nullable String source(String field, String part) {
