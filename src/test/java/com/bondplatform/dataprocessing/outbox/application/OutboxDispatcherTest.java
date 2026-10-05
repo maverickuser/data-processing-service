@@ -227,6 +227,31 @@ class OutboxDispatcherTest {
     assertThat(queue.attempts).hasSize(OutboxDispatcher.MAX_ATTEMPTS_PER_SWEEP);
   }
 
+  // 17b review S-2: a hanging queue cannot keep the sweep running past its budget
+  @Test
+  void sweepStartsNoSendOnceItsBudgetIsSpent() {
+    for (int i = 0; i < 10; i++) {
+      store.appendUngrouped();
+    }
+    queue.failNext(Integer.MAX_VALUE);
+    queue.onPublish = () -> clock.advance(Duration.ofSeconds(10));
+
+    assertThat(dispatcher.sweep(Duration.ofSeconds(35))).isZero();
+
+    assertThat(queue.attempts).hasSize(4);
+    assertThat(store.failedAttemptsRecorded()).isEqualTo(4L);
+  }
+
+  @Test
+  void sweepWithoutBudgetStopsAfterTheDefaultBudget() {
+    for (int i = 0; i < 10; i++) {
+      store.appendUngrouped();
+    }
+    queue.onPublish = () -> clock.advance(Duration.ofSeconds(10));
+
+    assertThat(dispatcher.sweep()).isEqualTo(3);
+  }
+
   @Test
   void longErrorIsShortenedBeforeItIsStored() {
     final UUID event = store.append(GROUP, 1L);
@@ -245,6 +270,7 @@ class OutboxDispatcherTest {
     private final List<OutboxEvent> sent = new ArrayList<>();
     private int failuresLeft;
     private String error = "queue refused";
+    private Runnable onPublish = () -> {};
 
     void failNext(int count) {
       failuresLeft = count;
@@ -256,6 +282,7 @@ class OutboxDispatcherTest {
 
     @Override
     public void publish(OutboxEvent event) {
+      onPublish.run();
       attempts.add(event);
       if (failuresLeft > 0) {
         failuresLeft--;
@@ -393,6 +420,10 @@ class OutboxDispatcherTest {
 
     private Row row(UUID id) {
       return Objects.requireNonNull(rows.get(id), "unknown event");
+    }
+
+    long failedAttemptsRecorded() {
+      return rows.values().stream().filter(row -> row.lastError() != null).count();
     }
 
     private record Row(OutboxEvent event, Instant nextAttemptAt, @Nullable String lastError) {}

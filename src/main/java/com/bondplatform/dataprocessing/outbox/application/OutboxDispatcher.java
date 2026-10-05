@@ -3,6 +3,7 @@ package com.bondplatform.dataprocessing.outbox.application;
 import com.bondplatform.dataprocessing.outbox.domain.BackoffPolicy;
 import com.bondplatform.dataprocessing.outbox.domain.OutboxEvent;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.Comparator;
@@ -30,6 +31,13 @@ public class OutboxDispatcher {
   static final int MAX_ATTEMPTS_PER_SWEEP = 500;
 
   static final int BATCH_SIZE = 50;
+
+  /**
+   * How long a sweep starts new sends when its caller sets no budget. One send can take up to the
+   * SQS client's 10-second call timeout, so a sweep ends within about 40 seconds, inside the
+   * sweeper's one-minute run.
+   */
+  public static final Duration DEFAULT_SWEEP_BUDGET = Duration.ofSeconds(30);
 
   private static final Logger LOG = LoggerFactory.getLogger(OutboxDispatcher.class);
   private static final int MAX_ERROR_LENGTH = 1000;
@@ -75,8 +83,23 @@ public class OutboxDispatcher {
   }
 
   /**
-   * Delivers pending events that are due, group by group in order, until none is left or the sweep
-   * has made {@link #MAX_ATTEMPTS_PER_SWEEP} attempts.
+   * Delivers pending events that are due, group by group in order, for at most {@link
+   * #DEFAULT_SWEEP_BUDGET}.
+   *
+   * @return how many events were delivered
+   */
+  public int sweep() {
+    return sweep(DEFAULT_SWEEP_BUDGET);
+  }
+
+  /**
+   * Delivers pending events that are due, group by group in order, until none is left, the sweep
+   * has made {@link #MAX_ATTEMPTS_PER_SWEEP} attempts, or its time budget is spent.
+   *
+   * <p>No send starts once the budget is spent, so a sweeper invocation records the outcome of
+   * every send it made before its time limit, even while the queue hangs on each call (17b review
+   * S-2). A send started just before the deadline may run past it by up to its own call timeout;
+   * callers leave that much room.
    *
    * <p>A batch in which every send fails does not end the sweep: each failed event is due again
    * only later, so the next batch holds other events. One unavailable queue therefore cannot keep
@@ -84,10 +107,11 @@ public class OutboxDispatcher {
    *
    * @return how many events were delivered
    */
-  public int sweep() {
+  public int sweep(Duration budget) {
+    Instant deadline = Instant.now(clock).plus(budget);
     int attempts = 0;
     int delivered = 0;
-    while (attempts < MAX_ATTEMPTS_PER_SWEEP) {
+    while (attempts < MAX_ATTEMPTS_PER_SWEEP && Instant.now(clock).isBefore(deadline)) {
       List<OutboxEvent> heads =
           store.findDueGroupHeads(
               Instant.now(clock), Math.min(BATCH_SIZE, MAX_ATTEMPTS_PER_SWEEP - attempts));
@@ -95,6 +119,9 @@ public class OutboxDispatcher {
         break;
       }
       for (OutboxEvent event : heads) {
+        if (!Instant.now(clock).isBefore(deadline)) {
+          break;
+        }
         attempts++;
         if (deliver(event)) {
           delivered++;
