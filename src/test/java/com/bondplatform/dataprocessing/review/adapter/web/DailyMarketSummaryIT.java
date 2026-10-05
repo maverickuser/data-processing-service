@@ -76,7 +76,8 @@ class DailyMarketSummaryIT extends PostgresIntegrationTest {
     assertThat(second.get("nextToken").isNull()).isTrue();
     JsonNode item = first.at("/items/0");
     assertThat(item.propertyNames()).containsExactlyInAnyOrderElementsOf(PROPERTIES);
-    assertThat(item.get("openPrice").decimalValue()).isEqualTo(new java.math.BigDecimal("114200.00"));
+    assertThat(item.get("openPrice").decimalValue())
+        .isEqualTo(new java.math.BigDecimal("114200.00"));
     assertThat(item.get("tradedVolume").isIntegralNumber()).isTrue();
     assertThat(item.get("tradedVolume").asLong()).isEqualTo(14);
     assertThat(item.get("securityCode").isNull()).isTrue();
@@ -173,16 +174,20 @@ class DailyMarketSummaryIT extends PostgresIntegrationTest {
     for (int n = 0; n < 51; n++) {
       summary(ISIN, FIRST.minusDays(n), "BSE");
     }
-    String token =
-        ok(get("/v1/securities/{isin}/daily-market-summaries", ISIN)).get("nextToken").asString();
 
     problem(get("/v1/daily-market-summaries"), 400);
     problem(get("/v1/daily-market-summaries").param("tradeDate", "01-01-2026"), 400);
     problem(
-        get("/v1/daily-market-summaries").param("tradeDate", "2026-01-01").param("exchangeName", ""),
+        get("/v1/daily-market-summaries")
+            .param("tradeDate", "2026-01-01")
+            .param("exchangeName", ""),
         400);
+    String token =
+        ok(get("/v1/securities/{isin}/daily-market-summaries", ISIN)).get("nextToken").asString();
     problem(
-        get("/v1/daily-market-summaries").param("tradeDate", "2026-01-01").param("pageToken", token),
+        get("/v1/daily-market-summaries")
+            .param("tradeDate", "2026-01-01")
+            .param("pageToken", token),
         400);
   }
 

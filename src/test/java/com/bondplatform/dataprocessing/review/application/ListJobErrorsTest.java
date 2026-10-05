@@ -102,8 +102,8 @@ class ListJobErrorsTest {
     assertThatThrownBy(() -> listJobErrors.list(JOB, null, "changed"))
         .isInstanceOf(InvalidQueryException.class)
         .hasMessage("The pageToken is not valid.");
-    String notASequence = new PageToken(scope(""), "fifty").encode();
-    assertThatThrownBy(() -> listJobErrors.list(JOB, null, notASequence))
+    String nonNumeric = new PageToken(scope(""), "fifty").encode();
+    assertThatThrownBy(() -> listJobErrors.list(JOB, null, nonNumeric))
         .isInstanceOf(InvalidQueryException.class)
         .hasMessage("The pageToken is not valid.");
     assertThatThrownBy(() -> listJobErrors.list(JOB, "  ", null))
