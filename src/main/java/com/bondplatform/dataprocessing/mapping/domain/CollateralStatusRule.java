@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Applies an explicit {@code Unsecured} collateral status (LLD section 15.2).
@@ -35,8 +36,8 @@ import java.util.stream.Collectors;
  *       coverage basis and coverage are cleared and no collateral asset is appended.
  * </ol>
  *
- * <p>The status must be exactly {@code Unsecured}: text keeps its letter case (LLD section 13.4),
- * and any other spelling clears nothing.
+ * <p>The status matches {@code Unsecured} in any letter case, so {@code UNSECURED} counts too
+ * (owner decision AH-2); the stored text still keeps its case (LLD section 13.4).
  */
 public final class CollateralStatusRule {
 
@@ -116,7 +117,7 @@ public final class CollateralStatusRule {
                 field ->
                     field.name().equals(statusField)
                         && field.isUsable()
-                        && UNSECURED.equals(field.parsedValue()));
+                        && isUnsecured(field.parsedValue()));
     if (!unsecured) {
       return new Screened(scalars, entries, List.of());
     }
@@ -159,10 +160,16 @@ public final class CollateralStatusRule {
    */
   public record Applied(SecurityScalars scalars, SecurityCollections collections) {}
 
+  /** Returns whether a collateral status is {@code Unsecured}, in any letter case. */
+  public static boolean isUnsecured(@Nullable String status) {
+    return UNSECURED.equalsIgnoreCase(status);
+  }
+
   /** Clears coverage and drops collateral assets when the request's status is Unsecured. */
   public Applied apply(SecurityScalars scalars, SecurityCollections collections) {
     SecurityScalars.Field status = scalars.fields().get(STATUS);
-    if (status == null || !status.value().equals(new SecurityValue.Text(UNSECURED))) {
+    if (status == null
+        || !(status.value() instanceof SecurityValue.Text text && isUnsecured(text.value()))) {
       return new Applied(scalars, collections);
     }
     return new Applied(scalars.clearing(COVERAGE), collections.withoutCollateralAssets());
