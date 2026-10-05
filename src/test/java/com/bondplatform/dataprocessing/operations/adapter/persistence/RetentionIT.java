@@ -59,8 +59,11 @@ class RetentionIT extends PostgresIntegrationTest {
     UUID expiredRun = jobWithOneRejection("run_r1", "2025-01-01");
     UUID keptRun = jobWithOneRejection("run_r2", "2025-01-02");
     final UUID recentRun = jobWithOneRejection("run_r3", "2025-01-03");
-    age(expiredRun, "366 days");
-    age(keptRun, "364 days");
+    final UUID cascadedRun = jobWithOneRejection("run_r5", "2025-01-05");
+    age(expiredRun, "400 days", "rejected_records", "validation_issues");
+    age(keptRun, "364 days", "rejected_records", "validation_issues");
+    // An expired record whose issues are newer goes, and its issues with it
+    age(cascadedRun, "400 days", "rejected_records");
     final UUID oldDelivered = event("DELIVERED", "40 days", "31 days");
     final UUID newDelivered = event("DELIVERED", "40 days", "29 days");
     final UUID oldPending = event("PENDING", "400 days", null);
@@ -71,6 +74,8 @@ class RetentionIT extends PostgresIntegrationTest {
 
     assertThat(issuesOf(expiredRun)).isZero();
     assertThat(recordsOf(expiredRun)).isZero();
+    assertThat(issuesOf(cascadedRun)).isZero();
+    assertThat(recordsOf(cascadedRun)).isZero();
     for (UUID kept : List.of(keptRun, recentRun)) {
       assertThat(issuesOf(kept)).isPositive();
       assertThat(recordsOf(kept)).isOne();
@@ -78,7 +83,7 @@ class RetentionIT extends PostgresIntegrationTest {
     assertThat(eventIds()).doesNotContain(oldDelivered).contains(newDelivered, oldPending);
     assertThat(count("data_processing.outbox_events")).isEqualTo(events - 1);
     assertThat(jdbc.sql(TABLES).query(Long.class).single()).isEqualTo(jobRows);
-    assertThat(result.rejectedRecords()).isOne();
+    assertThat(result.rejectedRecords()).isEqualTo(2);
     assertThat(result.outboxEvents()).isOne();
     assertThat(result.validationIssues()).isPositive();
   }
@@ -93,7 +98,7 @@ class RetentionIT extends PostgresIntegrationTest {
             .param("id", run)
             .query(String.class)
             .single();
-    age(run, "400 days");
+    age(run, "400 days", "rejected_records", "validation_issues");
 
     cleaner.clean();
 
@@ -136,9 +141,9 @@ class RetentionIT extends PostgresIntegrationTest {
     return run;
   }
 
-  /** Makes a run's rejected rows and issues look created the given interval ago. */
-  private void age(UUID run, String interval) {
-    for (String table : List.of("rejected_records", "validation_issues")) {
+  /** Makes a run's rows in the given tables look created the given interval ago. */
+  private void age(UUID run, String interval, String... tables) {
+    for (String table : tables) {
       jdbc.sql(
               "UPDATE data_processing."
                   + table

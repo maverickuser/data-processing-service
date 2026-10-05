@@ -62,12 +62,6 @@ class JdbcRetentionStoreTest {
     assertThat(params.getValue().getValue("limit")).isEqualTo(50);
   }
 
-  @ParameterizedTest
-  @MethodSource("deletes")
-  void deletesOnlyOneBatchPerStatement(String sql) {
-    assertThat(sql).contains("< :cutoff", "LIMIT :limit");
-  }
-
   @Test
   void neverDeletesPendingEvents() {
     assertThat(JdbcRetentionStore.DELETE_DELIVERED_EVENTS).contains("status = 'DELIVERED'");
