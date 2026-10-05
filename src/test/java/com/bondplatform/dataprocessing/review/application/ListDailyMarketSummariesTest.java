@@ -134,7 +134,8 @@ class ListDailyMarketSummariesTest {
         .isInstanceOf(InvalidQueryException.class)
         .hasMessage("The exchangeName filter must not hold control characters.");
     String unfiltered = new PageToken(DATE_SCOPE, "12\nINE000000049BSE").encode();
-    List<String> badPositions = List.of("INE000000049", "x\nINE", "-1\nINE", "99\nINE");
+    List<String> badPositions =
+        List.of("INE000000049", "x\nINE", "-1\nINE", "99\nINE", Integer.MAX_VALUE + "\nINE");
     List<String> tokens = new java.util.ArrayList<>(List.of(unfiltered));
     badPositions.forEach(position -> tokens.add(new PageToken(DATE_SCOPE, position).encode()));
     for (String token : tokens) {

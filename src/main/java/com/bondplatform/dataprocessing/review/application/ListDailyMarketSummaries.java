@@ -124,10 +124,11 @@ public class ListDailyMarketSummaries {
     } catch (NumberFormatException e) {
       return Optional.empty();
     }
-    int end = split + 1 + length;
-    if (length < 0 || end > position.length()) {
+    // Compared without adding, so a forged length near the int limit cannot overflow
+    if (length < 0 || length > position.length() - split - 1) {
       return Optional.empty();
     }
+    int end = split + 1 + length;
     return Optional.of(
         new TradeDatePosition(position.substring(split + 1, end), position.substring(end)));
   }
