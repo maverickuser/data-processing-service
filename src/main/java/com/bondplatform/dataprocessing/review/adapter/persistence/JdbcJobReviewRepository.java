@@ -7,6 +7,7 @@ import com.bondplatform.dataprocessing.review.domain.RawValuePreview;
 import com.bondplatform.dataprocessing.shared.domain.JobId;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Types;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
@@ -64,7 +65,7 @@ public class JdbcJobReviewRepository implements JobReviewRepository {
            + (SELECT count(*) FROM final_run WHERE failure_code IS NOT NULL)
       """;
 
-  static final String FIRST_ERRORS =
+  static final String ERRORS =
       """
       WITH final_run AS (
         SELECT id, failure_code, failure_detail
@@ -93,6 +94,8 @@ public class JdbcJobReviewRepository implements JobReviewRepository {
         FROM data_processing.validation_issues i
         JOIN final_run r ON i.processing_run_id = r.id
       ) errors
+      WHERE sequence_number > :after
+        AND (CAST(:isin AS TEXT) IS NULL OR isin = CAST(:isin AS TEXT))
       ORDER BY sequence_number
       LIMIT :limit
       """;
@@ -117,9 +120,15 @@ public class JdbcJobReviewRepository implements JobReviewRepository {
   }
 
   @Override
-  public List<JobErrorView> firstErrors(JobId jobId, int limit) {
+  public List<ListedError> errors(
+      JobId jobId, @Nullable String isin, long afterSequence, int limit) {
     return jdbc.query(
-        FIRST_ERRORS, byJob(jobId).addValue("limit", limit), JdbcJobReviewRepository::error);
+        ERRORS,
+        byJob(jobId)
+            .addValue("isin", isin, Types.VARCHAR)
+            .addValue("after", afterSequence)
+            .addValue("limit", limit),
+        JdbcJobReviewRepository::error);
   }
 
   private static MapSqlParameterSource byJob(JobId jobId) {
@@ -139,18 +148,20 @@ public class JdbcJobReviewRepository implements JobReviewRepository {
         counts(row.getString("counts")));
   }
 
-  private static JobErrorView error(ResultSet row, int rowNumber) throws SQLException {
-    return new JobErrorView(
-        row.getString("error_id"),
-        row.getString("code"),
-        row.getString("isin"),
-        row.getString("source_file"),
-        row.getObject("record_number", Integer.class),
-        row.getString("field"),
-        row.getString("json_path"),
-        RawValuePreview.of(row.getString("raw_type"), row.getString("raw_text")),
-        row.getString("message"),
-        row.getString("action_taken"));
+  private static ListedError error(ResultSet row, int rowNumber) throws SQLException {
+    return new ListedError(
+        row.getLong("sequence_number"),
+        new JobErrorView(
+            row.getString("error_id"),
+            row.getString("code"),
+            row.getString("isin"),
+            row.getString("source_file"),
+            row.getObject("record_number", Integer.class),
+            row.getString("field"),
+            row.getString("json_path"),
+            RawValuePreview.of(row.getString("raw_type"), row.getString("raw_text")),
+            row.getString("message"),
+            row.getString("action_taken")));
   }
 
   private static @Nullable Instant instant(ResultSet row, String column) throws SQLException {

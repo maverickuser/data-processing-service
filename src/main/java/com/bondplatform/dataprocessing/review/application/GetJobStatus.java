@@ -42,6 +42,10 @@ public class GetJobStatus {
         finished ? job.completedAt() : null,
         finished ? JobCounts.ofFinished(job.dataset(), job.counts()) : null,
         errorCount,
-        errorCount == 0 ? List.of() : jobs.firstErrors(job.jobId(), JobStatusView.PREVIEW_SIZE));
+        errorCount == 0
+            ? List.of()
+            : jobs.errors(job.jobId(), null, -1, JobStatusView.PREVIEW_SIZE).stream()
+                .map(JobReviewRepository.ListedError::error)
+                .toList());
   }
 }

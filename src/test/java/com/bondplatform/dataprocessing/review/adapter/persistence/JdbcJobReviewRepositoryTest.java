@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.bondplatform.dataprocessing.job.domain.JobStatus;
+import com.bondplatform.dataprocessing.review.application.JobReviewRepository.ListedError;
 import com.bondplatform.dataprocessing.review.application.JobReviewRepository.StoredJob;
 import com.bondplatform.dataprocessing.review.domain.JobErrorView;
 import com.bondplatform.dataprocessing.review.domain.RawValuePreview;
@@ -109,10 +110,12 @@ class JdbcJobReviewRepositoryTest {
     when(row.getString("raw_text")).thenReturn("{\"a\": 1}");
     when(row.getString("message")).thenReturn("Expected text.");
     when(row.getString("action_taken")).thenReturn(null);
+    when(row.getLong("sequence_number")).thenReturn(7L);
 
-    JobErrorView error = mapped(JdbcJobReviewRepository.FIRST_ERRORS, row, JobErrorView.class);
+    ListedError error = mapped(JdbcJobReviewRepository.ERRORS, row, ListedError.class);
 
-    assertThat(error)
+    assertThat(error.sequenceNumber()).isEqualTo(7);
+    assertThat(error.error())
         .isEqualTo(
             new JobErrorView(
                 "4b1d0000-0000-7000-8000-000000000001",
@@ -128,23 +131,25 @@ class JdbcJobReviewRepositoryTest {
   }
 
   @Test
-  void firstErrorsAskForTheLimitInSequenceOrder() {
+  void errorsAskForTheFilterPositionAndLimitInSequenceOrder() {
     when(jdbc.query(
-            eq(JdbcJobReviewRepository.FIRST_ERRORS),
+            eq(JdbcJobReviewRepository.ERRORS),
             any(SqlParameterSource.class),
             any(RowMapper.class)))
         .thenReturn(List.of());
 
-    repository.firstErrors(JOB, 5);
+    repository.errors(JOB, "INE831R08076", 50, 51);
 
     ArgumentCaptor<SqlParameterSource> parameters =
         ArgumentCaptor.forClass(SqlParameterSource.class);
     verify(jdbc)
-        .query(
-            eq(JdbcJobReviewRepository.FIRST_ERRORS), parameters.capture(), any(RowMapper.class));
+        .query(eq(JdbcJobReviewRepository.ERRORS), parameters.capture(), any(RowMapper.class));
     assertThat(parameters.getValue().getValue("jobId")).isEqualTo(JOB.value());
-    assertThat(parameters.getValue().getValue("limit")).isEqualTo(5);
-    assertThat(JdbcJobReviewRepository.FIRST_ERRORS)
+    assertThat(parameters.getValue().getValue("isin")).isEqualTo("INE831R08076");
+    assertThat(parameters.getValue().getValue("after")).isEqualTo(50L);
+    assertThat(parameters.getValue().getValue("limit")).isEqualTo(51);
+    assertThat(JdbcJobReviewRepository.ERRORS)
+        .contains("WHERE sequence_number > :after")
         .contains("ORDER BY sequence_number")
         .contains("0::bigint AS sequence_number");
   }
@@ -158,7 +163,7 @@ class JdbcJobReviewRepositoryTest {
     if (type == StoredJob.class) {
       repository.find(JOB);
     } else {
-      repository.firstErrors(JOB, 5);
+      repository.errors(JOB, null, -1, 5);
     }
     return Objects.requireNonNull(mapper.getValue().mapRow(row, 0));
   }

@@ -12,4 +12,10 @@ class ReviewConfigurationTest {
   void jobStatusReadsTheRepository() {
     assertThat(new ReviewConfiguration().getJobStatus(mock(JobReviewRepository.class))).isNotNull();
   }
+
+  @Test
+  void errorListReadsTheRepository() {
+    assertThat(new ReviewConfiguration().listJobErrors(mock(JobReviewRepository.class)))
+        .isNotNull();
+  }
 }
