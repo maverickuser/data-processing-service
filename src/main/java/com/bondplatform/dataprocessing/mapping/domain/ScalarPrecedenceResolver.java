@@ -12,9 +12,9 @@ import java.util.Objects;
  * Chooses one value per scalar field when a request's files supply several (LLD section 13.5).
  *
  * <p>Files are taken in ascending {@code (LastModified, object key)} order and the last usable
- * value of each field wins, so the latest file wins and the full object key breaks a tie. The
- * choice is made per field: a later file with no usable value for a field leaves an earlier file's
- * value in place.
+ * value of each field wins, so the latest file wins and the full object key breaks a tie. Keys are
+ * compared as Java strings, by UTF-16 code unit, not by a database collation. The choice is made
+ * per field: a later file with no usable value for a field leaves an earlier file's value in place.
  */
 public final class ScalarPrecedenceResolver {
 
