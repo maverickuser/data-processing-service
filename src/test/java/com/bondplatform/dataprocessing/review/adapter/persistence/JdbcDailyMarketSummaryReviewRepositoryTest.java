@@ -27,7 +27,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcOperations;
 import org.springframework.jdbc.core.namedparam.SqlParameterSource;
 
-class JdbcDailyMarketSummaryRepositoryTest {
+class JdbcDailyMarketSummaryReviewRepositoryTest {
 
   private static final Isin ISIN = Isin.of("INE0KH208019");
   private static final LocalDate DAY = LocalDate.of(2026, 1, 1);
@@ -35,13 +35,13 @@ class JdbcDailyMarketSummaryRepositoryTest {
       OffsetDateTime.of(2026, 1, 1, 15, 0, 0, 0, ZoneOffset.UTC);
 
   private final NamedParameterJdbcOperations jdbc = mock(NamedParameterJdbcOperations.class);
-  private final JdbcDailyMarketSummaryRepository repository =
-      new JdbcDailyMarketSummaryRepository(jdbc);
+  private final JdbcDailyMarketSummaryReviewRepository repository =
+      new JdbcDailyMarketSummaryReviewRepository(jdbc);
 
   @Test
   void securityExistsAsksTheSecuritiesTable() {
     when(jdbc.queryForObject(
-            eq(JdbcDailyMarketSummaryRepository.EXISTS),
+            eq(JdbcDailyMarketSummaryReviewRepository.EXISTS),
             any(SqlParameterSource.class),
             eq(Boolean.class)))
         .thenReturn(true, false, null);
@@ -54,7 +54,7 @@ class JdbcDailyMarketSummaryRepositoryTest {
   @Test
   void securityQueryBindsTypedBoundsAndPosition() {
     ArgumentCaptor<MapSqlParameterSource> parameters =
-        queried(JdbcDailyMarketSummaryRepository.FOR_SECURITY);
+        queried(JdbcDailyMarketSummaryReviewRepository.FOR_SECURITY);
 
     repository.forSecurity(ISIN, DAY, null, new SecurityPosition(DAY, "BSE"), 51);
     repository.forSecurity(ISIN, null, DAY, null, 51);
@@ -71,7 +71,7 @@ class JdbcDailyMarketSummaryRepositoryTest {
     MapSqlParameterSource first = parameters.getAllValues().get(1);
     assertThat(first.getValue("afterDate")).isNull();
     assertThat(first.getValue("afterExchange")).isNull();
-    assertThat(JdbcDailyMarketSummaryRepository.FOR_SECURITY)
+    assertThat(JdbcDailyMarketSummaryReviewRepository.FOR_SECURITY)
         .contains("ORDER BY trade_date DESC, exchange_name")
         .doesNotContain("source_");
   }
@@ -79,7 +79,7 @@ class JdbcDailyMarketSummaryRepositoryTest {
   @Test
   void tradeDateQueryBindsFilterAndPosition() {
     ArgumentCaptor<MapSqlParameterSource> parameters =
-        queried(JdbcDailyMarketSummaryRepository.FOR_TRADE_DATE);
+        queried(JdbcDailyMarketSummaryReviewRepository.FOR_TRADE_DATE);
 
     repository.forTradeDate(DAY, "BSE", new TradeDatePosition("INE0KH208019", "BSE"), 51);
     repository.forTradeDate(DAY, null, null, 51);
@@ -94,7 +94,7 @@ class JdbcDailyMarketSummaryRepositoryTest {
     assertThat(first.getSqlType("exchangeName")).isEqualTo(Types.VARCHAR);
     assertThat(first.getValue("afterIsin")).isNull();
     assertThat(first.getValue("afterExchange")).isNull();
-    assertThat(JdbcDailyMarketSummaryRepository.FOR_TRADE_DATE)
+    assertThat(JdbcDailyMarketSummaryReviewRepository.FOR_TRADE_DATE)
         .contains("ORDER BY isin, exchange_name")
         .doesNotContain("source_");
   }
@@ -120,7 +120,7 @@ class JdbcDailyMarketSummaryRepositoryTest {
     ArgumentCaptor<RowMapper<DailyMarketSummaryView>> mapper =
         ArgumentCaptor.forClass(RowMapper.class);
     when(jdbc.query(
-            eq(JdbcDailyMarketSummaryRepository.FOR_TRADE_DATE),
+            eq(JdbcDailyMarketSummaryReviewRepository.FOR_TRADE_DATE),
             any(SqlParameterSource.class),
             mapper.capture()))
         .thenReturn(List.of());

@@ -22,7 +22,7 @@ import org.springframework.stereotype.Repository;
  * shows are selected: never source references.
  */
 @Repository
-public class JdbcDailyMarketSummaryRepository implements DailyMarketSummaryRepository {
+public class JdbcDailyMarketSummaryReviewRepository implements DailyMarketSummaryRepository {
 
   static final String EXISTS =
       "SELECT EXISTS (SELECT 1 FROM securities_data.securities WHERE isin = :isin)";
@@ -62,7 +62,7 @@ public class JdbcDailyMarketSummaryRepository implements DailyMarketSummaryRepos
   private final NamedParameterJdbcOperations jdbc;
 
   /** Creates the repository. */
-  public JdbcDailyMarketSummaryRepository(NamedParameterJdbcOperations jdbc) {
+  public JdbcDailyMarketSummaryReviewRepository(NamedParameterJdbcOperations jdbc) {
     this.jdbc = jdbc;
   }
 
@@ -87,7 +87,7 @@ public class JdbcDailyMarketSummaryRepository implements DailyMarketSummaryRepos
             .addValue("afterDate", after == null ? null : after.tradeDate(), Types.DATE)
             .addValue("afterExchange", after == null ? null : after.exchangeName(), Types.VARCHAR)
             .addValue("limit", limit);
-    return jdbc.query(FOR_SECURITY, parameters, JdbcDailyMarketSummaryRepository::summary);
+    return jdbc.query(FOR_SECURITY, parameters, JdbcDailyMarketSummaryReviewRepository::summary);
   }
 
   @Override
@@ -103,7 +103,7 @@ public class JdbcDailyMarketSummaryRepository implements DailyMarketSummaryRepos
             .addValue("afterIsin", after == null ? null : after.isin(), Types.VARCHAR)
             .addValue("afterExchange", after == null ? null : after.exchangeName(), Types.VARCHAR)
             .addValue("limit", limit);
-    return jdbc.query(FOR_TRADE_DATE, parameters, JdbcDailyMarketSummaryRepository::summary);
+    return jdbc.query(FOR_TRADE_DATE, parameters, JdbcDailyMarketSummaryReviewRepository::summary);
   }
 
   private static DailyMarketSummaryView summary(ResultSet row, int rowNumber) throws SQLException {
