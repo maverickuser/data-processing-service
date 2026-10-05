@@ -11,6 +11,7 @@ import com.bondplatform.dataprocessing.contract.domain.SourceValue;
 import com.bondplatform.dataprocessing.publication.domain.SecurityCollections;
 import com.bondplatform.dataprocessing.publication.domain.SecurityScalars;
 import com.bondplatform.dataprocessing.publication.domain.SecurityValue;
+import com.bondplatform.dataprocessing.shared.domain.CanonicalJson;
 import com.bondplatform.dataprocessing.shared.domain.ErrorCode;
 import java.util.ArrayList;
 import java.util.List;
@@ -140,7 +141,7 @@ public final class CollateralStatusRule {
         conflicts.add(
             conflict(
                 entry.path(),
-                new SourceValue.Structured(SourceValue.Structured.Kind.OBJECT),
+                selectedValues(entry),
                 "A collateral asset was supplied for an Unsecured instrument.",
                 "Did not record the supplied asset."));
       } else {
@@ -174,5 +175,25 @@ public final class CollateralStatusRule {
         rawValue,
         new ValidationIssue(ErrorCode.CONFLICTING_COLLATERAL_DATA, message),
         actionTaken);
+  }
+
+  /**
+   * Returns an entry's selected values as read, as one object keyed by source property; missing
+   * values are left out. The entry's full evidence stays in the canonical file.
+   */
+  private static SourceValue selectedValues(JsonCollectionEntry entry) {
+    String prefix = entry.path() + ".";
+    String json =
+        entry.fields().stream()
+            .flatMap(
+                field ->
+                    field.rawValue().toJson().stream()
+                        .map(
+                            value ->
+                                CanonicalJson.of(field.path().substring(prefix.length()))
+                                    + ":"
+                                    + value))
+            .collect(Collectors.joining(",", "{", "}"));
+    return new SourceValue.Structured(SourceValue.Structured.Kind.OBJECT, json);
   }
 }

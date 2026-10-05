@@ -1,6 +1,7 @@
 package com.bondplatform.dataprocessing.canonical.adapter.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.groups.Tuple.tuple;
 
 import com.bondplatform.dataprocessing.admission.SubmissionEvents;
 import com.bondplatform.dataprocessing.admission.application.AdmitSubmission;
@@ -164,6 +165,70 @@ class RejectedRecordStoreIT extends PostgresIntegrationTest {
         .containsEntry("code", "CONFLICTING_COLLATERAL_DATA")
         .containsEntry("raw_value", "100")
         .containsEntry("action_taken", "Ignored supplied coverage.");
+  }
+
+  // AJ-3: every disposition, typed raw values in JSONB, and an unlisted file left unlinked
+  @Test
+  void storesSkippedFilesAndEntriesWithTypedRawValues() {
+    JsonFileEvidence skipped = JsonEvidence.skipped();
+    JsonFileEvidence unlisted =
+        new JsonFileEvidence(
+            "data-fetch-service-artifacts",
+            "nsdl/INE831R08076/run_201/INE831R08076_coupon-details.json",
+            JsonEvidence.read(JsonEvidence.TYPED, List.of()).canonical(),
+            List.of());
+    JsonCanonicalRun run = startJsonRun(skipped);
+
+    long errorCount = jsonStore.saveJson(run, RUN_ID, List.of(skipped, unlisted));
+
+    List<Map<String, Object>> records =
+        jdbc.sql(
+                """
+                SELECT r.json_path, r.disposition, r.source_file_id IS NOT NULL AS linked,
+                  r.record ->> 'code' AS code
+                FROM data_processing.rejected_records r
+                WHERE r.processing_run_id = :run
+                ORDER BY (SELECT min(sequence_number) FROM data_processing.validation_issues i
+                          WHERE i.rejected_record_id = r.id)
+                """)
+            .param("run", RUN_ID)
+            .query()
+            .listOfRows();
+    assertThat(records)
+        .extracting(row -> row.get("disposition"))
+        .containsExactly(
+            "FILE_SKIPPED", "FIELD_REJECTED", "FIELD_REJECTED", "FIELD_REJECTED", "ENTRY_SKIPPED");
+    assertThat(records.get(0))
+        .containsEntry("json_path", "$")
+        .containsEntry("linked", true)
+        .containsEntry("code", "MALFORMED_JSON");
+    assertThat(records.subList(1, 5))
+        .allSatisfy(row -> assertThat(row).containsEntry("linked", false));
+
+    List<Map<String, Object>> issues =
+        jdbc.sql(
+                """
+                SELECT field, jsonb_typeof(raw_value) AS type, raw_value::text AS raw_value,
+                  source_file_name
+                FROM data_processing.validation_issues
+                WHERE processing_run_id = :run ORDER BY sequence_number
+                """)
+            .param("run", RUN_ID)
+            .query()
+            .listOfRows();
+    assertThat(issues).hasSize((int) errorCount).hasSize(5);
+    assertThat(issues.get(0))
+        .containsEntry("field", null)
+        .containsEntry("type", null)
+        .containsEntry("source_file_name", "INE831R08076_listings.json");
+    assertThat(issues.subList(1, 5))
+        .extracting(row -> row.get("field"), row -> row.get("type"), row -> row.get("raw_value"))
+        .containsExactly(
+            tuple("issuer_name", "number", "89400.00"),
+            tuple("issuer_ownership_type", "object", "{\"a\": [1, \"x\"]}"),
+            tuple("coupon_type", "boolean", "true"),
+            tuple("listing_date", "string", "\"31-02-2020\""));
+    assertThat(issues.get(4)).containsEntry("source_file_name", unlisted.fileName());
   }
 
   private JsonCanonicalRun startJsonRun(JsonFileEvidence file) {

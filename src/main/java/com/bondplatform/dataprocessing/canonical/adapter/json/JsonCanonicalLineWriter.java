@@ -9,26 +9,23 @@ import com.bondplatform.dataprocessing.canonical.domain.JsonRejection;
 import com.bondplatform.dataprocessing.canonical.domain.StructureIssue;
 import com.bondplatform.dataprocessing.canonical.domain.ValidationIssue;
 import com.bondplatform.dataprocessing.contract.domain.SourceValue;
-import java.util.Optional;
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ArrayNode;
-import tools.jackson.databind.node.JsonNodeFactory;
 import tools.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.util.RawValue;
 
 /**
  * Writes a JSON source file's evidence as one line of the run's canonical file, and a rejected part
  * as the record kept for review (LLD section 17.5).
  *
- * <p>A value as read keeps its JSON type: a string, an exact number, a boolean, or {@code null}. A
- * missing value has none, and an object or array keeps only its kind, given as {@code rawKind}.
- * Parsed values are strings with an explicit {@code dataType}, as in CSV lines. Business rows
- * reference a line by job, source file and JSONPath.
+ * <p>A value as read keeps its JSON type and is embedded as written: a string, an exact number, a
+ * boolean, {@code null}, or an object or array whole. A missing value has none; {@code rawKind}
+ * names the kind either way. Parsed values are strings with an explicit {@code dataType}, as in CSV
+ * lines. Business rows reference a line by job, source file and JSONPath.
  */
 public final class JsonCanonicalLineWriter {
 
   private static final JsonMapper JSON = JsonMapper.builder().build();
-  private static final JsonNodeFactory NODES = JSON.getNodeFactory();
 
   private JsonCanonicalLineWriter() {}
 
@@ -76,14 +73,6 @@ public final class JsonCanonicalLineWriter {
     return JSON.writeValueAsString(record);
   }
 
-  /**
-   * Returns a value as read as JSON text, or empty when it has none to show: a missing value, or an
-   * object or array, whose structure is not kept.
-   */
-  public static Optional<String> rawValue(SourceValue value) {
-    return json(value).map(JSON::writeValueAsString);
-  }
-
   private static void field(ObjectNode node, JsonCanonicalField field) {
     node.put("name", field.name());
     node.put("path", field.path());
@@ -123,17 +112,6 @@ public final class JsonCanonicalLineWriter {
 
   private static void raw(ObjectNode node, SourceValue value) {
     node.put("rawKind", value.kindName());
-    json(value).ifPresent(json -> node.set("rawValue", json));
-  }
-
-  private static Optional<JsonNode> json(SourceValue value) {
-    return switch (value) {
-      case SourceValue.Text text -> Optional.of(NODES.stringNode(text.value()));
-      case SourceValue.Decimal decimal -> Optional.of(NODES.numberNode(decimal.value()));
-      case SourceValue.Bool bool -> Optional.of(NODES.booleanNode(bool.value()));
-      case SourceValue.Null ignored -> Optional.of(NODES.nullNode());
-      case SourceValue.Missing ignored -> Optional.empty();
-      case SourceValue.Structured ignored -> Optional.empty();
-    };
+    value.toJson().ifPresent(json -> node.putRawValue("rawValue", new RawValue(json)));
   }
 }

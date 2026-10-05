@@ -19,12 +19,28 @@ import org.junit.jupiter.api.Test;
 
 class JsonValueTest {
 
+  // LLD 16: an object or array keeps its whole structure as evidence
+  @Test
+  void writesCompactJsonInDocumentOrderWithExactNumbers() {
+    Map<String, JsonValue> properties = new LinkedHashMap<>();
+    properties.put("z", new JsonNumber(new BigDecimal("89400.00")));
+    properties.put("a \"quoted\"", new JsonArray(List.of(new JsonBoolean(true), new JsonNull())));
+    properties.put("n", new JsonObject(Map.of("s", new JsonString("x"))));
+
+    JsonObject object = new JsonObject(properties);
+
+    String json = "{\"z\":89400.00,\"a \\\"quoted\\\"\":[true,null],\"n\":{\"s\":\"x\"}}";
+    assertThat(object.toJson()).isEqualTo(json);
+    assertThat(object.toSourceValue())
+        .isEqualTo(new SourceValue.Structured(SourceValue.Structured.Kind.OBJECT, json));
+  }
+
   @Test
   void becomesTheSourceValueOfItsKind() {
     assertThat(new JsonObject(Map.of()).toSourceValue())
-        .isEqualTo(new SourceValue.Structured(SourceValue.Structured.Kind.OBJECT));
+        .isEqualTo(new SourceValue.Structured(SourceValue.Structured.Kind.OBJECT, "{}"));
     assertThat(new JsonArray(List.of()).toSourceValue())
-        .isEqualTo(new SourceValue.Structured(SourceValue.Structured.Kind.ARRAY));
+        .isEqualTo(new SourceValue.Structured(SourceValue.Structured.Kind.ARRAY, "[]"));
     assertThat(new JsonString("8.94%").toSourceValue()).isEqualTo(new SourceValue.Text("8.94%"));
     assertThat(new JsonNumber(new BigDecimal("8.94")).toSourceValue())
         .isEqualTo(new SourceValue.Decimal(new BigDecimal("8.94")));

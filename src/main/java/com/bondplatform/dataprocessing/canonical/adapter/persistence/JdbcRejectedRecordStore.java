@@ -144,8 +144,8 @@ public class JdbcRejectedRecordStore implements RejectedRecordStore, JsonRejecti
    * {@inheritDoc}
    *
    * <p>A request's JSON files are bounded in total size, so all its rejections are written in one
-   * batch of records and one of issues. An issue's raw value is kept as JSON with its type; a
-   * missing value, or an object or array, has none.
+   * batch of records and one of issues. An issue's raw value is kept as JSON with its type, an
+   * object or array whole; a missing value has none.
    */
   @Override
   public long saveJson(JsonCanonicalRun run, UUID processingRunId, List<JsonFileEvidence> files) {
@@ -180,10 +180,7 @@ public class JdbcRejectedRecordStore implements RejectedRecordStore, JsonRejecti
                   .addValue("sourceFileName", file.fileName())
                   .addValue("field", issue.field(), Types.VARCHAR)
                   .addValue("jsonPath", issue.path())
-                  .addValue(
-                      "rawValue",
-                      JsonCanonicalLineWriter.rawValue(issue.rawValue()).orElse(null),
-                      Types.VARCHAR)
+                  .addValue("rawValue", issue.rawValue().toJson().orElse(null), Types.VARCHAR)
                   .addValue("message", issue.issue().message())
                   .addValue("actionTaken", issue.actionTaken(), Types.VARCHAR)
                   .addValue("createdAt", createdAt));

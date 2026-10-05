@@ -1,6 +1,7 @@
 package com.bondplatform.dataprocessing.canonical.adapter.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.groups.Tuple.tuple;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -115,6 +116,9 @@ class JdbcRejectedRecordStoreTest {
     assertThat(errorCount).isEqualTo(5);
     SqlParameterSource[] records = batch(JdbcRejectedRecordStore.INSERT_JSON_RECORD);
     assertThat(records).hasSize(5);
+    assertThat(records[0].getValue("jsonPath")).isEqualTo("$");
+    assertThat(records[0].getValue("disposition")).isEqualTo("FILE_SKIPPED");
+    assertThat(records[0].getValue("key")).isEqualTo(JsonEvidence.skipped().key());
     SqlParameterSource section = records[1];
     assertThat(section.getValue("id")).isEqualTo(new UUID(0, 3));
     assertThat(section.getValue("processingRunId")).isEqualTo(RUN_ID);
@@ -160,6 +164,23 @@ class JdbcRejectedRecordStoreTest {
     assertThat(ignored.getValue("rawValue")).isEqualTo("100");
     assertThat(ignored.getValue("actionTaken")).isEqualTo("Ignored supplied coverage.");
     assertThat(ignored.getValue("message")).isEqualTo("Coverage with Unsecured.");
+  }
+
+  @Test
+  void jsonRawValuesKeepTheirTypeAndScale() {
+    store.saveJson(
+        JsonEvidence.RUN, RUN_ID, List.of(JsonEvidence.read(JsonEvidence.TYPED, List.of())));
+
+    assertThat(batch(JdbcRejectedRecordStore.INSERT_JSON_ISSUE))
+        .extracting(issue -> issue.getValue("field"), issue -> issue.getValue("rawValue"))
+        .containsExactly(
+            tuple("issuer_name", "89400.00"),
+            tuple("issuer_ownership_type", "{\"a\":[1,\"x\"]}"),
+            tuple("coupon_type", "true"),
+            tuple("listing_date", "\"31-02-2020\""));
+    assertThat(batch(JdbcRejectedRecordStore.INSERT_JSON_RECORD))
+        .extracting(record -> record.getValue("disposition"))
+        .containsExactly("FIELD_REJECTED", "FIELD_REJECTED", "FIELD_REJECTED", "ENTRY_SKIPPED");
   }
 
   @Test

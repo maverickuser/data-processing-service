@@ -80,10 +80,14 @@ class JsonPathExtractorTest {
   void reportsObjectOrArrayWhereScalarIsSelected() {
     assertThat(scalar("$.listingDetails"))
         .isEqualTo(
-            new JsonMatch.Found(new SourceValue.Structured(SourceValue.Structured.Kind.ARRAY)));
+            new JsonMatch.Found(
+                new SourceValue.Structured(
+                    SourceValue.Structured.Kind.ARRAY,
+                    "[{\"exchangeName\":\"BSE\"},{\"exchangeName\":\"NSE\"}]")));
     assertThat(scalar("$.currentRatings"))
         .isEqualTo(
-            new JsonMatch.Found(new SourceValue.Structured(SourceValue.Structured.Kind.OBJECT)));
+            new JsonMatch.Found(
+                new SourceValue.Structured(SourceValue.Structured.Kind.OBJECT, "{}")));
   }
 
   @Test

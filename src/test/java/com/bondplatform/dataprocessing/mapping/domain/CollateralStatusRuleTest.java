@@ -112,7 +112,8 @@ class CollateralStatusRuleTest {
                 "Ignored the supplied coverage."),
             new CollateralConflict(
                 "$.instrumentsVo.assetCover.assetList[0]",
-                new SourceValue.Structured(SourceValue.Structured.Kind.OBJECT),
+                new SourceValue.Structured(
+                    SourceValue.Structured.Kind.OBJECT, "{\"assetType\":\"Book Debts\"}"),
                 new ValidationIssue(
                     ErrorCode.CONFLICTING_COLLATERAL_DATA,
                     "A collateral asset was supplied for an Unsecured instrument."),
@@ -192,7 +193,11 @@ class CollateralStatusRuleTest {
     return new JsonCollectionEntry(
         "collateral_assets",
         path,
-        List.of(field("asset_type", FieldType.TEXT, new SourceValue.Text(type))),
+        List.of(
+            READER.read(
+                "asset_type", path + ".assetType", FieldType.TEXT, new SourceValue.Text(type)),
+            READER.read(
+                "asset_value", path + ".assetValue", FieldType.TEXT, new SourceValue.Missing())),
         EntryDisposition.ACCEPTED);
   }
 

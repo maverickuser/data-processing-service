@@ -39,6 +39,14 @@ public final class JsonEvidence {
           new ValidationIssue(ErrorCode.CONFLICTING_COLLATERAL_DATA, "Coverage with Unsecured."),
           "Ignored supplied coverage.");
 
+  /** Values of the wrong type for text fields, and a listing whose only date is impossible. */
+  public static final String TYPED =
+      """
+      {"issuerName": 89400.00, "issuerTypeOwner": {"a": [1, "x"]},
+       "coupensVo": {"couponDetails": {"couponType": true}},
+       "listingDetails": [{"listingDate": "31-02-2020"}]}
+      """;
+
   /** The error of a malformed file. */
   public static final ValidationIssue MALFORMED =
       new ValidationIssue(ErrorCode.MALFORMED_JSON, "Line 1, column 2.");

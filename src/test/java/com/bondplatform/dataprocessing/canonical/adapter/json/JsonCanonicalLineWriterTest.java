@@ -5,8 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.bondplatform.dataprocessing.canonical.domain.JsonEvidence;
 import com.bondplatform.dataprocessing.canonical.domain.JsonFileEvidence;
 import com.bondplatform.dataprocessing.canonical.domain.JsonRejection;
-import com.bondplatform.dataprocessing.contract.domain.SourceValue;
-import java.math.BigDecimal;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
@@ -102,27 +100,26 @@ class JsonCanonicalLineWriterTest {
   }
 
   @Test
-  void rawValueKeepsJsonTypeAndExactNumber() {
-    assertThat(JsonCanonicalLineWriter.rawValue(new SourceValue.Text("32-13-2026")))
-        .contains("\"32-13-2026\"");
-    assertThat(
-            JsonCanonicalLineWriter.rawValue(new SourceValue.Decimal(new BigDecimal("89400.00"))))
-        .contains("89400.00");
-    assertThat(JsonCanonicalLineWriter.rawValue(new SourceValue.Bool(true))).contains("true");
-    assertThat(JsonCanonicalLineWriter.rawValue(new SourceValue.Null())).contains("null");
-  }
+  void structuredRawValueIsEmbeddedWhole() {
+    JsonFileEvidence file =
+        JsonEvidence.read(
+            "{\"coupensVo\": {\"couponDetails\": {\"couponType\": {\"a\": [1.50, \"x\"]}}}}",
+            List.of());
 
-  @Test
-  void missingOrStructuredValueHasNoRawValue() {
-    assertThat(JsonCanonicalLineWriter.rawValue(new SourceValue.Missing())).isEmpty();
-    assertThat(
-            JsonCanonicalLineWriter.rawValue(
-                new SourceValue.Structured(SourceValue.Structured.Kind.OBJECT)))
-        .isEmpty();
+    JsonNode line = JSON.readTree(JsonCanonicalLineWriter.line(JsonEvidence.RUN, file));
+
+    JsonNode type = scalar(line, "coupon_type");
+    assertThat(type.get("rawKind").asString()).isEqualTo("object");
+    assertThat(type.at("/rawValue/a/1").asString()).isEqualTo("x");
+    assertThat(JsonCanonicalLineWriter.line(JsonEvidence.RUN, file))
+        .contains("\"rawValue\":{\"a\":[1.50,\"x\"]}");
   }
 
   private static JsonNode scalar(String name) {
-    JsonNode line = JSON.readTree(JsonCanonicalLineWriter.line(JsonEvidence.RUN, WITH_ERRORS));
+    return scalar(JSON.readTree(JsonCanonicalLineWriter.line(JsonEvidence.RUN, WITH_ERRORS)), name);
+  }
+
+  private static JsonNode scalar(JsonNode line, String name) {
     for (JsonNode field : line.get("scalars")) {
       if (field.get("name").asString().equals(name)) {
         return field;
