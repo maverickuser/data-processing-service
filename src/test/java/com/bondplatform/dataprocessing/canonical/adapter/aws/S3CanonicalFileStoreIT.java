@@ -4,9 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.bondplatform.dataprocessing.canonical.application.CanonicalFile;
 import com.bondplatform.dataprocessing.canonical.domain.GoldenBhavcopy;
+import com.bondplatform.dataprocessing.canonical.domain.JsonEvidence;
 import com.bondplatform.dataprocessing.source.adapter.aws.S3Mock;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.List;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -51,6 +53,25 @@ class S3CanonicalFileStoreIT {
     assertThat(stored.response().contentType()).isEqualTo("application/x-ndjson");
     assertThat(stored.asString(StandardCharsets.UTF_8).lines())
         .hasSize(8)
+        .allSatisfy(line -> assertThat(line).startsWith("{\"jobId\":"));
+  }
+
+  @Test
+  void jsonRequestIsStoredAsOneLinePerFile() {
+    String key =
+        new S3CanonicalFileStore(s3, BUCKET, workDirectory)
+            .storeJson(
+                JsonEvidence.RUN,
+                List.of(
+                    JsonEvidence.skipped(),
+                    JsonEvidence.read(JsonEvidence.WITH_ERRORS, List.of())));
+
+    ResponseBytes<GetObjectResponse> stored =
+        s3.getObjectAsBytes(request -> request.bucket(BUCKET).key(key));
+    assertThat(key).isEqualTo(JsonEvidence.RUN.objectKey());
+    assertThat(stored.response().contentType()).isEqualTo("application/x-ndjson");
+    assertThat(stored.asString(StandardCharsets.UTF_8).lines())
+        .hasSize(2)
         .allSatisfy(line -> assertThat(line).startsWith("{\"jobId\":"));
   }
 }

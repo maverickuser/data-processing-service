@@ -1,10 +1,13 @@
 package com.bondplatform.dataprocessing.canonical.adapter.aws;
 
 import com.bondplatform.dataprocessing.canonical.adapter.json.CanonicalLineWriter;
+import com.bondplatform.dataprocessing.canonical.adapter.json.JsonCanonicalLineWriter;
 import com.bondplatform.dataprocessing.canonical.application.CanonicalFile;
 import com.bondplatform.dataprocessing.canonical.application.CanonicalFileStore;
 import com.bondplatform.dataprocessing.canonical.domain.CanonicalRow;
 import com.bondplatform.dataprocessing.canonical.domain.CanonicalRun;
+import com.bondplatform.dataprocessing.canonical.domain.JsonCanonicalRun;
+import com.bondplatform.dataprocessing.canonical.domain.JsonFileEvidence;
 import com.bondplatform.dataprocessing.job.application.TemporaryFailureException;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -12,6 +15,7 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -59,6 +63,22 @@ public class S3CanonicalFileStore implements CanonicalFileStore {
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     }
+  }
+
+  /** Builds the JSON request's canonical file in memory and uploads it in one request. */
+  @Override
+  public String storeJson(JsonCanonicalRun run, List<JsonFileEvidence> files) {
+    StringBuilder content = new StringBuilder();
+    files.forEach(file -> content.append(JsonCanonicalLineWriter.line(run, file)).append('\n'));
+    String key = run.objectKey();
+    try {
+      s3.putObject(
+          request -> request.bucket(bucket).key(key).contentType(CONTENT_TYPE),
+          RequestBody.fromString(content.toString(), StandardCharsets.UTF_8));
+    } catch (SdkException e) {
+      throw new TemporaryFailureException(UNAVAILABLE, "The canonical file could not be stored", e);
+    }
+    return key;
   }
 
   /** A canonical file buffered on local disk until it is committed. */

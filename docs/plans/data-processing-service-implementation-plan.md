@@ -222,7 +222,7 @@ LLD sections 13, 15; both NSDL contracts.
 | 32 | `f/32-json-collections` | `CollectionExtractor`, structural rejection, entry skipping, payload-ISIN warning; `JsonCanonicalizer` assembling stage 1 | U-JSON-01 (collections), U-JSON-02, U-JSON-06, U-JSON-08..10 | Five sample payloads yield their golden canonical records |
 | 33 | `f/33-security-scalar-mapping` | `ScalarPrecedenceResolver`, `SecurityFieldMapper` | U-MAP-03, U-SCAL-01..03 | — |
 | 34 | `f/34-collection-mapping` | `CollectionEntryMapper`, rating source category, `CollateralStatusRule` | U-MAP-04, U-COLL-01..02, U-UNSEC-01..02, U-OUT-02 | — |
-| 35 | `f/35a-publish-security-details`, `f/35b-nsdl-handler` (split 2026-10-05) | 35a: `PublishSecurityDetails`: one transaction for changed scalars with `field_sources`, collection appends, status and counts. 35b: JSON error storage, canonical file, NSDL `DatasetHandler` wired | I-JSON-01..08 | Resubmitting identical data changes zero rows |
+| 35 | `f/35a-publish-security-details`, `f/35b-json-evidence`, `f/35c-nsdl-handler` (split 2026-10-05) | 35a: `PublishSecurityDetails`: one transaction for changed scalars with `field_sources`, collection appends, status and counts. 35b: JSON error storage and canonical file. 35c: NSDL `DatasetHandler` wired | I-JSON-01..08 | Resubmitting identical data changes zero rows |
 
 ## Stack G — Read APIs
 

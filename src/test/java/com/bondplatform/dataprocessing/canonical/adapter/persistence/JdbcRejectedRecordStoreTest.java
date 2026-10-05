@@ -7,8 +7,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.bondplatform.dataprocessing.canonical.adapter.json.CanonicalLineWriter;
+import com.bondplatform.dataprocessing.canonical.adapter.json.JsonCanonicalLineWriter;
 import com.bondplatform.dataprocessing.canonical.domain.CanonicalRow;
 import com.bondplatform.dataprocessing.canonical.domain.GoldenBhavcopy;
+import com.bondplatform.dataprocessing.canonical.domain.JsonEvidence;
+import com.bondplatform.dataprocessing.canonical.domain.JsonFileEvidence;
 import com.bondplatform.dataprocessing.canonical.domain.RejectedRow;
 import java.time.Clock;
 import java.time.Instant;
@@ -98,6 +101,79 @@ class JdbcRejectedRecordStoreTest {
   void emptyBatchSendsNothing() {
     store.saveAll(GoldenBhavcopy.RUN, RUN_ID, List.of());
 
+    verifyNoInteractions(jdbc);
+  }
+
+  @Test
+  void jsonRejectionsAreStoredByPathWithIssuesNumberedAcrossFiles() {
+    JsonFileEvidence withErrors =
+        JsonEvidence.read(JsonEvidence.WITH_ERRORS, List.of(JsonEvidence.IGNORED));
+
+    long errorCount =
+        store.saveJson(JsonEvidence.RUN, RUN_ID, List.of(JsonEvidence.skipped(), withErrors));
+
+    assertThat(errorCount).isEqualTo(5);
+    SqlParameterSource[] records = batch(JdbcRejectedRecordStore.INSERT_JSON_RECORD);
+    assertThat(records).hasSize(5);
+    SqlParameterSource section = records[1];
+    assertThat(section.getValue("id")).isEqualTo(new UUID(0, 3));
+    assertThat(section.getValue("processingRunId")).isEqualTo(RUN_ID);
+    assertThat(section.getValue("jobId")).isEqualTo(JsonEvidence.RUN.jobId().value());
+    assertThat(section.getValue("bucket")).isEqualTo(withErrors.bucket());
+    assertThat(section.getValue("key")).isEqualTo(withErrors.key());
+    assertThat(section.getValue("isin")).isEqualTo("INE831R08076");
+    assertThat(section.getValue("jsonPath")).isEqualTo("$.currentRatings");
+    assertThat(section.getValue("disposition")).isEqualTo("SECTION_REJECTED");
+    assertThat(section.getValue("record"))
+        .isEqualTo(JsonCanonicalLineWriter.record(withErrors.rejections().getFirst()));
+    assertThat(section.getValue("createdAt"))
+        .isEqualTo(OffsetDateTime.of(2026, 1, 2, 3, 4, 5, 0, ZoneOffset.UTC));
+    assertThat(batch(JdbcRejectedRecordStore.INSERT_JSON_ISSUE))
+        .extracting(issue -> issue.getValue("sequenceNumber"))
+        .containsExactly(1L, 2L, 3L, 4L, 5L);
+  }
+
+  @Test
+  void jsonFieldIssueKeepsFieldPathTypedRawValueAndFileName() {
+    store.saveJson(
+        JsonEvidence.RUN,
+        RUN_ID,
+        List.of(JsonEvidence.read(JsonEvidence.WITH_ERRORS, List.of(JsonEvidence.IGNORED))));
+
+    SqlParameterSource[] issues = batch(JdbcRejectedRecordStore.INSERT_JSON_ISSUE);
+    SqlParameterSource rate = issues[1];
+    assertThat(rate.getValue("id")).isEqualTo(new UUID(0, 4));
+    assertThat(rate.getValue("processingRunId")).isEqualTo(RUN_ID);
+    assertThat(rate.getValue("rejectedRecordId")).isEqualTo(new UUID(0, 3));
+    assertThat(rate.getValue("isin")).isEqualTo("INE831R08076");
+    assertThat(rate.getValue("sourceFileName")).isEqualTo("INE831R08076_instrument-details.json");
+    assertThat(rate.getValue("field")).isEqualTo("coupon_rate");
+    assertThat(rate.getValue("jsonPath")).isEqualTo("$.coupensVo.couponDetails.couponRate");
+    assertThat(rate.getValue("rawValue")).isEqualTo("\"abc\"");
+    assertThat(rate.getValue("actionTaken")).isNull();
+    SqlParameterSource section = issues[0];
+    assertThat(section.getValue("code")).isEqualTo("INVALID_TYPE");
+    assertThat(section.getValue("field")).isNull();
+    assertThat(section.getValue("rawValue")).isNull();
+    SqlParameterSource ignored = issues[3];
+    assertThat(ignored.getValue("code")).isEqualTo("CONFLICTING_COLLATERAL_DATA");
+    assertThat(ignored.getValue("rawValue")).isEqualTo("100");
+    assertThat(ignored.getValue("actionTaken")).isEqualTo("Ignored supplied coverage.");
+    assertThat(ignored.getValue("message")).isEqualTo("Coverage with Unsecured.");
+  }
+
+  @Test
+  void jsonRequestWithoutRejectionsSendsNothing() {
+    long errorCount =
+        store.saveJson(
+            JsonEvidence.RUN,
+            RUN_ID,
+            List.of(
+                JsonEvidence.read(
+                    "{\"coupensVo\": {\"couponDetails\": {\"couponType\": \"Simple\"}}}",
+                    List.of())));
+
+    assertThat(errorCount).isZero();
     verifyNoInteractions(jdbc);
   }
 
