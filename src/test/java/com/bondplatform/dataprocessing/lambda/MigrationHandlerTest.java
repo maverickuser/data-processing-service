@@ -28,6 +28,14 @@ class MigrationHandlerTest {
   }
 
   @Test
+  void reportsNoneWhenTheDatabaseHasNoVersionAtAll() {
+    MigrationHandler handler = new MigrationHandler(() -> result(null, null, 0));
+
+    assertThat(handler.handleRequest(Map.of(), new FixedLambdaContext()))
+        .isEqualTo("applied migrations=0 schemaVersion=none");
+  }
+
+  @Test
   void failedMigrationFailsTheInvocation() {
     MigrationHandler handler =
         new MigrationHandler(
@@ -40,7 +48,8 @@ class MigrationHandlerTest {
   }
 
   /** Flyway leaves the target version unset when nothing ran. */
-  private static MigrateResult result(String initial, @Nullable String target, int executed) {
+  private static MigrateResult result(
+      @Nullable String initial, @Nullable String target, int executed) {
     MigrateResult result =
         new MigrateResult("11", "data_processing", "data_processing", "PostgreSQL");
     result.initialSchemaVersion = initial;
