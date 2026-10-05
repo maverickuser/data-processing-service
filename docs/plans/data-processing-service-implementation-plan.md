@@ -230,8 +230,8 @@ LLD sections 16, 20; read OpenAPI.
 
 | PR | Branch | Scope | Test cases | Exit evidence |
 |---|---|---|---|---|
-| 36 | `g/36-job-status` | `GET /v1/processing-jobs/{jobId}`, `JobStatusView`, five-error preview | U-REV-01, I-READ-01 | — |
-| 37 | `g/37-job-errors` | `GET /v1/processing-jobs/{jobId}/errors`, `PageToken`, `RawValuePreview`, `isin` filter, final-run selection | U-REV-02..03, I-READ-02 | 120 errors page as 50, 50, 20 |
+| 36 | `g/36-job-status` | `GET /v1/processing-jobs/{jobId}`, `JobStatusView`, five-error preview, final-run selection, `RawValuePreview` (moved from 37, 2026-10-05: the preview needs them) | U-REV-01, U-REV-02, I-READ-01 | — |
+| 37 | `g/37-job-errors` | `GET /v1/processing-jobs/{jobId}/errors`, `PageToken`, `isin` filter | U-REV-03, I-READ-02 | 120 errors page as 50, 50, 20 |
 | 38 | `g/38-security-view` | `GET /v1/securities/{isin}`, `CurrentRatingSelector`, collateral presentation | U-REV-04..05, I-READ-03 | — |
 | 39 | `g/39-market-summaries` | Both daily-market-summary endpoints; OpenAPI response validation for all read endpoints; no-S3-location test | U-REV-06, I-READ-04..08 | Every documented response validates against the read OpenAPI file |
 
