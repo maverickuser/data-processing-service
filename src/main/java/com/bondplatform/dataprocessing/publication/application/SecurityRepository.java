@@ -29,6 +29,9 @@ public interface SecurityRepository {
    * @return the values by internal field name, such as {@code couponRate}; a field with no value is
    *     absent
    * @throws IllegalStateException if the security does not exist
+   * @throws IllegalArgumentException if a stored percentage is one {@link
+   *     com.bondplatform.dataprocessing.shared.domain.Percent} cannot hold; only a row edited by
+   *     hand can have one, as every write goes through the bounded stage-1 check
    */
   Map<String, SecurityValue> lockValues(Isin isin);
 

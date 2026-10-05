@@ -38,7 +38,8 @@ public record JsonFileCounts(
    * Returns the job outcome once the request's changes are known.
    *
    * @param status the request's status, decided by stage 2
-   * @param scalarFieldsChanged security fields set or cleared
+   * @param scalarFieldsChanged security fields set or cleared; a coverage field cleared by an
+   *     {@code Unsecured} status counts when it held a value
    * @param collectionEntriesAppended collection entries the security did not have
    * @param errorCount the errors the attempt recorded
    */
