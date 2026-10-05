@@ -8,6 +8,9 @@ import static org.mockito.Mockito.when;
 
 import com.bondplatform.dataprocessing.job.domain.JobStatus;
 import com.bondplatform.dataprocessing.review.application.GetJobStatus;
+import com.bondplatform.dataprocessing.review.application.InvalidQueryException;
+import com.bondplatform.dataprocessing.review.application.ListJobErrors;
+import com.bondplatform.dataprocessing.review.domain.ErrorPage;
 import com.bondplatform.dataprocessing.review.domain.JobErrorView;
 import com.bondplatform.dataprocessing.review.domain.JobStatusView;
 import com.bondplatform.dataprocessing.review.domain.RawValuePreview;
@@ -26,7 +29,9 @@ class JobStatusControllerTest {
   private static final String JOB = "0190f3a0-0000-7000-8000-000000000001";
 
   private final GetJobStatus getJobStatus = mock(GetJobStatus.class);
-  private final JobStatusController controller = new JobStatusController(getJobStatus);
+  private final ListJobErrors listJobErrors = mock(ListJobErrors.class);
+  private final JobStatusController controller =
+      new JobStatusController(getJobStatus, listJobErrors);
 
   @Test
   void foundJobIsAnsweredWithItsStatusAndErrors() {
@@ -97,5 +102,43 @@ class JobStatusControllerTest {
         .isInstanceOfSatisfying(
             ApiProblemException.class, e -> assertThat(e.type()).isEqualTo(ProblemType.NOT_FOUND));
     verifyNoInteractions(getJobStatus);
+  }
+
+  @Test
+  void errorPageIsAnsweredWithItsItemsAndNextToken() {
+    when(listJobErrors.list(JobId.parse(JOB), " ine1 ", "token"))
+        .thenReturn(Optional.of(new ErrorPage(List.of(), "next")));
+
+    ErrorPageResponse page = controller.errors(JOB, " ine1 ", "token");
+
+    assertThat(page.items()).isEmpty();
+    assertThat(page.nextToken()).isEqualTo("next");
+  }
+
+  @Test
+  void errorsOfUnknownJobAreNotFound() {
+    when(listJobErrors.list(JobId.parse(JOB), null, null)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> controller.errors(JOB, null, null))
+        .isInstanceOfSatisfying(
+            ApiProblemException.class, e -> assertThat(e.type()).isEqualTo(ProblemType.NOT_FOUND));
+    assertThatThrownBy(() -> controller.errors("job-123", null, null))
+        .isInstanceOfSatisfying(
+            ApiProblemException.class, e -> assertThat(e.type()).isEqualTo(ProblemType.NOT_FOUND));
+  }
+
+  // U-REV-03: an invalid token or filter is a 400
+  @Test
+  void invalidQueryIsBadRequest() {
+    when(listJobErrors.list(JobId.parse(JOB), null, "x"))
+        .thenThrow(new InvalidQueryException("The pageToken is not valid."));
+
+    assertThatThrownBy(() -> controller.errors(JOB, null, "x"))
+        .isInstanceOfSatisfying(
+            ApiProblemException.class,
+            e -> {
+              assertThat(e.type()).isEqualTo(ProblemType.INVALID_REQUEST);
+              assertThat(e.detail()).isEqualTo("The pageToken is not valid.");
+            });
   }
 }

@@ -25,8 +25,22 @@ public interface JobReviewRepository {
   /** Returns how many errors the job's final attempt has. */
   long errorCount(JobId jobId);
 
-  /** Returns the first errors of the job's final attempt, at most {@code limit}. */
-  List<JobErrorView> firstErrors(JobId jobId, int limit);
+  /**
+   * Returns the job's final-attempt errors after a position, in order, at most {@code limit}.
+   *
+   * @param isin only errors about this normalized ISIN, or {@code null} for all; the run's own
+   *     failure is about no ISIN
+   * @param afterSequence the sequence number of the last error already returned; the run's failure
+   *     is 0 and issues start at 1, so {@code -1} starts from the first error
+   */
+  List<ListedError> errors(JobId jobId, @Nullable String isin, long afterSequence, int limit);
+
+  /**
+   * An error with its place in the job's error list.
+   *
+   * @param sequenceNumber 0 for the run's own failure, else the issue's sequence number
+   */
+  record ListedError(long sequenceNumber, JobErrorView error) {}
 
   /**
    * A job's stored status fields.

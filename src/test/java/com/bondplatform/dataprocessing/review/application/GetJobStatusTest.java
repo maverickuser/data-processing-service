@@ -64,7 +64,7 @@ class GetJobStatusTest {
     when(jobs.find(JOB))
         .thenReturn(Optional.of(stored(JobStatus.COMPLETED_WITH_ERRORS, COMPLETED, COUNTS)));
     when(jobs.errorCount(JOB)).thenReturn(7L);
-    when(jobs.firstErrors(JOB, 5)).thenReturn(errors(5));
+    when(jobs.errors(JOB, null, -1, 5)).thenReturn(listed(errors(5)));
 
     JobStatusView view = getJobStatus.find(JOB).orElseThrow();
 
@@ -90,7 +90,12 @@ class GetJobStatusTest {
 
     assertThat(view.errors()).isEmpty();
     assertThat(view.hasMoreErrors()).isFalse();
-    verify(jobs, never()).firstErrors(ArgumentMatchers.any(), ArgumentMatchers.anyInt());
+    verify(jobs, never())
+        .errors(
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.anyLong(),
+            ArgumentMatchers.anyInt());
   }
 
   // LLD 20.3: a job that failed before counting reports each count as null
@@ -98,7 +103,7 @@ class GetJobStatusTest {
   void failedJobWithoutCountsShowsThemAsNull() {
     when(jobs.find(JOB)).thenReturn(Optional.of(stored(JobStatus.FAILED, COMPLETED, null)));
     when(jobs.errorCount(JOB)).thenReturn(1L);
-    when(jobs.firstErrors(JOB, 5)).thenReturn(errors(1));
+    when(jobs.errors(JOB, null, -1, 5)).thenReturn(listed(errors(1)));
 
     JobStatusView view = getJobStatus.find(JOB).orElseThrow();
 
@@ -120,6 +125,12 @@ class GetJobStatusTest {
         STARTED,
         completedAt,
         counts);
+  }
+
+  private static List<JobReviewRepository.ListedError> listed(List<JobErrorView> errors) {
+    return java.util.stream.IntStream.range(0, errors.size())
+        .mapToObj(n -> new JobReviewRepository.ListedError(n + 1, errors.get(n)))
+        .toList();
   }
 
   private static List<JobErrorView> errors(int count) {
