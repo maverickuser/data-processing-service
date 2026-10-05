@@ -54,7 +54,8 @@ class ListJobErrorsTest {
     ErrorPage page = listJobErrors.list(JOB, null, null).orElseThrow();
 
     assertThat(page.items()).hasSize(50);
-    assertThat(PageToken.decode(Objects.requireNonNull(page.nextToken()), scope(""))).contains(50L);
+    assertThat(PageToken.decode(Objects.requireNonNull(page.nextToken()), scope("")))
+        .contains("50");
   }
 
   @Test
@@ -63,7 +64,7 @@ class ListJobErrorsTest {
     when(jobs.errors(JOB, null, 50, 51)).thenReturn(listed(51, 70));
 
     ErrorPage page =
-        listJobErrors.list(JOB, null, new PageToken(scope(""), 50).encode()).orElseThrow();
+        listJobErrors.list(JOB, null, new PageToken(scope(""), "50").encode()).orElseThrow();
 
     assertThat(page.items()).hasSize(20);
     assertThat(page.nextToken()).isNull();
@@ -90,7 +91,7 @@ class ListJobErrorsTest {
     ErrorPage page = listJobErrors.list(JOB, "  ine831r08076 ", null).orElseThrow();
 
     String token = Objects.requireNonNull(page.nextToken());
-    assertThat(PageToken.decode(token, scope("INE831R08076"))).contains(50L);
+    assertThat(PageToken.decode(token, scope("INE831R08076"))).contains("50");
     assertThatThrownBy(() -> listJobErrors.list(JOB, null, token))
         .isInstanceOf(InvalidQueryException.class);
   }
@@ -99,6 +100,10 @@ class ListJobErrorsTest {
   @Test
   void invalidTokenOrBlankFilterIsRejectedBeforeReading() {
     assertThatThrownBy(() -> listJobErrors.list(JOB, null, "changed"))
+        .isInstanceOf(InvalidQueryException.class)
+        .hasMessage("The pageToken is not valid.");
+    String nonNumeric = new PageToken(scope(""), "fifty").encode();
+    assertThatThrownBy(() -> listJobErrors.list(JOB, null, nonNumeric))
         .isInstanceOf(InvalidQueryException.class)
         .hasMessage("The pageToken is not valid.");
     assertThatThrownBy(() -> listJobErrors.list(JOB, "  ", null))

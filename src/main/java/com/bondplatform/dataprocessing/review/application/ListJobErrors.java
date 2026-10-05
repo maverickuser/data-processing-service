@@ -38,6 +38,7 @@ public class ListJobErrors {
         pageToken == null
             ? -1
             : PageToken.decode(pageToken, scope)
+                .flatMap(ListJobErrors::sequence)
                 .orElseThrow(() -> new InvalidQueryException("The pageToken is not valid."));
     return jobs.find(jobId)
         .map(
@@ -52,9 +53,20 @@ public class ListJobErrors {
         jobs.errors(jobId, filter, after, ErrorPage.SIZE + 1);
     boolean more = listed.size() > ErrorPage.SIZE;
     List<JobReviewRepository.ListedError> shown = more ? listed.subList(0, ErrorPage.SIZE) : listed;
-    String next = more ? new PageToken(scope, shown.getLast().sequenceNumber()).encode() : null;
+    String next =
+        more
+            ? new PageToken(scope, Long.toString(shown.getLast().sequenceNumber())).encode()
+            : null;
     List<JobErrorView> items = shown.stream().map(JobReviewRepository.ListedError::error).toList();
     return new ErrorPage(items, next);
+  }
+
+  private static Optional<Long> sequence(String position) {
+    try {
+      return Optional.of(Long.parseLong(position));
+    } catch (NumberFormatException e) {
+      return Optional.empty();
+    }
   }
 
   private static @Nullable String normalized(@Nullable String isin) {
