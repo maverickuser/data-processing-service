@@ -8,9 +8,12 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.bondplatform.dataprocessing.canonical.adapter.json.CanonicalLineWriter;
+import com.bondplatform.dataprocessing.canonical.adapter.json.JsonCanonicalLineWriter;
 import com.bondplatform.dataprocessing.canonical.application.CanonicalFile;
 import com.bondplatform.dataprocessing.canonical.domain.CanonicalRow;
 import com.bondplatform.dataprocessing.canonical.domain.GoldenBhavcopy;
+import com.bondplatform.dataprocessing.canonical.domain.JsonEvidence;
+import com.bondplatform.dataprocessing.canonical.domain.JsonFileEvidence;
 import com.bondplatform.dataprocessing.job.application.TemporaryFailureException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -114,6 +117,47 @@ class S3CanonicalFileStoreTest {
 
   private S3CanonicalFileStore store() {
     return new S3CanonicalFileStore(s3, "canonical-bucket", workDirectory);
+  }
+
+  @Test
+  void jsonRequestUploadsOneLinePerFileUnderTheRunKey() {
+    recordUploads();
+    List<JsonFileEvidence> files =
+        List.of(JsonEvidence.skipped(), JsonEvidence.read(JsonEvidence.WITH_ERRORS, List.of()));
+
+    String key = store().storeJson(JsonEvidence.RUN, files);
+
+    assertThat(key).isEqualTo(JsonEvidence.RUN.objectKey());
+    assertThat(requests)
+        .singleElement()
+        .satisfies(
+            request -> {
+              assertThat(request.bucket()).isEqualTo("canonical-bucket");
+              assertThat(request.key()).isEqualTo(key);
+              assertThat(request.contentType()).isEqualTo("application/x-ndjson");
+            });
+    assertThat(bodies.get(0).lines().toList())
+        .containsExactlyElementsOf(
+            files.stream()
+                .map(file -> JsonCanonicalLineWriter.line(JsonEvidence.RUN, file))
+                .toList());
+    assertThat(bodies.get(0)).endsWith("\n");
+    assertThat(workDirectory).isEmptyDirectory();
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void failedJsonUploadIsTemporaryWithoutTheMessageFromS3() {
+    when(s3.putObject(any(Consumer.class), any(RequestBody.class)))
+        .thenThrow(S3Exception.builder().message("bucket canonical-bucket is gone").build());
+
+    assertThatThrownBy(() -> store().storeJson(JsonEvidence.RUN, List.of(JsonEvidence.skipped())))
+        .isInstanceOfSatisfying(
+            TemporaryFailureException.class,
+            e -> {
+              assertThat(e.code()).isEqualTo("CANONICAL_STORE_UNAVAILABLE");
+              assertThat(e.getMessage()).doesNotContain("canonical-bucket");
+            });
   }
 
   @SuppressWarnings("unchecked")

@@ -1,11 +1,13 @@
 package com.bondplatform.dataprocessing.canonical.domain;
 
 import com.bondplatform.dataprocessing.contract.domain.SourceValue;
+import com.bondplatform.dataprocessing.shared.domain.CanonicalJson;
 import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * A parsed JSON value. Numbers are kept exactly as {@link BigDecimal}, and an object keeps its
@@ -46,12 +48,35 @@ public sealed interface JsonValue {
   /** Returns what this value is as a selected source value, before any normalization. */
   default SourceValue toSourceValue() {
     return switch (this) {
-      case JsonObject ignored -> new SourceValue.Structured(SourceValue.Structured.Kind.OBJECT);
-      case JsonArray ignored -> new SourceValue.Structured(SourceValue.Structured.Kind.ARRAY);
+      case JsonObject object ->
+          new SourceValue.Structured(SourceValue.Structured.Kind.OBJECT, toJson());
+      case JsonArray array ->
+          new SourceValue.Structured(SourceValue.Structured.Kind.ARRAY, toJson());
       case JsonString string -> new SourceValue.Text(string.value());
       case JsonNumber number -> new SourceValue.Decimal(number.value());
       case JsonBoolean bool -> new SourceValue.Bool(bool.value());
       case JsonNull ignored -> new SourceValue.Null();
+    };
+  }
+
+  /**
+   * Returns this value as compact JSON text: object properties in document order, numbers with
+   * their own scale.
+   */
+  default String toJson() {
+    return switch (this) {
+      case JsonObject object ->
+          object.properties().entrySet().stream()
+              .map(entry -> CanonicalJson.of(entry.getKey()) + ":" + entry.getValue().toJson())
+              .collect(Collectors.joining(",", "{", "}"));
+      case JsonArray array ->
+          array.elements().stream()
+              .map(JsonValue::toJson)
+              .collect(Collectors.joining(",", "[", "]"));
+      case JsonString string -> CanonicalJson.of(string.value());
+      case JsonNumber number -> number.value().toString();
+      case JsonBoolean bool -> Boolean.toString(bool.value());
+      case JsonNull ignored -> "null";
     };
   }
 }

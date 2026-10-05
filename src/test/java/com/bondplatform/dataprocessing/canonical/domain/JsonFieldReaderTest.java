@@ -261,6 +261,7 @@ class JsonFieldReaderTest {
   }
 
   private static SourceValue structured(SourceValue.Structured.Kind kind) {
-    return new SourceValue.Structured(kind);
+    return new SourceValue.Structured(
+        kind, kind == SourceValue.Structured.Kind.OBJECT ? "{}" : "[]");
   }
 }

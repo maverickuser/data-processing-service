@@ -9,6 +9,7 @@ import com.bondplatform.dataprocessing.contract.domain.ContractValidator;
 import com.bondplatform.dataprocessing.contract.domain.DatasetUrn;
 import com.bondplatform.dataprocessing.contract.domain.RuleRegistry;
 import com.bondplatform.dataprocessing.contract.domain.SourceContract;
+import com.bondplatform.dataprocessing.shared.domain.Isin;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -46,6 +47,16 @@ public final class NsdlContract {
       case JsonRead.Parsed parsed -> parsed.root();
       case JsonRead.Malformed malformed -> throw new IllegalArgumentException(malformed.detail());
     };
+  }
+
+  /**
+   * Returns stage 1's result for a file of {@code INE831R08076} holding the JSON text, read with
+   * the real contract.
+   */
+  public static JsonFileCanonical.Read canonical(String json) {
+    return (JsonFileCanonical.Read)
+        new JsonCanonicalizer(CONTRACT, RuleRegistry.standard())
+            .canonicalize(Isin.of("INE831R08076"), new JsonRead.Parsed(parse(json)));
   }
 
   private static byte[] sampleBytes(String fileName) {

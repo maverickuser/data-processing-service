@@ -23,8 +23,9 @@ class TextFieldReaderTest {
     return Stream.of(
         Arguments.of(new SourceValue.Decimal(new BigDecimal("8.94")), "number"),
         Arguments.of(new SourceValue.Bool(true), "boolean"),
-        Arguments.of(new SourceValue.Structured(SourceValue.Structured.Kind.OBJECT), "object"),
-        Arguments.of(new SourceValue.Structured(SourceValue.Structured.Kind.ARRAY), "array"));
+        Arguments.of(
+            new SourceValue.Structured(SourceValue.Structured.Kind.OBJECT, "{}"), "object"),
+        Arguments.of(new SourceValue.Structured(SourceValue.Structured.Kind.ARRAY, "[]"), "array"));
   }
 
   @ParameterizedTest

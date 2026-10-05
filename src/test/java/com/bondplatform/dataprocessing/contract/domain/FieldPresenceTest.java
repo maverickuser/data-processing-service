@@ -43,7 +43,8 @@ class FieldPresenceTest {
     assertThat(FieldPresence.of(new SourceValue.Decimal(BigDecimal.ZERO)))
         .isEqualTo(FieldPresence.PRESENT);
     assertThat(FieldPresence.of(new SourceValue.Bool(false))).isEqualTo(FieldPresence.PRESENT);
-    assertThat(FieldPresence.of(new SourceValue.Structured(SourceValue.Structured.Kind.ARRAY)))
+    assertThat(
+            FieldPresence.of(new SourceValue.Structured(SourceValue.Structured.Kind.ARRAY, "[]")))
         .isEqualTo(FieldPresence.PRESENT);
   }
 
