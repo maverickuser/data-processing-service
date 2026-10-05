@@ -205,13 +205,10 @@ class JsonFieldReaderTest {
   }
 
   @Test
-  void unreachableFieldIsReportedWithTheBlockingPath() {
+  void unreachableFieldFailsWithoutAnErrorOfItsOwn() {
     JsonCanonicalField field =
         JsonFieldReader.unreachable(
-            "coupon_rate",
-            "$.coupensVo.couponDetails.couponRate",
-            FieldType.PERCENT,
-            new JsonMatch.WrongStructure("$.coupensVo", "object", "string"));
+            "coupon_rate", "$.coupensVo.couponDetails.couponRate", FieldType.PERCENT);
 
     assertThat(field)
         .isEqualTo(
@@ -224,10 +221,8 @@ class JsonFieldReaderTest {
                 null,
                 FieldType.PERCENT,
                 ValidationStatus.FAILED,
-                List.of(
-                    new ValidationIssue(
-                        ErrorCode.INVALID_TYPE,
-                        "Expected an object at $.coupensVo but found string."))));
+                List.of()));
+    assertThat(field.isUsable()).isFalse();
   }
 
   private JsonCanonicalField read(FieldType type, SourceValue value) {

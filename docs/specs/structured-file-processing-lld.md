@@ -666,9 +666,9 @@ Accept manifest request with idempotency key
   -> Finalize job status and change/error counts for polling
 ```
 
-- Malformed JSON in one file skips that file and records an error; other files continue.
+- Malformed JSON in one file skips that file and records an error; other files continue. Implementation choice (2026-10-05, PR 32): the code is `MALFORMED_JSON`, mirroring `MALFORMED_CSV`, as no separate code is defined; its message gives a line and column but never quotes the file.
 - Duplicate property names within the same JSON object make the file malformed; skip the file with an error instead of silently taking one value. The same property name in distinct objects is not a duplicate-property error.
-- A structural type error quarantines the affected section while other valid sections continue. For example, an object supplied where `currentRatings` requires an array quarantines that collection. Record the failing JSONPath and expected/actual types; do not report an invalid structure merely as absent optional fields.
+- A structural type error quarantines the affected section while other valid sections continue. For example, an object supplied where `currentRatings` requires an array quarantines that collection. Record the failing JSONPath and expected/actual types; do not report an invalid structure merely as absent optional fields. Implementation choice (2026-10-05, PR 32): the error is `INVALID_TYPE`, recorded once per failing JSONPath however many selected fields sit under it; those fields fail without an error of their own. A collection entry that is not an object is quarantined the same way, with its own path such as `$.listingDetails[2]`.
 - Field validation errors quarantine only the field, not the file or entire ISIN.
 - Mixed filename ISINs invalidate the whole request, irrespective of any otherwise valid content.
 - Publish all valid changes for the request in one transaction; any publication failure rolls back the complete set of business-data changes.

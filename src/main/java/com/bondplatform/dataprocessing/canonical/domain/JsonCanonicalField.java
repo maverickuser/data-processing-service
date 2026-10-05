@@ -18,14 +18,16 @@ import org.jspecify.annotations.Nullable;
  * @param path the field's JSONPath in the file, such as {@code
  *     $.instrumentsVo.instruments.issuePrice}
  * @param presence whether the field carries a value to act on; anything but {@code PRESENT} is "no
- *     update"
+ *     update". {@code MISSING} with status {@code FAILED} means the path could not be reached
+ *     because of a {@link StructureIssue}; the status, not the presence, decides
  * @param rawValue what the file holds at the path, before any normalization; {@link
  *     SourceValue.Missing} when the path cannot be reached
  * @param normalizedValue the text after normalization, or {@code null} when there is none
  * @param parsedValue the typed value as a canonical string, or {@code null} when there is none
  * @param dataType the type the contract gives the field
  * @param validationStatus whether the field passed
- * @param errors every problem with the field; empty when it passed
+ * @param errors every problem with the field itself; empty when it passed, and for an unreachable
+ *     field, whose problem is reported once as a {@link StructureIssue}
  */
 public record JsonCanonicalField(
     String name,

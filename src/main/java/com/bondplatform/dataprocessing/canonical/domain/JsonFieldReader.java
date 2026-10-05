@@ -29,7 +29,9 @@ import org.jspecify.annotations.Nullable;
  *       in percentage points: {@code "8.94%"} is 8.94.
  * </ul>
  *
- * <p>A value of the wrong JSON kind is {@code INVALID_TYPE}; it is never converted.
+ * <p>A value of the wrong JSON kind is {@code INVALID_TYPE}; it is never converted. A JSON number's
+ * normalized value is its plain decimal text, so {@code 1e2} is {@code 100}; the raw value keeps
+ * the number as read.
  */
 public final class JsonFieldReader {
 
@@ -67,24 +69,12 @@ public final class JsonFieldReader {
   }
 
   /**
-   * Reports a field whose path cannot be reached because a value on the way has the wrong kind (LLD
-   * section 13.7). The field is not treated as merely absent.
+   * Returns a field whose path cannot be reached because a value on the way has the wrong kind. It
+   * fails without an error of its own: the {@link StructureIssue} for the blocking path is reported
+   * once for the file (LLD section 13.7).
    */
-  public static JsonCanonicalField unreachable(
-      String name, String path, FieldType type, JsonMatch.WrongStructure structure) {
-    return new Reading(name, path, type, new SourceValue.Missing())
-        .failed(
-            null,
-            null,
-            new ValidationIssue(
-                ErrorCode.INVALID_TYPE,
-                "Expected an "
-                    + structure.expected()
-                    + " at "
-                    + structure.path()
-                    + " but found "
-                    + structure.actual()
-                    + "."));
+  public static JsonCanonicalField unreachable(String name, String path, FieldType type) {
+    return new Reading(name, path, type, new SourceValue.Missing()).failed(null, null);
   }
 
   private static JsonCanonicalField text(Reading reading) {

@@ -23,6 +23,11 @@ public enum ErrorCode {
   EMPTY_FILE,
   /** A CSV is not valid UTF-8 RFC 4180, or a record has another number of cells than the header. */
   MALFORMED_CSV,
+  /**
+   * A JSON file is not valid UTF-8, not one well-formed JSON value, or repeats a property name in
+   * one object; the file is skipped and the others continue.
+   */
+  MALFORMED_JSON,
   /** A CSV lacks a header the source contract selects. */
   REQUIRED_HEADER_MISSING,
   /** Two CSV headers are the same after trimming and case-folding, selected or not. */
