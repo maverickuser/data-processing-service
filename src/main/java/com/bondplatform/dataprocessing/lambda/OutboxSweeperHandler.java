@@ -87,12 +87,16 @@ public class OutboxSweeperHandler implements RequestHandler<ScheduledEvent, Stri
     int failed = stuck.orElse(0);
     Duration budget = budget(context);
     int delivered = 0;
-    if (budget.isPositive()) {
-      delivered = sweep.applyAsInt(budget);
-    } else {
-      LOG.warn("Outbox sweep skipped: no time left in the invocation");
+    try {
+      if (budget.isPositive()) {
+        delivered = sweep.applyAsInt(budget);
+      } else {
+        LOG.warn("Outbox sweep skipped: no time left in the invocation");
+      }
+    } finally {
+      // Recorded even when the sweep fails, as that is when the backlog matters most.
+      recordBacklog();
     }
-    recordBacklog();
     LOG.info(
         "Sweep done, stuckJobsFailed={}, outboxEventsDelivered={}, budgetMillis={}",
         failed,

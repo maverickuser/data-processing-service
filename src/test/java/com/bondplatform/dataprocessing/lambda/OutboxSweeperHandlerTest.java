@@ -1,6 +1,7 @@
 package com.bondplatform.dataprocessing.lambda;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -99,6 +100,23 @@ class OutboxSweeperHandlerTest {
         .containsExactly(
             Map.entry(Metric.STUCK_JOBS_FAILED, 2L),
             Map.entry(Metric.OLDEST_PENDING_OUTBOX_AGE, 90L));
+  }
+
+  @Test
+  void recordsTheBacklogEvenWhenTheSweepFails() {
+    OutboxSweeperHandler failing =
+        new OutboxSweeperHandler(
+            () -> 0,
+            budget -> {
+              throw new IllegalStateException("queue unavailable");
+            },
+            () -> Duration.ofMinutes(10),
+            metrics);
+
+    assertThatThrownBy(
+            () -> failing.handleRequest(new ScheduledEvent(), remaining(Duration.ofSeconds(59))))
+        .isInstanceOf(IllegalStateException.class);
+    assertThat(recorded).containsEntry(Metric.OLDEST_PENDING_OUTBOX_AGE, 600L);
   }
 
   @Test

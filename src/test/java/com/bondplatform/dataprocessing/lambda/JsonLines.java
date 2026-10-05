@@ -42,7 +42,7 @@ final class JsonLines {
     try {
       return JSON.readTree(line);
     } catch (JacksonException e) {
-      return JSON.createObjectNode();
+      throw new AssertionError("Output line is not valid JSON: " + line, e);
     }
   }
 }

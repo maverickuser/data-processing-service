@@ -26,6 +26,8 @@ import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * Accepts a validated submission durably (LLD section 2.1).
@@ -85,23 +87,25 @@ public class AdmitSubmission {
 
     Optional<AcceptedRequest> replayed = existing(submission, payloadHash);
     if (replayed.isPresent()) {
-      log("Submission replayed", replayed.get());
+      logOnCommit("Submission replayed", replayed.get());
       return receiptOf(replayed.get());
     }
     Optional<AcceptedRequest> stored =
         requests.insertIfAbsent(newRequest(submission, event, canonicalEvent, payloadHash));
     if (stored.isPresent()) {
       outbox.append(dispatchEvent(stored.get()));
-      log("Submission accepted", stored.get());
+      logOnCommit("Submission accepted", stored.get());
       return receiptOf(stored.get());
     }
     // Another ordering group committed the same key or event identity in between.
-    return existing(submission, payloadHash)
-        .map(AdmitSubmission::receiptOf)
-        .orElseThrow(
-            () ->
-                new IllegalStateException(
-                    "Submission " + submission.runId() + " was neither stored nor found"));
+    AcceptedRequest raced =
+        existing(submission, payloadHash)
+            .orElseThrow(
+                () ->
+                    new IllegalStateException(
+                        "Submission " + submission.runId() + " was neither stored nor found"));
+    logOnCommit("Submission replayed", raced);
+    return receiptOf(raced);
   }
 
   /**
@@ -161,6 +165,21 @@ public class AdmitSubmission {
         request.acceptanceSequence(),
         CanonicalJson.of(Map.of("jobId", request.id().toString())),
         request.submittedAt());
+  }
+
+  /** Logs once the transaction commits, so a log line never names a job that was rolled back. */
+  private static void logOnCommit(String message, AcceptedRequest request) {
+    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+      log(message, request);
+      return;
+    }
+    TransactionSynchronizationManager.registerSynchronization(
+        new TransactionSynchronization() {
+          @Override
+          public void afterCommit() {
+            log(message, request);
+          }
+        });
   }
 
   /** Logs with the job's ID as the {@code jobId} field (LLD section 23.8). */
