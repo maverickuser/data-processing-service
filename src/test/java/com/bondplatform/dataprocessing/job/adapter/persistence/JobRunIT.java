@@ -15,6 +15,7 @@ import com.bondplatform.dataprocessing.job.domain.ClaimedJob;
 import com.bondplatform.dataprocessing.job.domain.JobOutcome;
 import com.bondplatform.dataprocessing.job.domain.JobStatus;
 import com.bondplatform.dataprocessing.persistence.PostgresIntegrationTest;
+import com.bondplatform.dataprocessing.persistence.WithoutNsdlHandler;
 import com.bondplatform.dataprocessing.shared.domain.JobId;
 import java.util.List;
 import java.util.Map;
@@ -276,6 +277,11 @@ class JobRunIT extends PostgresIntegrationTest {
   /** Adds the settable handler to the application. */
   @TestConfiguration(proxyBeanMethods = false)
   static class TestHandlerConfiguration {
+
+    @Bean
+    static WithoutNsdlHandler withoutNsdlHandler() {
+      return new WithoutNsdlHandler();
+    }
 
     @Bean
     SettableHandler settableHandler() {
