@@ -170,6 +170,8 @@ class ProcessingSchemaIT extends PostgresIntegrationTest {
                 + " USING btree (processing_run_id, isin, sequence_number)");
     assertThat(schema().indexes(SCHEMA, "outbox_events"))
         .containsExactly(
+            "CREATE INDEX outbox_events_delivered ON data_processing.outbox_events"
+                + " USING btree (delivered_at) WHERE (status = 'DELIVERED'::text)",
             "CREATE INDEX outbox_events_pending ON data_processing.outbox_events"
                 + " USING btree (status, next_attempt_at) WHERE (status = 'PENDING'::text)",
             "CREATE INDEX outbox_events_pending_by_group ON data_processing.outbox_events"
