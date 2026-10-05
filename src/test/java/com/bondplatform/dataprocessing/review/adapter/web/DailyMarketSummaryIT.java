@@ -24,6 +24,7 @@ class DailyMarketSummaryIT extends PostgresIntegrationTest {
 
   private static final String ISIN = "INE0KH208019";
   private static final LocalDate FIRST = LocalDate.of(2026, 1, 1);
+  private static final List<String> EXCHANGES = List.of("BSE", "MSE", "NSE");
   private static final List<String> PROPERTIES =
       List.of(
           "isin",
@@ -55,9 +56,11 @@ class DailyMarketSummaryIT extends PostgresIntegrationTest {
   @Test
   void securitySummariesAreNewestFirstAndPageBackwards() throws Exception {
     security(ISIN);
-    for (int day = 0; day < 30; day++) {
-      summary(ISIN, FIRST.plusDays(day), "BSE");
-      summary(ISIN, FIRST.plusDays(day), "NSE");
+    // Three exchanges a day, so a page ends inside a day (AP-2)
+    for (int day = 0; day < 20; day++) {
+      for (String exchange : EXCHANGES) {
+        summary(ISIN, FIRST.plusDays(day), exchange);
+      }
     }
 
     JsonNode first = ok(get("/v1/securities/{isin}/daily-market-summaries", " ine0kh208019 "));
@@ -67,12 +70,16 @@ class DailyMarketSummaryIT extends PostgresIntegrationTest {
                 .param("pageToken", first.get("nextToken").asString()));
 
     assertThat(first.get("items")).hasSize(50);
-    assertThat(first.at("/items/0/tradeDate").asString()).isEqualTo("2026-01-30");
+    assertThat(first.at("/items/0/tradeDate").asString()).isEqualTo("2026-01-20");
     assertThat(first.at("/items/0/exchangeName").asString()).isEqualTo("BSE");
-    assertThat(first.at("/items/1/exchangeName").asString()).isEqualTo("NSE");
+    assertThat(first.at("/items/1/exchangeName").asString()).isEqualTo("MSE");
+    assertThat(first.at("/items/49/tradeDate").asString()).isEqualTo("2026-01-04");
+    assertThat(first.at("/items/49/exchangeName").asString()).isEqualTo("MSE");
     assertThat(second.get("items")).hasSize(10);
-    assertThat(second.at("/items/0/tradeDate").asString()).isEqualTo("2026-01-05");
+    assertThat(second.at("/items/0/tradeDate").asString()).isEqualTo("2026-01-04");
+    assertThat(second.at("/items/0/exchangeName").asString()).isEqualTo("NSE");
     assertThat(second.at("/items/9/tradeDate").asString()).isEqualTo("2026-01-01");
+    assertThat(keys(first, second, "tradeDate")).doesNotHaveDuplicates().hasSize(60);
     assertThat(second.get("nextToken").isNull()).isTrue();
     JsonNode item = first.at("/items/0");
     assertThat(item.propertyNames()).containsExactlyInAnyOrderElementsOf(PROPERTIES);
@@ -131,12 +138,13 @@ class DailyMarketSummaryIT extends PostgresIntegrationTest {
   @Test
   void tradeDateSummariesAreByIsinFilteredAndPaged() throws Exception {
     List<String> isins = new ArrayList<>();
-    for (int n = 0; n < 30; n++) {
+    for (int n = 0; n < 20; n++) {
       String isin = "INE%09d".formatted(n);
       isins.add(isin);
       security(isin);
-      summary(isin, FIRST, "NSE");
-      summary(isin, FIRST, "BSE");
+      for (String exchange : EXCHANGES.reversed()) {
+        summary(isin, FIRST, exchange);
+      }
       summary(isin, FIRST.plusDays(1), "BSE");
     }
 
@@ -156,11 +164,16 @@ class DailyMarketSummaryIT extends PostgresIntegrationTest {
     assertThat(first.get("items")).hasSize(50);
     assertThat(first.at("/items/0/isin").asString()).isEqualTo(isins.getFirst());
     assertThat(first.at("/items/0/exchangeName").asString()).isEqualTo("BSE");
-    assertThat(first.at("/items/1/exchangeName").asString()).isEqualTo("NSE");
+    assertThat(first.at("/items/1/exchangeName").asString()).isEqualTo("MSE");
+    assertThat(first.at("/items/49/isin").asString()).isEqualTo(isins.get(16));
+    assertThat(first.at("/items/49/exchangeName").asString()).isEqualTo("MSE");
     assertThat(second.get("items")).hasSize(10);
+    assertThat(second.at("/items/0/isin").asString()).isEqualTo(isins.get(16));
+    assertThat(second.at("/items/0/exchangeName").asString()).isEqualTo("NSE");
     assertThat(second.at("/items/9/isin").asString()).isEqualTo(isins.getLast());
     assertThat(second.get("nextToken").isNull()).isTrue();
-    assertThat(bse.get("items")).hasSize(30);
+    assertThat(keys(first, second, "isin")).doesNotHaveDuplicates().hasSize(60);
+    assertThat(bse.get("items")).hasSize(20);
     assertThat(bse.get("items"))
         .extracting(item -> item.get("exchangeName").asString())
         .containsOnly("BSE");
@@ -189,6 +202,16 @@ class DailyMarketSummaryIT extends PostgresIntegrationTest {
             .param("tradeDate", "2026-01-01")
             .param("pageToken", token),
         400);
+  }
+
+  /** Each item's first key and exchange, across both pages. */
+  private static List<String> keys(JsonNode first, JsonNode second, String key) {
+    List<String> keys = new ArrayList<>();
+    for (JsonNode page : List.of(first, second)) {
+      page.get("items")
+          .forEach(item -> keys.add(item.get(key).asString() + "|" + item.get("exchangeName")));
+    }
+    return keys;
   }
 
   private JsonNode ok(MockHttpServletRequestBuilder request) throws Exception {

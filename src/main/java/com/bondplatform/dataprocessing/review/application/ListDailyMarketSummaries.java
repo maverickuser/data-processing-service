@@ -36,7 +36,8 @@ public class ListDailyMarketSummaries {
    * @param toDate the inclusive upper bound, or {@code null}
    * @param pageToken the previous page's {@code nextToken}, or {@code null} for the first page
    * @throws InvalidQueryException if {@code fromDate} is after {@code toDate}, or the token was not
-   *     issued for this ISIN and these dates
+   *     issued for this ISIN and these dates; checked before the ISIN is looked up, so a malformed
+   *     request about an unknown ISIN is still invalid (AP-4)
    */
   public Optional<SummaryPage> forSecurity(
       Isin isin,
@@ -72,7 +73,8 @@ public class ListDailyMarketSummaries {
         position(pageToken, scope, ListDailyMarketSummaries::tradeDatePosition);
     List<DailyMarketSummaryView> listed =
         summaries.forTradeDate(tradeDate, filter, after, SummaryPage.SIZE + 1);
-    return page(listed, scope, last -> last.isin() + "\n" + last.exchangeName());
+    return page(
+        listed, scope, last -> last.isin().length() + "\n" + last.isin() + last.exchangeName());
   }
 
   private static SummaryPage page(
@@ -95,7 +97,7 @@ public class ListDailyMarketSummaries {
         .orElseThrow(() -> new InvalidQueryException(INVALID_TOKEN));
   }
 
-  // A position is the first key, which never holds a line break, then the exchange name
+  // A date never holds a line break, so the exchange name follows the first one
   private static Optional<SecurityPosition> securityPosition(String position) {
     int split = position.indexOf('\n');
     if (split < 0) {
@@ -110,12 +112,24 @@ public class ListDailyMarketSummaries {
     }
   }
 
+  // A stored ISIN is not format-checked and may hold any text, so its length comes first (AP-1)
   private static Optional<TradeDatePosition> tradeDatePosition(String position) {
     int split = position.indexOf('\n');
-    return split < 0
-        ? Optional.empty()
-        : Optional.of(
-            new TradeDatePosition(position.substring(0, split), position.substring(split + 1)));
+    if (split < 0) {
+      return Optional.empty();
+    }
+    int length;
+    try {
+      length = Integer.parseInt(position.substring(0, split));
+    } catch (NumberFormatException e) {
+      return Optional.empty();
+    }
+    int end = split + 1 + length;
+    if (length < 0 || end > position.length()) {
+      return Optional.empty();
+    }
+    return Optional.of(
+        new TradeDatePosition(position.substring(split + 1, end), position.substring(end)));
   }
 
   private static String text(@Nullable LocalDate date) {

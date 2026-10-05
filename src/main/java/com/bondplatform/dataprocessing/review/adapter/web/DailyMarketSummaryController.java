@@ -8,6 +8,8 @@ import com.bondplatform.dataprocessing.shared.domain.Isin;
 import java.time.LocalDate;
 import java.util.Locale;
 import org.jspecify.annotations.Nullable;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.format.annotation.DateTimeFormat.ISO;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -37,8 +39,8 @@ public class DailyMarketSummaryController {
       produces = MediaType.APPLICATION_JSON_VALUE)
   public SummaryPageResponse forSecurity(
       @PathVariable String isin,
-      @RequestParam(required = false) @Nullable LocalDate fromDate,
-      @RequestParam(required = false) @Nullable LocalDate toDate,
+      @RequestParam(required = false) @DateTimeFormat(iso = ISO.DATE) @Nullable LocalDate fromDate,
+      @RequestParam(required = false) @DateTimeFormat(iso = ISO.DATE) @Nullable LocalDate toDate,
       @RequestParam(required = false) @Nullable String pageToken) {
     String normalized = isin.strip().toUpperCase(Locale.ROOT);
     // No ISIN is blank or holds a control character, which PostgreSQL text cannot always store
@@ -63,7 +65,7 @@ public class DailyMarketSummaryController {
    */
   @GetMapping(path = "/v1/daily-market-summaries", produces = MediaType.APPLICATION_JSON_VALUE)
   public SummaryPageResponse forTradeDate(
-      @RequestParam LocalDate tradeDate,
+      @RequestParam @DateTimeFormat(iso = ISO.DATE) LocalDate tradeDate,
       @RequestParam(required = false) @Nullable String exchangeName,
       @RequestParam(required = false) @Nullable String pageToken) {
     try {

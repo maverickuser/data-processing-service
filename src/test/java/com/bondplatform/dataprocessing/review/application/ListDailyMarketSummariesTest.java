@@ -110,7 +110,7 @@ class ListDailyMarketSummariesTest {
 
     assertThat(page.items()).hasSize(50);
     assertThat(PageToken.decode(Objects.requireNonNull(page.nextToken()), DATE_SCOPE + "BSE"))
-        .contains("INE000000049\nBSE");
+        .contains("12\nINE000000049BSE");
   }
 
   @Test
@@ -119,7 +119,7 @@ class ListDailyMarketSummariesTest {
     when(summaries.forTradeDate(eq(DAY), isNull(), eq(after), eq(51))).thenReturn(byIsin(2));
 
     SummaryPage page =
-        list.forTradeDate(DAY, null, new PageToken(DATE_SCOPE, "INE000000049\nBSE").encode());
+        list.forTradeDate(DAY, null, new PageToken(DATE_SCOPE, "12\nINE000000049BSE").encode());
 
     assertThat(page.items()).hasSize(2);
     assertThat(page.nextToken()).isNull();
@@ -133,15 +133,31 @@ class ListDailyMarketSummariesTest {
     assertThatThrownBy(() -> list.forTradeDate(DAY, "BSE" + (char) 0, null))
         .isInstanceOf(InvalidQueryException.class)
         .hasMessage("The exchangeName filter must not hold control characters.");
-    String unfiltered = new PageToken(DATE_SCOPE, "INE000000049\nBSE").encode();
-    String noSplit = new PageToken(DATE_SCOPE, "INE000000049").encode();
-    for (String token : List.of(unfiltered, noSplit)) {
+    String unfiltered = new PageToken(DATE_SCOPE, "12\nINE000000049BSE").encode();
+    List<String> badPositions = List.of("INE000000049", "x\nINE", "-1\nINE", "99\nINE");
+    List<String> tokens = new java.util.ArrayList<>(List.of(unfiltered));
+    badPositions.forEach(position -> tokens.add(new PageToken(DATE_SCOPE, position).encode()));
+    for (String token : tokens) {
       String filter = token.equals(unfiltered) ? "BSE" : null;
       assertThatThrownBy(() -> list.forTradeDate(DAY, filter, token))
           .isInstanceOf(InvalidQueryException.class)
           .hasMessage("The pageToken is not valid.");
     }
     verifyNoInteractions(summaries);
+  }
+
+  // AP-1: an ISIN holding a line break still pages from exactly where it ended
+  @Test
+  void isinWithLineBreakRoundTripsThroughTheToken() {
+    List<DailyMarketSummaryView> listed = new java.util.ArrayList<>(byIsin(49));
+    listed.add(summary("INE\n1", DAY));
+    listed.add(summary("INE\n2", DAY));
+    when(summaries.forTradeDate(DAY, null, null, 51)).thenReturn(listed);
+    String token = Objects.requireNonNull(list.forTradeDate(DAY, null, null).nextToken());
+    TradeDatePosition after = new TradeDatePosition("INE\n1", "BSE");
+    when(summaries.forTradeDate(DAY, null, after, 51)).thenReturn(List.of());
+
+    assertThat(list.forTradeDate(DAY, null, token).items()).isEmpty();
   }
 
   private static List<DailyMarketSummaryView> byDate(int count) {
