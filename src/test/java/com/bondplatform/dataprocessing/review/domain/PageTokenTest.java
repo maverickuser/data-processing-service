@@ -20,6 +20,16 @@ class PageTokenTest {
     assertThat(token).doesNotContain("job-1").matches("[A-Za-z0-9_\\-]+\\.[A-Za-z0-9_\\-]+");
   }
 
+  // AN-6: a scope may hold line breaks and any text; only the exact scope matches
+  @Test
+  void scopeWithLineBreaksRoundTripsExactly() {
+    String scope = "job-errors\n\nline\nINE831R08076";
+    String token = new PageToken(scope, 7).encode();
+
+    assertThat(PageToken.decode(token, scope)).contains(7L);
+    assertThat(PageToken.decode(token, "job-errors\n\nline")).isEmpty();
+  }
+
   @Test
   void tokenOfAnotherScopeIsRejected() {
     String token = new PageToken(SCOPE, 50).encode();

@@ -69,6 +69,18 @@ class ListJobErrorsTest {
     assertThat(page.nextToken()).isNull();
   }
 
+  // AN-6: a last page of exactly fifty has no next token
+  @Test
+  void exactlyFiftyLeftIsTheLastPage() {
+    givenJob(JobStatus.COMPLETED_WITH_ERRORS);
+    when(jobs.errors(JOB, null, -1, 51)).thenReturn(listed(1, 50));
+
+    ErrorPage page = listJobErrors.list(JOB, null, null).orElseThrow();
+
+    assertThat(page.items()).hasSize(50);
+    assertThat(page.nextToken()).isNull();
+  }
+
   // I-READ-02 at the use case: the filter is trimmed and uppercased, and binds the token
   @Test
   void isinFilterIsNormalizedAndBindsTheToken() {
@@ -92,6 +104,9 @@ class ListJobErrorsTest {
     assertThatThrownBy(() -> listJobErrors.list(JOB, "  ", null))
         .isInstanceOf(InvalidQueryException.class)
         .hasMessage("The isin filter must not be blank.");
+    assertThatThrownBy(() -> listJobErrors.list(JOB, "INE" + (char) 0, null))
+        .isInstanceOf(InvalidQueryException.class)
+        .hasMessage("The isin filter must not hold control characters.");
     verifyNoInteractions(jobs);
   }
 

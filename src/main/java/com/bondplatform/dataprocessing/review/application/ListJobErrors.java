@@ -28,8 +28,8 @@ public class ListJobErrors {
    *
    * @param isin an optional filter, trimmed and uppercased before matching
    * @param pageToken the previous page's {@code nextToken}, or {@code null} for the first page
-   * @throws InvalidQueryException if the filter is blank, or the token was not issued for this job
-   *     and filter
+   * @throws InvalidQueryException if the filter is blank or holds a control character, or the token
+   *     was not issued for this job and filter
    */
   public Optional<ErrorPage> list(JobId jobId, @Nullable String isin, @Nullable String pageToken) {
     String filter = normalized(isin);
@@ -64,6 +64,10 @@ public class ListJobErrors {
     String trimmed = isin.strip();
     if (trimmed.isEmpty()) {
       throw new InvalidQueryException("The isin filter must not be blank.");
+    }
+    // PostgreSQL text cannot hold U+0000, and no ISIN holds a control character (AN-1)
+    if (trimmed.chars().anyMatch(Character::isISOControl)) {
+      throw new InvalidQueryException("The isin filter must not hold control characters.");
     }
     return trimmed.toUpperCase(Locale.ROOT);
   }

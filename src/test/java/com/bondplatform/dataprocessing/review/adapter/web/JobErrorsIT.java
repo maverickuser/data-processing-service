@@ -107,8 +107,11 @@ class JobErrorsIT extends PostgresIntegrationTest {
     JobId job = jobWithListingErrors(60);
     String token = page(get(errors(job))).get("nextToken").asString();
 
+    // Change a character inside the payload, so only the check value can catch it (AN-5)
+    char middle = token.charAt(5);
+    String edited = token.substring(0, 5) + (middle == 'A' ? 'B' : 'A') + token.substring(6);
     MockHttpServletResponse changed =
-        http.perform(get(errors(job)).param("pageToken", token + "A")).andReturn().getResponse();
+        http.perform(get(errors(job)).param("pageToken", edited)).andReturn().getResponse();
     MockHttpServletResponse foreign =
         http.perform(get(errors(job)).param("pageToken", token).param("isin", ISIN))
             .andReturn()
@@ -118,6 +121,17 @@ class JobErrorsIT extends PostgresIntegrationTest {
       assertThat(response.getStatus()).isEqualTo(400);
       assertThat(response.getContentType()).startsWith("application/problem+json");
     }
+  }
+
+  // AN-1: a NUL in the filter is a 400, never a database error
+  @Test
+  void controlCharacterInFilterIsBadRequest() throws Exception {
+    JobId job = jobWithListingErrors(1);
+
+    MockHttpServletResponse response =
+        http.perform(get(errors(job)).param("isin", "INE" + (char) 0)).andReturn().getResponse();
+
+    assertThat(response.getStatus()).isEqualTo(400);
   }
 
   @Test
