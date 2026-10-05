@@ -96,9 +96,7 @@ class ScalarExtractorTest {
   void faceValueFromGroupedStringEqualsFaceValueFromNumber() {
     JsonCanonicalField fromString =
         field(
-            extractor.extract(
-                NsdlContract.parse(
-                    "{\"instrumentsVo\": {\"instruments\": {\"issuePrice\": \"10,00,000.00\"}}}")),
+            fields("{\"instrumentsVo\": {\"instruments\": {\"issuePrice\": \"10,00,000.00\"}}}"),
             "original_face_value");
 
     assertThat(fromString.validationStatus()).isEqualTo(ValidationStatus.PASSED);
@@ -110,13 +108,12 @@ class ScalarExtractorTest {
   @Test
   void invalidScalarIsRejectedAloneAndTheOthersAreKept() {
     List<JsonCanonicalField> fields =
-        extractor.extract(
-            NsdlContract.parse(
-                """
-                {"issuerName": 42, "instrumentType": "Bond",
-                 "instrumentsVo": {"instruments": {"allotmentDate": "31-02-2019",
-                                                   "redemptionDate": "2029-06-08"}}}
-                """));
+        fields(
+            """
+            {"issuerName": 42, "instrumentType": "Bond",
+             "instrumentsVo": {"instruments": {"allotmentDate": "31-02-2019",
+                                               "redemptionDate": "2029-06-08"}}}
+            """);
 
     assertThat(field(fields, "issuer_name").errors())
         .extracting(ValidationIssue::code)
@@ -129,24 +126,52 @@ class ScalarExtractorTest {
             ordered("instrument_type", "Bond", "redemption_date", "2029-06-08"));
   }
 
-  // LLD 13.7: a structural error is reported, not treated as an absent field
+  // LLD 13.7: a structural error is reported once for its path, not as absent fields
   @Test
-  void scalarBehindValueOfWrongKindIsReportedWithThePath() {
-    List<JsonCanonicalField> fields =
-        extractor.extract(NsdlContract.parse("{\"coupensVo\": [\"8.94\"], \"issuerName\": \"X\"}"));
+  void scalarsBehindValueOfWrongKindFailAndThePathIsReportedOnce() {
+    ScalarExtractor.ScalarExtraction extraction =
+        extractor.extract(
+            NsdlContract.parse(
+                "{\"coupensVo\": [\"8.94\"], \"instrumentsVo\": {\"instruments\": 5},"
+                    + " \"issuerName\": \"X\"}"));
 
-    JsonCanonicalField couponRate = field(fields, "coupon_rate");
-    assertThat(couponRate.validationStatus()).isEqualTo(ValidationStatus.FAILED);
-    assertThat(couponRate.errors())
+    assertThat(extraction.structureIssues())
         .containsExactly(
-            new ValidationIssue(
-                ErrorCode.INVALID_TYPE, "Expected an object at $.coupensVo but found array."));
-    assertThat(field(fields, "coupon_type").validationStatus()).isEqualTo(ValidationStatus.FAILED);
+            new StructureIssue(
+                "$.instrumentsVo.instruments",
+                new ValidationIssue(
+                    ErrorCode.INVALID_TYPE,
+                    "Expected an object at $.instrumentsVo.instruments but found number.")),
+            new StructureIssue(
+                "$.coupensVo",
+                new ValidationIssue(
+                    ErrorCode.INVALID_TYPE, "Expected an object at $.coupensVo but found array.")));
+    List<JsonCanonicalField> fields = extraction.fields();
+    for (String name :
+        List.of("coupon_rate", "coupon_type", "allotment_date", "original_face_value")) {
+      assertThat(field(fields, name).validationStatus()).isEqualTo(ValidationStatus.FAILED);
+      assertThat(field(fields, name).errors()).isEmpty();
+    }
+    assertThat(field(fields, "collateral_status").validationStatus())
+        .isEqualTo(ValidationStatus.PASSED);
     assertThat(usable(fields)).containsExactlyEntriesOf(ordered("issuer_name", "X"));
   }
 
+  @Test
+  void wellFormedSamplesHaveNoStructureIssues() {
+    assertThat(
+            extractor
+                .extract(NsdlContract.sample("INE831R08076_instrument-details.json"))
+                .structureIssues())
+        .isEmpty();
+  }
+
+  private List<JsonCanonicalField> fields(String json) {
+    return extractor.extract(NsdlContract.parse(json)).fields();
+  }
+
   private List<JsonCanonicalField> extract(String sample) {
-    return extractor.extract(NsdlContract.sample(sample));
+    return extractor.extract(NsdlContract.sample(sample)).fields();
   }
 
   private static JsonCanonicalField field(List<JsonCanonicalField> fields, String name) {
