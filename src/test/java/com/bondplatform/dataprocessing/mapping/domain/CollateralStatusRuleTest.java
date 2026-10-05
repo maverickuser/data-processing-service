@@ -98,7 +98,7 @@ class CollateralStatusRuleTest {
         field("asset_coverage", FieldType.PERCENT, new SourceValue.Decimal(new BigDecimal("100")));
 
     CollateralStatusRule.Screened screened =
-        rule.screen(List.of(status("UNSECURED"), coverage), List.of());
+        rule.screen(List.of(status("unSECURED"), coverage), List.of());
 
     assertThat(screened.conflicts())
         .singleElement()
@@ -113,6 +113,9 @@ class CollateralStatusRuleTest {
 
     assertThat(rule.apply(scalars, collections()).scalars()).isEqualTo(scalars);
     assertThat(CollateralStatusRule.isUnsecured(null)).isFalse();
+    // AK-1: equalsIgnoreCase would match the long s (U+017F)
+    String longS = Character.toString(0x017F);
+    assertThat(CollateralStatusRule.isUnsecured("Un" + longS + "ecured")).isFalse();
   }
 
   // U-UNSEC-02: an Unsecured file that also supplies coverage or assets contradicts itself

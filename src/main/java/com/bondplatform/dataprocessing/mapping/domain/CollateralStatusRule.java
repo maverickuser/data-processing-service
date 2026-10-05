@@ -15,6 +15,7 @@ import com.bondplatform.dataprocessing.shared.domain.CanonicalJson;
 import com.bondplatform.dataprocessing.shared.domain.ErrorCode;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -160,9 +161,12 @@ public final class CollateralStatusRule {
    */
   public record Applied(SecurityScalars scalars, SecurityCollections collections) {}
 
-  /** Returns whether a collateral status is {@code Unsecured}, in any letter case. */
+  /**
+   * Returns whether a collateral status is {@code Unsecured}, in any letter case. Case is folded
+   * with the root locale, so a look-alike such as {@code Unſecured} (long s) does not match.
+   */
   public static boolean isUnsecured(@Nullable String status) {
-    return UNSECURED.equalsIgnoreCase(status);
+    return status != null && status.toLowerCase(Locale.ROOT).equals("unsecured");
   }
 
   /** Clears coverage and drops collateral assets when the request's status is Unsecured. */
