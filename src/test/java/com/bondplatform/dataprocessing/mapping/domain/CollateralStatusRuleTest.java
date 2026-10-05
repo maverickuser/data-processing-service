@@ -69,14 +69,53 @@ class CollateralStatusRuleTest {
         scalars(
             "collateralStatus", new SecurityValue.Text("Secured"),
             "assetCoverage", new SecurityValue.Percentage(Percent.parse("100")));
-    SecurityScalars upperCase = scalars("collateralStatus", new SecurityValue.Text("UNSECURED"));
+    SecurityScalars other = scalars("collateralStatus", new SecurityValue.Text("Unsecured debt"));
     SecurityScalars none = scalars("couponType", new SecurityValue.Text("Simple"));
 
-    for (SecurityScalars scalars : List.of(secured, upperCase, none)) {
+    for (SecurityScalars scalars : List.of(secured, other, none)) {
       CollateralStatusRule.Applied applied = rule.apply(scalars, collections());
       assertThat(applied.scalars()).isEqualTo(scalars);
       assertThat(applied.collections().collateralAssets()).hasSize(1);
     }
+  }
+
+  // AH-2: the owner decided the status matches in any letter case
+  @Test
+  void unsecuredInAnyCaseClearsCoverageAndAssets() {
+    for (String status : List.of("UNSECURED", "unsecured", "UnSecured")) {
+      CollateralStatusRule.Applied applied =
+          rule.apply(scalars("collateralStatus", new SecurityValue.Text(status)), collections());
+
+      assertThat(applied.scalars().cleared())
+          .containsExactlyInAnyOrder("assetCoverageBasis", "assetCoverage");
+      assertThat(applied.collections().collateralAssets()).isEmpty();
+    }
+  }
+
+  @Test
+  void upperCaseUnsecuredFileWithCoverageIsConflict() {
+    JsonCanonicalField coverage =
+        field("asset_coverage", FieldType.PERCENT, new SourceValue.Decimal(new BigDecimal("100")));
+
+    CollateralStatusRule.Screened screened =
+        rule.screen(List.of(status("unSECURED"), coverage), List.of());
+
+    assertThat(screened.conflicts())
+        .singleElement()
+        .extracting(CollateralConflict::path)
+        .isEqualTo("$.asset_coverage");
+  }
+
+  @Test
+  void nonTextStatusIsNotUnsecured() {
+    SecurityScalars scalars =
+        scalars("collateralStatus", new SecurityValue.Percentage(Percent.parse("1")));
+
+    assertThat(rule.apply(scalars, collections()).scalars()).isEqualTo(scalars);
+    assertThat(CollateralStatusRule.isUnsecured(null)).isFalse();
+    // AK-1: equalsIgnoreCase would match the long s (U+017F)
+    String longS = Character.toString(0x017F);
+    assertThat(CollateralStatusRule.isUnsecured("Un" + longS + "ecured")).isFalse();
   }
 
   // U-UNSEC-02: an Unsecured file that also supplies coverage or assets contradicts itself
