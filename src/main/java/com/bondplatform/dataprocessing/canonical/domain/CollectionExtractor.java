@@ -70,9 +70,17 @@ public final class CollectionExtractor {
     List<JsonCanonicalField> read = new ArrayList<>(fields.size());
     for (int i = 0; i < fields.size(); i++) {
       JsonField field = fields.get(i);
-      // An entry is an object and each field path is one property, so the path always resolves.
-      JsonMatch.Found found =
-          (JsonMatch.Found) JsonPathExtractor.scalar(entry.value(), collection.fieldPaths().get(i));
+      // An entry is an object and the contract validator allows one property per field path, so
+      // the path always resolves; a contract that breaks this fails here, naming the field.
+      if (!(JsonPathExtractor.scalar(entry.value(), collection.fieldPaths().get(i))
+          instanceof JsonMatch.Found found)) {
+        throw new IllegalStateException(
+            "Field "
+                + field.name()
+                + " of "
+                + collection.contract().name()
+                + " must be one property");
+      }
       read.add(
           reader.read(
               field.name(), entry.path() + "." + field.path(), field.type(), found.value()));
