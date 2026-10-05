@@ -4,6 +4,8 @@ import com.bondplatform.dataprocessing.job.application.JobCompletion;
 import com.bondplatform.dataprocessing.outbox.application.OutboxEventStore;
 import com.bondplatform.dataprocessing.publication.application.DailyMarketSummaryRepository;
 import com.bondplatform.dataprocessing.publication.application.PublishDailyMarketSummaries;
+import com.bondplatform.dataprocessing.publication.application.PublishSecurityDetails;
+import com.bondplatform.dataprocessing.publication.application.SecurityCollectionRepository;
 import com.bondplatform.dataprocessing.publication.application.SecurityRepository;
 import com.bondplatform.dataprocessing.shared.supplier.IdSupplier;
 import java.time.Clock;
@@ -28,5 +30,15 @@ public class PublicationConfiguration {
       PublicationProperties properties) {
     return new PublishDailyMarketSummaries(
         securities, summaries, completion, outbox, ids, clock, properties.source());
+  }
+
+  /** Publishes completely evaluated JSON requests. */
+  @Bean
+  public PublishSecurityDetails publishSecurityDetails(
+      SecurityRepository securities,
+      SecurityCollectionRepository collections,
+      JobCompletion completion,
+      Clock clock) {
+    return new PublishSecurityDetails(securities, collections, completion, clock);
   }
 }
