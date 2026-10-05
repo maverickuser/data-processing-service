@@ -6,8 +6,9 @@ import java.util.Map;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The counts a finished job shows (LLD section 20.3). A job that failed before it could count
- * anything shows its dataset's counts, each {@code null}.
+ * The counts a finished job shows (LLD section 20.3): exactly its dataset's agreed counts, in their
+ * agreed order, each {@code null} that was not stored, so a job that failed before counting shows
+ * them all as {@code null}.
  */
 public final class JobCounts {
 
@@ -27,20 +28,18 @@ public final class JobCounts {
   private JobCounts() {}
 
   /**
-   * Returns a finished job's counts: the stored ones, or else its dataset's counts set to {@code
-   * null}, or {@code null} for a dataset with no agreed counts.
+   * Returns a finished job's counts, or {@code null} for a dataset with no agreed counts.
+   *
+   * @param stored the stored counts, or {@code null} if none were stored; other names are left out
    */
   public static @Nullable Map<String, @Nullable Long> ofFinished(
       String dataset, @Nullable Map<String, @Nullable Long> stored) {
-    if (stored != null) {
-      return stored;
-    }
     List<String> names = NAMES.get(dataset);
     if (names == null) {
       return null;
     }
-    Map<String, @Nullable Long> unknown = new LinkedHashMap<>();
-    names.forEach(name -> unknown.put(name, null));
-    return unknown;
+    Map<String, @Nullable Long> counts = new LinkedHashMap<>();
+    names.forEach(name -> counts.put(name, stored == null ? null : stored.get(name)));
+    return counts;
   }
 }

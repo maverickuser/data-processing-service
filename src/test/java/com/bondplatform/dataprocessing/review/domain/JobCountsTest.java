@@ -2,17 +2,23 @@ package com.bondplatform.dataprocessing.review.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.AbstractMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class JobCountsTest {
 
+  // PR 36 review AM-4: exactly the agreed names, in order, whatever was stored
   @Test
-  void storedCountsAreShownAsStored() {
-    Map<String, Long> stored = Map.of("sourceRecords", 2L);
+  void storedCountsAreShownUnderTheAgreedNamesOnly() {
+    Map<String, Long> stored = Map.of("acceptedRows", 1L, "sourceRecords", 2L, "other", 9L);
 
     assertThat(JobCounts.ofFinished("urn:bond-platform:dataset:bse-debt-trades", stored))
-        .isSameAs(stored);
+        .containsExactly(
+            Map.entry("sourceRecords", 2L),
+            Map.entry("acceptedRows", 1L),
+            new AbstractMap.SimpleEntry<>("invalidRows", null),
+            new AbstractMap.SimpleEntry<>("supersededRows", null));
   }
 
   @Test

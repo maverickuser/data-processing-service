@@ -41,7 +41,13 @@ public class JdbcJobReviewRepository implements JobReviewRepository {
       WHERE id = :jobId
       """;
 
-  /** The final run is the one with the highest attempt number; both queries start from it. */
+  /**
+   * The final run is the one with the highest attempt number; both queries start from it.
+   *
+   * <p>The count is the larger of the job's stored error count and its final run's stored issues,
+   * plus the run's own failure. The stored count outlives the one-year cleanup of issues (LLD
+   * section 21.1); a failed job stores none, so its issues are counted (PR 36 review AM-1).
+   */
   static final String ERROR_COUNT =
       """
       WITH final_run AS (
@@ -51,8 +57,10 @@ public class JdbcJobReviewRepository implements JobReviewRepository {
         ORDER BY attempt_number DESC
         LIMIT 1
       )
-      SELECT (SELECT count(*) FROM data_processing.validation_issues i
-              JOIN final_run r ON i.processing_run_id = r.id)
+      SELECT GREATEST(
+               (SELECT error_count FROM data_processing.ingestion_requests WHERE id = :jobId),
+               (SELECT count(*) FROM data_processing.validation_issues i
+                JOIN final_run r ON i.processing_run_id = r.id))
            + (SELECT count(*) FROM final_run WHERE failure_code IS NOT NULL)
       """;
 
@@ -66,14 +74,14 @@ public class JdbcJobReviewRepository implements JobReviewRepository {
         LIMIT 1
       )
       SELECT * FROM (
-        SELECT r.id::text AS error_id, r.failure_code AS code, NULL AS isin,
+        SELECT r.id::text AS error_id, r.failure_code AS code, NULL::text AS isin,
                (SELECT CASE WHEN count(*) = 1 THEN min(f.file_name) END
                 FROM data_processing.source_files f
                 WHERE f.ingestion_request_id = :jobId) AS source_file,
-               NULL::integer AS record_number, NULL AS field, NULL AS json_path,
-               NULL AS raw_type, NULL AS raw_text,
+               NULL::integer AS record_number, NULL::text AS field, NULL::text AS json_path,
+               NULL::text AS raw_type, NULL::text AS raw_text,
                COALESCE(r.failure_detail, r.failure_code) AS message,
-               NULL AS action_taken, 0::bigint AS sequence_number
+               NULL::text AS action_taken, 0::bigint AS sequence_number
         FROM final_run r
         WHERE r.failure_code IS NOT NULL
         UNION ALL
