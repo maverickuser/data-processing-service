@@ -1,8 +1,10 @@
 package com.bondplatform.dataprocessing.review.adapter.config;
 
 import com.bondplatform.dataprocessing.review.application.GetJobStatus;
+import com.bondplatform.dataprocessing.review.application.GetSecurity;
 import com.bondplatform.dataprocessing.review.application.JobReviewRepository;
 import com.bondplatform.dataprocessing.review.application.ListJobErrors;
+import com.bondplatform.dataprocessing.review.application.SecurityReviewRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -20,5 +22,11 @@ public class ReviewConfiguration {
   @Bean
   public ListJobErrors listJobErrors(JobReviewRepository jobs) {
     return new ListJobErrors(jobs);
+  }
+
+  /** Answers security view requests. */
+  @Bean
+  public GetSecurity getSecurity(SecurityReviewRepository securities) {
+    return new GetSecurity(securities);
   }
 }

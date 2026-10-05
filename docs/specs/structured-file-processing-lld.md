@@ -1135,7 +1135,7 @@ Agreed shape of `GET /v1/securities/{isin}`:
 ```
 
 - Every property is always present; a scalar without a value is `null` and an empty collection is `[]`. `couponRate` and `assetCoverage` are `null` as a whole when no value exists.
-- `currentRatings` holds one entry per agency chosen by the section 13.6 rule; `ratingHistory` holds every other rating observation (including `EARLIER`-category rows), newest `ratingDate` first. `collateralAssets` follows section 15.2.
+- `currentRatings` holds one entry per agency chosen by the section 13.6 rule; `ratingHistory` holds every other rating observation (including `EARLIER`-category rows), newest `ratingDate` first. `collateralAssets` follows section 15.2. Implementation choice (2026-10-05, PR 38): a dated observation beats an undated one; agencies match by exact name, and observations without one form their own group, listed last. `currentRatings` is ordered by agency name, `ratingHistory` by rating date, newest first, then most recently recorded, undated last; listings by listing date and cash flows by due date, undated last, then by recording time; collateral assets by recording time. `collateralAssets` is empty only while the status is `Unsecured` in any letter case (AH-2); a security with no status shows its assets.
 - An ISIN-only security created by a trade returns the same shape with nulls and empty collections.
 - An unknown ISIN returns `404` as RFC 9457 `application/problem+json`.
 - The internal `fieldSources` map, canonical record identifiers, and S3 lineage are not exposed.
