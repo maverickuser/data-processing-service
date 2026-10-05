@@ -85,12 +85,12 @@ class OutboxSweeperIT extends PostgresIntegrationTest {
             "UPDATE data_processing.outbox_events"
                 + " SET next_attempt_at = now() - INTERVAL '1 hour'")
         .update();
-    OutboxSweeperHandler sweeper = new OutboxSweeperHandler(dispatcher::sweep);
+    OutboxSweeperHandler sweeper = new OutboxSweeperHandler(() -> 0, dispatcher::sweep);
 
     assertThat(sweeper.handleRequest(new ScheduledEvent(), new FixedLambdaContext()))
-        .isEqualTo("delivered outboxEvents=3");
+        .isEqualTo("failed stuckJobs=0 delivered outboxEvents=3");
     assertThat(sweeper.handleRequest(new ScheduledEvent(), new FixedLambdaContext()))
-        .isEqualTo("delivered outboxEvents=0");
+        .isEqualTo("failed stuckJobs=0 delivered outboxEvents=0");
 
     List<Message> received = receiveAll();
     assertThat(received)
