@@ -128,7 +128,7 @@ public class RunJob {
     Attempt ended = runAttempt(job);
     DatasetUrn dataset = job.job().dataset();
     recordOutcome(dataset, ended.jobStatus());
-    metrics.record(
+    record(
         Metric.RUN_DURATION,
         Duration.between(started, Instant.now(clock)).toMillis(),
         Map.of(DATASET, dataset.value()));
@@ -136,7 +136,19 @@ public class RunJob {
   }
 
   private void recordOutcome(DatasetUrn dataset, JobStatus status) {
-    metrics.record(Metric.JOB_OUTCOME, 1, Map.of(DATASET, dataset.value(), OUTCOME, status.name()));
+    record(Metric.JOB_OUTCOME, 1, Map.of(DATASET, dataset.value(), OUTCOME, status.name()));
+  }
+
+  /**
+   * Records a metric after the job's state is committed; a failure to record is logged and does not
+   * change how the message is handled.
+   */
+  private void record(Metric metric, long value, Map<String, String> dimensions) {
+    try {
+      metrics.record(metric, value, dimensions);
+    } catch (RuntimeException e) {
+      LOG.warn("Metric not recorded, metric={}, type={}", metric, e.getClass().getName());
+    }
   }
 
   private Attempt runAttempt(ClaimedJob job) {

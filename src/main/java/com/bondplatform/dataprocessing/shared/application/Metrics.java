@@ -6,8 +6,9 @@ import java.util.Map;
 public interface Metrics {
 
   /**
-   * Records one value of a metric. The dimensions are few and come from a small, fixed set of
-   * values, never from source data or job IDs, so the number of CloudWatch series stays small.
+   * Records one value of a metric with the dimensions its {@link Metric#dimensionSets()} name, and
+   * no others. The dimensions are few and come from a small, fixed set of values, never from source
+   * data or job IDs, so the number of CloudWatch series stays small.
    */
   void record(Metric metric, long value, Map<String, String> dimensions);
 }

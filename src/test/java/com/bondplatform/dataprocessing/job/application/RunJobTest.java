@@ -32,6 +32,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.slf4j.MDC;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
@@ -286,20 +288,79 @@ class RunJobTest {
               "SOURCE_UNAVAILABLE", "S3 did not answer", new IllegalStateException());
         };
 
-    runJob.run(JOB);
-    runJob.run(JOB);
+    assertThat(runJob.run(JOB)).isEqualTo(RunResult.retryAfter(Duration.ofMinutes(5)));
+    assertThat(runJob.run(JOB)).isEqualTo(RunResult.ATTEMPTS_EXHAUSTED);
 
     assertThat(metrics.outcomes()).containsExactly("RETRY_PENDING", "FAILED");
+    assertThat(metrics.recorded).filteredOn(r -> r.metric() == Metric.RUN_DURATION).hasSize(2);
+  }
+
+  @ParameterizedTest
+  @CsvSource({"PERMANENT, FAILED", "UNEXPECTED, RETRY_PENDING", "UNFINISHED, FAILED"})
+  void everyAttemptRecordsItsOutcomeAndDurationOnce(String path, String outcome) {
+    runs.add(JobStatus.QUEUED, 0);
+    handler.behaviour =
+        job -> {
+          clock.now = NOW.plusMillis(20);
+          switch (path) {
+            case "PERMANENT" -> throw new PermanentFailureException("CHECKSUM_MISMATCH", "differs");
+            case "UNEXPECTED" -> throw new IllegalArgumentException("unexpected");
+            default -> {}
+          }
+        };
+
+    runJob.run(JOB);
+
+    assertThat(metrics.recorded)
+        .containsExactly(
+            new Recorded(
+                Metric.JOB_OUTCOME, 1, Map.of("Dataset", NSDL.value(), "Outcome", outcome)),
+            new Recorded(Metric.RUN_DURATION, 20, Map.of("Dataset", NSDL.value())));
   }
 
   @Test
-  void permanentFailureAndUnfinishedJobRecordFailed() {
+  void jobOfDatasetWithoutHandlerRecordsFailedAndDuration() {
     runs.add(JobStatus.QUEUED, 0);
-    handler.behaviour = job -> {};
 
-    runJob.run(JOB);
+    new RunJob(
+            runs,
+            List.of(),
+            new DirectTransactions(),
+            RetryPolicy.STANDARD,
+            clock,
+            () -> new UUID(0, 1),
+            metrics)
+        .run(JOB);
 
     assertThat(metrics.outcomes()).containsExactly("FAILED");
+    assertThat(metrics.recorded).hasSize(2);
+  }
+
+  @Test
+  void unknownJobRecordsNothing() {
+    runJob.run(JOB);
+
+    assertThat(metrics.recorded).isEmpty();
+  }
+
+  @Test
+  void metricThatCannotBeRecordedChangesNothing() {
+    runs.add(JobStatus.QUEUED, 0);
+    handler.behaviour = job -> completion.complete(job, COMPLETED);
+    RunJob withBrokenMetrics =
+        new RunJob(
+            runs,
+            List.of(handler),
+            new DirectTransactions(),
+            RetryPolicy.STANDARD,
+            clock,
+            () -> new UUID(0, 1),
+            (metric, value, dimensions) -> {
+              throw new IllegalStateException("cannot write");
+            });
+
+    assertThat(withBrokenMetrics.run(JOB)).isEqualTo(RunResult.FINISHED);
+    assertThat(runs.status).isEqualTo(JobStatus.COMPLETED);
   }
 
   @Test
@@ -342,7 +403,6 @@ class RunJobTest {
 
   private record Run(UUID id, int attemptNumber, RunStatus status, @Nullable String code) {}
 
-  /** Runs callbacks directly, standing in for a transaction manager. */
   private record Recorded(Metric metric, long value, Map<String, String> dimensions) {}
 
   private static final class RecordedMetrics implements Metrics {
@@ -383,6 +443,7 @@ class RunJobTest {
     }
   }
 
+  /** Runs callbacks directly, standing in for a transaction manager. */
   private static final class DirectTransactions implements TransactionOperations {
     @Override
     public <T> T execute(TransactionCallback<T> action) {

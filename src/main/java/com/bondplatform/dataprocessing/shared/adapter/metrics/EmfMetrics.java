@@ -15,7 +15,7 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * Writes each metric as one CloudWatch embedded metric format line on standard output (LLD section
  * 23.8). Lambda sends standard output to CloudWatch Logs, which turns such lines into metrics; no
- * call to CloudWatch is made, so recording a metric cannot fail or slow a job.
+ * call to CloudWatch is made, so recording a metric cannot slow a job.
  */
 @Component
 public class EmfMetrics implements Metrics {
@@ -48,7 +48,7 @@ public class EmfMetrics implements Metrics {
             "Namespace",
             NAMESPACE,
             "Dimensions",
-            List.of(List.copyOf(sorted.keySet())),
+            metric.dimensionSets(),
             "Metrics",
             List.of(Map.of("Name", metric.metricName(), "Unit", metric.unit())));
     Map<String, Object> line = new LinkedHashMap<>();

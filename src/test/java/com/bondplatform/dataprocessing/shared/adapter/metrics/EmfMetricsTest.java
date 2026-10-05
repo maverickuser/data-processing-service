@@ -35,7 +35,8 @@ class EmfMetricsTest {
     assertThat(aws.get("Timestamp").asLong()).isEqualTo(NOW.toEpochMilli());
     JsonNode directive = aws.get("CloudWatchMetrics").get(0);
     assertThat(directive.get("Namespace").asString()).isEqualTo("BondPlatform/DataProcessing");
-    assertThat(directive.get("Dimensions").toString()).isEqualTo("[[\"Dataset\",\"Outcome\"]]");
+    assertThat(directive.get("Dimensions").toString())
+        .isEqualTo("[[\"Dataset\",\"Outcome\"],[\"Outcome\"]]");
     assertThat(directive.get("Metrics")).hasSize(1);
     assertThat(directive.get("Metrics").get(0).get("Name").asString()).isEqualTo("JobOutcome");
     assertThat(directive.get("Metrics").get(0).get("Unit").asString()).isEqualTo("Count");
@@ -45,12 +46,12 @@ class EmfMetricsTest {
   }
 
   @Test
-  void metricWithoutDimensionsHasOneEmptyDimensionSet() {
-    metrics.record(Metric.RUN_DURATION, 1500, Map.of());
+  void durationIsPublishedByDatasetAndOverAllDatasets() {
+    metrics.record(Metric.RUN_DURATION, 1500, Map.of("Dataset", "urn:x:dataset:bse"));
 
     JsonNode line = JsonMapper.builder().build().readTree(bytes.toString(StandardCharsets.UTF_8));
     assertThat(line.get("_aws").get("CloudWatchMetrics").get(0).get("Dimensions").toString())
-        .isEqualTo("[[]]");
+        .isEqualTo("[[\"Dataset\"],[]]");
     assertThat(line.get("RunDuration").asLong()).isEqualTo(1500);
   }
 }
