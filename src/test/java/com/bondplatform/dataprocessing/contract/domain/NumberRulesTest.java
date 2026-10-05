@@ -126,6 +126,24 @@ class NumberRulesTest {
   }
 
   @Test
+  void parsedNumberWhosePlainFormIsTooLongIsRejected() {
+    assertThat(ExactNumbers.decimal(new BigDecimal("1e999999999")))
+        .isInstanceOfSatisfying(
+            FieldResult.Rejected.class,
+            rejected -> assertThat(rejected.code()).isEqualTo(ErrorCode.INVALID_DECIMAL));
+    assertThat(ExactNumbers.decimal(new BigDecimal("1e-999999999")))
+        .isInstanceOf(FieldResult.Rejected.class);
+    assertThat(ExactNumbers.decimal(new BigDecimal("9".repeat(ExactNumbers.MAX_LENGTH))))
+        .isInstanceOf(FieldResult.Valid.class);
+    assertThat(ExactNumbers.decimal(new BigDecimal("-" + "9".repeat(ExactNumbers.MAX_LENGTH))))
+        .isInstanceOf(FieldResult.Rejected.class);
+    assertThat(ExactNumbers.decimal(new BigDecimal("0." + "9".repeat(ExactNumbers.MAX_LENGTH - 2))))
+        .isInstanceOf(FieldResult.Valid.class);
+    assertThat(ExactNumbers.decimal(new BigDecimal("1.5E+3")))
+        .isEqualTo(new FieldResult.Valid<>(new BigDecimal("1.5E+3")));
+  }
+
+  @Test
   void blankNumberHasNoValue() {
     assertThat(numberNormalizer.normalize("   "))
         .isEqualTo(new FieldResult.NoValue<>(FieldPresence.PLACEHOLDER));
