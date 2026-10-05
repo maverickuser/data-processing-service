@@ -127,11 +127,10 @@ public class RunJob {
     Instant started = Instant.now(clock);
     Attempt ended = runAttempt(job);
     DatasetUrn dataset = job.job().dataset();
+    long millis = Duration.between(started, Instant.now(clock)).toMillis();
+    LOG.info("Attempt ended, jobStatus={}, durationMillis={}", ended.jobStatus(), millis);
     recordOutcome(dataset, ended.jobStatus());
-    record(
-        Metric.RUN_DURATION,
-        Duration.between(started, Instant.now(clock)).toMillis(),
-        Map.of(DATASET, dataset.value()));
+    record(Metric.RUN_DURATION, millis, Map.of(DATASET, dataset.value()));
     return ended.result();
   }
 

@@ -17,7 +17,10 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.core.env.Environment;
 import tools.jackson.databind.JsonNode;
 
@@ -28,6 +31,7 @@ import tools.jackson.databind.JsonNode;
  * <p>The entry point starts its own application context, as it does in Lambda. It is pointed at the
  * shared test database through system properties, which stand in for the function's environment.
  */
+@ExtendWith(OutputCaptureExtension.class)
 class EventIngestionApiIT extends PostgresIntegrationTest {
 
   private static final String PATH = "/v1/event-ingestions";
@@ -56,9 +60,10 @@ class EventIngestionApiIT extends PostgresIntegrationTest {
     handler = null;
   }
 
-  // I-ADM-01, I-ADM-06
+  // I-ADM-01, I-ADM-06, I-OPS-05 for the API function
   @Test
-  void acceptedSubmissionIsStoredAndAnsweredWithItsReceipt() throws IOException {
+  void acceptedSubmissionIsStoredAndAnsweredWithItsReceipt(CapturedOutput output)
+      throws IOException {
     HttpApiResponse response = submit("run_202", SubmissionEvents.nsdl("run_202", "INE121A07QY9"));
 
     assertThat(response.status()).isEqualTo(202);
@@ -90,6 +95,9 @@ class EventIngestionApiIT extends PostgresIntegrationTest {
         .containsEntry("status", "QUEUED")
         .containsEntry("source_contract_id", "nsdl-security-json")
         .containsEntry("queued_job", jobId);
+    JsonNode logged = JsonLines.log(output, "Submission accepted");
+    assertThat(logged.path("jobId").asString()).isEqualTo(jobId);
+    assertThat(logged.path("level").asString()).isEqualTo("INFO");
   }
 
   // I-ADM-02

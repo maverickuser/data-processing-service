@@ -1491,9 +1491,9 @@ Its Terraform currently requires the processor's internal load balancer and secu
 
 ### 23.8 Logs and metrics
 
-Every function writes its logs to standard output as one JSON object per line, in Spring Boot's Logstash format. Lambda sends standard output to CloudWatch Logs. Each line in a job's scope carries `jobId` as a top-level field, and `attemptNumber` once an attempt has started. Logs never quote source values, or exception messages that may contain them (section 19).
+Every function writes its logs to standard output as one JSON object per line, in Spring Boot's Logstash format. Lambda sends standard output to CloudWatch Logs. Each line in a job's scope carries `jobId` as a top-level field, and `attemptNumber` once an attempt has started. Admission logs `Submission accepted` or `Submission replayed` with the job's `jobId`; the worker logs `Attempt ended` with the job's status and the attempt's duration. Logs never quote source values, or exception messages that may contain them (section 19).
 
-Metrics are written to standard output as CloudWatch embedded metric format lines, in the namespace `BondPlatform/DataProcessing`. Recording a metric makes no network call, so it cannot fail a job. Dimensions take only a small, fixed set of values; job IDs and source values are never dimensions. A metric with dimensions is also published under the coarser set the table lists, so one alarm covers every dataset. Recording happens after the job's state is committed, and a failure to record is logged and ignored.
+Metrics are written to standard output as CloudWatch embedded metric format lines, in the namespace `BondPlatform/DataProcessing`. Recording a metric makes no network call, so it does not slow a job. Dimensions take only a small, fixed set of values; job IDs and source values are never dimensions. A metric with dimensions is also published under the coarser set the table lists, so one alarm covers every dataset. Recording happens after the job's state is committed, and a failure to record is logged and ignored.
 
 | Metric | Unit | Dimensions | Recorded |
 |---|---|---|---|

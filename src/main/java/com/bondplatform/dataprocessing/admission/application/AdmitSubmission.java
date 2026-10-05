@@ -20,6 +20,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,6 +43,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class AdmitSubmission {
+
+  private static final Logger LOG = LoggerFactory.getLogger(AdmitSubmission.class);
 
   private final ContractRegistry contracts;
   private final IngestionRequestRepository requests;
@@ -80,12 +85,14 @@ public class AdmitSubmission {
 
     Optional<AcceptedRequest> replayed = existing(submission, payloadHash);
     if (replayed.isPresent()) {
+      log("Submission replayed", replayed.get());
       return receiptOf(replayed.get());
     }
     Optional<AcceptedRequest> stored =
         requests.insertIfAbsent(newRequest(submission, event, canonicalEvent, payloadHash));
     if (stored.isPresent()) {
       outbox.append(dispatchEvent(stored.get()));
+      log("Submission accepted", stored.get());
       return receiptOf(stored.get());
     }
     // Another ordering group committed the same key or event identity in between.
@@ -154,6 +161,13 @@ public class AdmitSubmission {
         request.acceptanceSequence(),
         CanonicalJson.of(Map.of("jobId", request.id().toString())),
         request.submittedAt());
+  }
+
+  /** Logs with the job's ID as the {@code jobId} field (LLD section 23.8). */
+  private static void log(String message, AcceptedRequest request) {
+    try (MDC.MDCCloseable job = MDC.putCloseable("jobId", request.id().toString())) {
+      LOG.info(message);
+    }
   }
 
   private static AdmissionReceipt receiptOf(AcceptedRequest request) {

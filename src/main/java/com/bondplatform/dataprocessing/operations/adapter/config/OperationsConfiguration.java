@@ -1,6 +1,8 @@
 package com.bondplatform.dataprocessing.operations.adapter.config;
 
 import com.bondplatform.dataprocessing.job.domain.RetryPolicy;
+import com.bondplatform.dataprocessing.operations.application.OutboxBacklog;
+import com.bondplatform.dataprocessing.operations.application.OutboxBacklogMonitor;
 import com.bondplatform.dataprocessing.operations.application.RetentionCleaner;
 import com.bondplatform.dataprocessing.operations.application.RetentionStore;
 import com.bondplatform.dataprocessing.operations.application.StuckJobFailer;
@@ -18,6 +20,12 @@ public class OperationsConfiguration {
   @Bean
   public RetentionCleaner retentionCleaner(RetentionStore store, Clock clock) {
     return new RetentionCleaner(store, clock);
+  }
+
+  /** Measures how long the oldest pending outbox event has waited. */
+  @Bean
+  public OutboxBacklogMonitor outboxBacklogMonitor(OutboxBacklog backlog, Clock clock) {
+    return new OutboxBacklogMonitor(backlog, clock);
   }
 
   /** Fails jobs that stopped making progress, allowing each the retry policy's attempts. */
