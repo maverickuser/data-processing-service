@@ -54,8 +54,11 @@ public final class CsvFileReader {
       if (!records.hasNext()) {
         return rejected(ErrorCode.EMPTY_FILE, "The file is empty");
       }
-      CsvHeader.Resolution resolution =
-          CsvHeader.resolve(records.next().toList(), contract.fields());
+      CSVRecord headerRecord = records.next();
+      if (hasNul(headerRecord)) {
+        return rejected(ErrorCode.MALFORMED_CSV, "The header has a NUL character (U+0000)");
+      }
+      CsvHeader.Resolution resolution = CsvHeader.resolve(headerRecord.toList(), contract.fields());
       if (resolution instanceof CsvHeader.Resolution.Rejected rejected) {
         return new Outcome.Rejected(rejected.rejection());
       }
@@ -66,6 +69,10 @@ public final class CsvFileReader {
         count++;
         // The header is record 1 (LLD section 4.2); blank lines are not records.
         long recordNumber = count + 1;
+        if (hasNul(record)) {
+          return rejected(
+              ErrorCode.MALFORMED_CSV, "Record " + recordNumber + " has a NUL character (U+0000)");
+        }
         if (record.size() != header.columnCount()) {
           return rejected(
               ErrorCode.MALFORMED_CSV,
@@ -91,6 +98,11 @@ public final class CsvFileReader {
           ? notUtf8()
           : rejected(ErrorCode.MALFORMED_CSV, "The file is not valid CSV: broken quoting");
     }
+  }
+
+  /** PostgreSQL text and JSONB cannot store U+0000, so a file holding it is malformed (AJ-6). */
+  private static boolean hasNul(CSVRecord record) {
+    return record.stream().anyMatch(cell -> cell.indexOf('\0') >= 0);
   }
 
   private static Map<String, CsvCell> selected(CSVRecord record, CsvHeader header) {
