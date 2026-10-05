@@ -50,6 +50,7 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -124,6 +125,45 @@ class NsdlHandlerTest {
                 .sourceFile())
         .isEqualTo(ISIN + "_coupon-details.json");
     assertThat(published.details().collections().listings()).isNotEmpty();
+  }
+
+  // I-JSON-01 at the handler: the golden manifest's exact collections; redemptions adds nothing
+  @Test
+  void goldenManifestMapsEveryCollectionAndRedemptionsAddsNothing() {
+    for (String suffix :
+        List.of(
+            "isin-details",
+            "instrument-details",
+            "coupon-details",
+            "credit-ratings",
+            "listings",
+            "redemptions")) {
+      givenSample(suffix, EARLY);
+    }
+    givenStored(0);
+
+    handler.process(job);
+
+    SecurityDetails details = published().details();
+    assertThat(details.collections().cashFlows()).hasSize(11);
+    assertThat(details.collections().listings()).hasSize(2);
+    assertThat(details.collections().ratings()).hasSize(15);
+    assertThat(details.collections().collateralAssets()).isEmpty();
+    assertThat(details.scalars().fields().get("redemptionDate"))
+        .extracting(SecurityScalars.Field::value)
+        .isEqualTo(new SecurityValue.Date(LocalDate.of(2029, 6, 8)));
+    List<String> sourceFiles = new ArrayList<>();
+    details
+        .scalars()
+        .fields()
+        .values()
+        .forEach(field -> sourceFiles.add(field.source().sourceFile()));
+    List.of(
+            details.collections().cashFlows(),
+            details.collections().listings(),
+            details.collections().ratings())
+        .forEach(entries -> entries.forEach(entry -> sourceFiles.add(entry.source().sourceFile())));
+    assertThat(sourceFiles).isNotEmpty().noneMatch(file -> file.endsWith("_redemptions.json"));
   }
 
   // I-JSON-04 at the handler: a malformed file is skipped and the others still publish

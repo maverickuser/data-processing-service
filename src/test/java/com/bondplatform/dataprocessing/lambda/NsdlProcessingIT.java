@@ -11,9 +11,11 @@ import com.bondplatform.dataprocessing.shared.domain.JobId;
 import com.bondplatform.dataprocessing.source.adapter.aws.S3Mock;
 import java.io.IOException;
 import java.io.InputStream;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -34,6 +36,7 @@ import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * NSDL security-details requests from submission to terminal status with the real NSDL handler
@@ -110,8 +113,23 @@ class NsdlProcessingIT extends PostgresIntegrationTest {
     Map<String, Object> security = security();
     assertThat(security.get("issuer_name")).isEqualTo("ADITYA BIRLA HOUSING FINANCE LIMITED");
     assertThat(security.get("coupon_type")).isEqualTo("Simple");
-    assertThat(count("security_listings")).isPositive();
-    assertThat(count("security_ratings")).isPositive();
+    assertThat(security.get("redemption_date")).isEqualTo(Date.valueOf("2029-06-08"));
+    assertThat((BigDecimal) security.get("coupon_rate_value")).isEqualByComparingTo("8.94");
+    assertThat(count("security_cash_flows")).isEqualTo(11);
+    assertThat(count("security_listings")).isEqualTo(2);
+    assertThat(count("security_ratings")).isEqualTo(15);
+    // The redemptions file has no usable selected value, so nothing refers to it
+    assertThat((String) security.get("field_sources")).doesNotContain("_redemptions.json");
+    for (String table : List.of("security_cash_flows", "security_listings", "security_ratings")) {
+      assertThat(
+              jdbc.sql(
+                      "SELECT count(*) FROM securities_data."
+                          + table
+                          + " WHERE source_file LIKE '%_redemptions.json'")
+                  .query(Long.class)
+                  .single())
+          .isZero();
+    }
     assertThat(errorCount(job)).isZero();
     String key = canonicalKeyOf(job);
     assertThat(
@@ -145,6 +163,9 @@ class NsdlProcessingIT extends PostgresIntegrationTest {
   void laterSubmissionUpdatesOnlyTheChangedField() {
     process("run_n1", ISIN, samples());
     Map<String, Object> before = security();
+    long cashFlows = count("security_cash_flows");
+    long listings = count("security_listings");
+    long ratings = count("security_ratings");
 
     JobId second = process("run_n2", ISIN, Map.of("coupon-details", coupon("Compound")));
 
@@ -152,9 +173,13 @@ class NsdlProcessingIT extends PostgresIntegrationTest {
     assertThat(countsOf(second).get("scalarFieldsChanged").asInt()).isEqualTo(1);
     Map<String, Object> after = security();
     assertThat(after.get("coupon_type")).isEqualTo("Compound");
-    assertThat(after.get("issuer_name")).isEqualTo(before.get("issuer_name"));
     assertThat(source("couponType")).isEqualTo(second.value().toString());
     assertThat(updatedAt(after)).isAfter(updatedAt(before));
+    // Every other column and source reference is as it was
+    assertThat(withoutCouponType(after)).isEqualTo(withoutCouponType(before));
+    assertThat(count("security_cash_flows")).isEqualTo(cashFlows);
+    assertThat(count("security_listings")).isEqualTo(listings);
+    assertThat(count("security_ratings")).isEqualTo(ratings);
   }
 
   // I-JSON-04 end to end
@@ -175,13 +200,16 @@ class NsdlProcessingIT extends PostgresIntegrationTest {
     assertThat(count("security_listings")).isZero();
     assertThat(
             jdbc.sql(
-                    "SELECT code FROM data_processing.validation_issues i"
+                    "SELECT code || ' ' || source_file_name"
+                        + " FROM data_processing.validation_issues i"
                         + " JOIN data_processing.processing_runs r ON r.id = i.processing_run_id"
                         + " WHERE r.ingestion_request_id = :id ORDER BY i.sequence_number")
                 .param("id", job.value())
                 .query(String.class)
                 .list())
-        .containsExactly("MALFORMED_JSON", "CHECKSUM_MISMATCH");
+        .containsExactly(
+            "MALFORMED_JSON " + ISIN + "_coupon-details.json",
+            "CHECKSUM_MISMATCH " + ISIN + "_listings.json");
     assertThat(errorCount(job)).isEqualTo(2);
   }
 
@@ -206,6 +234,14 @@ class NsdlProcessingIT extends PostgresIntegrationTest {
     assertThat(statusOf(first)).isEqualTo("COMPLETED");
     assertThat(statusOf(second)).isEqualTo("COMPLETED");
     assertThat(statusOf(other)).isEqualTo("COMPLETED");
+    // The FIFO queue's message group per ISIN gives the order; the other ISIN is its own security
+    assertThat(
+            jdbc.sql(
+                    "SELECT coupon_type FROM securities_data.securities"
+                        + " WHERE isin = 'INE0O7U07046'")
+                .query(String.class)
+                .single())
+        .isNotNull();
     assertThat(security().get("coupon_type")).isEqualTo("Compound");
     assertThat(source("couponType")).isEqualTo(second.value().toString());
   }
@@ -238,7 +274,12 @@ class NsdlProcessingIT extends PostgresIntegrationTest {
     Map<String, Object> security = security();
     assertThat(security.get("collateral_status")).isEqualTo("UNSECURED");
     assertThat(security.get("asset_coverage_value")).isNull();
+    assertThat(security.get("asset_coverage_unit")).isNull();
     assertThat(security.get("asset_coverage_basis")).isNull();
+    assertThat((String) security.get("field_sources"))
+        .doesNotContain("\"assetCoverage\"")
+        .doesNotContain("\"assetCoverageBasis\"");
+    assertThat(countsOf(second).get("scalarFieldsChanged").asInt()).isEqualTo(3);
     assertThat(count("security_collateral_assets")).isEqualTo(1);
   }
 
@@ -347,13 +388,25 @@ class NsdlProcessingIT extends PostgresIntegrationTest {
   private Map<String, Object> security() {
     return jdbc.sql(
             """
-            SELECT issuer_name, coupon_type, collateral_status, asset_coverage_basis,
-                   asset_coverage_value, field_sources::text AS field_sources, updated_at
+            SELECT issuer_name, coupon_type, coupon_rate_value, redemption_date, collateral_status,
+                   asset_coverage_basis, asset_coverage_value, asset_coverage_unit,
+                   field_sources::text AS field_sources, updated_at
             FROM securities_data.securities WHERE isin = :isin
             """)
         .param("isin", ISIN)
         .query()
         .singleRow();
+  }
+
+  /** Returns the security without what a coupon-type change may touch. */
+  private static Map<String, Object> withoutCouponType(Map<String, Object> security) {
+    Map<String, Object> rest = new LinkedHashMap<>(security);
+    rest.remove("coupon_type");
+    rest.remove("updated_at");
+    JsonNode sources = JSON.readTree((String) Objects.requireNonNull(rest.get("field_sources")));
+    ((ObjectNode) sources).remove("couponType");
+    rest.put("field_sources", sources);
+    return rest;
   }
 
   private Map<String, Object> summary() {
