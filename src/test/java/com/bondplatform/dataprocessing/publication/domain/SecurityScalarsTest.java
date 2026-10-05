@@ -10,6 +10,7 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -20,6 +21,8 @@ class SecurityScalarsTest {
           new JobId(UUID.fromString("0198f3a2-0000-7000-8000-000000000002")),
           "INE831R08076_coupon-details.json",
           "$.coupensVo.couponDetails.couponRate");
+  private static final SecurityValue PERCENT_100 =
+      new SecurityValue.Percentage(Percent.parse("100"));
 
   // U-SCAL-01
   @Test
@@ -71,6 +74,34 @@ class SecurityScalarsTest {
     assertThat(
             scalars("couponType", new SecurityValue.Text("Simple")).changesFrom(Map.of()).fields())
         .containsOnlyKeys("couponType");
+  }
+
+  // U-UNSEC-01: clearing removes a stored value, and is no change when nothing is stored
+  @Test
+  void clearedFieldIsChangeOnlyWhenSomethingIsStored() {
+    SecurityScalars incoming =
+        scalars(
+                "collateralStatus", new SecurityValue.Text("Unsecured"),
+                "assetCoverageBasis", new SecurityValue.Text("Principal + Interest"))
+            .clearing(Set.of("assetCoverageBasis", "assetCoverage"));
+
+    assertThat(incoming.fields()).containsOnlyKeys("collateralStatus");
+    assertThat(incoming.changesFrom(Map.of("assetCoverage", PERCENT_100)).cleared())
+        .containsExactly("assetCoverage");
+    SecurityScalars none =
+        incoming.changesFrom(Map.of("collateralStatus", new SecurityValue.Text("Unsecured")));
+    assertThat(none.isEmpty()).isTrue();
+  }
+
+  @Test
+  void fieldCannotBeBothSetAndCleared() {
+    Map<String, SecurityScalars.Field> fields =
+        Map.of("assetCoverage", new SecurityScalars.Field(PERCENT_100, SOURCE));
+    Set<String> cleared = Set.of("assetCoverage");
+
+    assertThatThrownBy(() -> new SecurityScalars(fields, cleared))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("Field assetCoverage cannot be both set and cleared");
   }
 
   @Test

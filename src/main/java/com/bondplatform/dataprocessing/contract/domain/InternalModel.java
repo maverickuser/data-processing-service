@@ -22,6 +22,18 @@ public final class InternalModel {
   /** The table that holds one row per security. */
   public static final String SECURITIES = "securities_data.securities";
 
+  /** The table that holds a security's scheduled payments. */
+  public static final String CASH_FLOWS = "securities_data.security_cash_flows";
+
+  /** The table that holds a security's exchange listings. */
+  public static final String LISTINGS = "securities_data.security_listings";
+
+  /** The table that holds a security's credit-rating observations. */
+  public static final String RATINGS = "securities_data.security_ratings";
+
+  /** The table that holds the assets securing a security. */
+  public static final String COLLATERAL_ASSETS = "securities_data.security_collateral_assets";
+
   private static final Map<String, Target> TARGETS =
       Map.of(
           DAILY_MARKET_SUMMARIES,
@@ -52,7 +64,7 @@ public final class InternalModel {
                   Map.entry("couponRate", FieldType.PERCENT),
                   Map.entry("couponType", FieldType.TEXT),
                   Map.entry("listingStatus", FieldType.TEXT))),
-          "securities_data.security_cash_flows",
+          CASH_FLOWS,
           Target.collection(
               Map.of(),
               Map.of(
@@ -62,10 +74,10 @@ public final class InternalModel {
                   "amountPayable", FieldType.DECIMAL,
                   "paymentDate", FieldType.DATE,
                   "newFaceValue", FieldType.DECIMAL)),
-          "securities_data.security_listings",
+          LISTINGS,
           Target.collection(
               Map.of(), Map.of("exchangeName", FieldType.TEXT, "listingDate", FieldType.DATE)),
-          "securities_data.security_ratings",
+          RATINGS,
           Target.collection(
               Map.of("sourceCategory", Set.of("CURRENT", "EARLIER")),
               Map.of(
@@ -76,7 +88,7 @@ public final class InternalModel {
                   "ratingDate", FieldType.DATE,
                   "ratingChangeDate", FieldType.DATE,
                   "verificationDate", FieldType.DATE)),
-          "securities_data.security_collateral_assets",
+          COLLATERAL_ASSETS,
           Target.collection(
               Map.of(),
               Map.of(

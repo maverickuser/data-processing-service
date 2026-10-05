@@ -37,5 +37,10 @@ public enum ErrorCode {
   /** Two prices in one row contradict each other, such as a high price below the low price. */
   PRICE_INCONSISTENT,
   /** A valid CSV row is replaced by a later valid row with the same ISIN in the same file. */
-  DUPLICATE_ISIN_SUPERSEDED
+  DUPLICATE_ISIN_SUPERSEDED,
+  /**
+   * An asset-cover section states {@code Unsecured} but also supplies coverage or assets; the
+   * status is applied and the coverage or assets are ignored.
+   */
+  CONFLICTING_COLLATERAL_DATA
 }
