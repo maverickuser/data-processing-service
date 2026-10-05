@@ -20,8 +20,13 @@ class ResponseFieldsTest {
   private static final Set<String> LOCATION_WORDS =
       Set.of("bucket", "key", "version", "url", "uri", "location", "s3", "object");
 
-  /** Splits a camel-case name into its lower-case words: {@code errorsUrl} is errors and url. */
-  private static final Pattern WORD_START = Pattern.compile("(?=[A-Z0-9])");
+  /**
+   * Splits a camel-case name into words, keeping acronyms and digits whole: {@code errorsUrl} is
+   * errors and Url, {@code s3URL} is s3 and URL. Field types such as {@code Object} are not
+   * inspected; I-READ-07 checks what such values hold.
+   */
+  private static final Pattern WORD_START =
+      Pattern.compile("(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])");
 
   /** A link to this API's own error list, not to stored data. */
   private static final Set<String> ALLOWED = Set.of("JobStatusResponse.errorsUrl");

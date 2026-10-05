@@ -6,8 +6,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import com.bondplatform.dataprocessing.admission.SubmissionEvents;
 import com.bondplatform.dataprocessing.admission.application.AdmitSubmission;
 import com.bondplatform.dataprocessing.canonical.application.JsonRejectionStore;
+import com.bondplatform.dataprocessing.canonical.application.RejectedRecordStore;
+import com.bondplatform.dataprocessing.canonical.domain.CanonicalRun;
+import com.bondplatform.dataprocessing.canonical.domain.GoldenBhavcopy;
 import com.bondplatform.dataprocessing.canonical.domain.JsonCanonicalRun;
 import com.bondplatform.dataprocessing.canonical.domain.JsonEvidence;
+import com.bondplatform.dataprocessing.canonical.domain.RejectedRow;
 import com.bondplatform.dataprocessing.job.application.JobRunRepository;
 import com.bondplatform.dataprocessing.job.domain.JobOutcome;
 import com.bondplatform.dataprocessing.job.domain.JobStatus;
@@ -65,6 +69,7 @@ class ReadContractIT extends PostgresIntegrationTest {
   @Autowired private JobRunRepository jobRuns;
   @Autowired private SourceFileRepository sourceFiles;
   @Autowired private JsonRejectionStore rejections;
+  @Autowired private RejectedRecordStore csvRejections;
   @Autowired private TransactionOperations transactions;
   @Autowired private WebApplicationContext context;
 
@@ -85,6 +90,7 @@ class ReadContractIT extends PostgresIntegrationTest {
       check(http, JOB, 200, get(JOB, each.toString()));
     }
     check(http, JOB, 404, get(JOB, unknownJob));
+    check(http, ERRORS, 200, get(ERRORS, csvJob.toString()));
     check(http, ERRORS, 200, get(ERRORS, jsonJob.toString()));
     check(http, ERRORS, 200, get(ERRORS, jsonJob.toString()).param("isin", ISIN));
     check(http, ERRORS, 200, get(ERRORS, failedJob.toString()));
@@ -157,7 +163,11 @@ class ReadContractIT extends PostgresIntegrationTest {
     return run;
   }
 
-  /** Lists one CSV file with its bucket, key, version and source URL. */
+  /**
+   * Lists one CSV file with its bucket, key, version and source URL. The source URL is not stored
+   * anywhere today, so for it this test cannot fail; U-REV-06 guards against a field that would
+   * carry it.
+   */
   private void listCsv(JobId job) {
     sourceFiles.saveAll(
         job,
@@ -180,10 +190,28 @@ class ReadContractIT extends PostgresIntegrationTest {
     listCsv(job);
     UUID run = start(job);
     jobRuns.recordCanonicalFile(run, CANONICAL_KEY);
-    jobRuns.completeRun(job, run, 1, new JobOutcome(JobStatus.COMPLETED, CSV_COUNTS, 0), NOW);
+    // One rejected row, stored under the source key the way the pipeline stores it
+    csvRejections.saveAll(
+        new CanonicalRun(
+            job,
+            1,
+            GoldenBhavcopy.RUN.tradeDate(),
+            BUCKET,
+            CSV_KEY,
+            GoldenBhavcopy.RUN.sourceContractVersion(),
+            GoldenBhavcopy.RUN.mappingContractVersion()),
+        run,
+        List.of(RejectedRow.of(GoldenBhavcopy.rows().get(5), "isin", 1)));
+    jobRuns.completeRun(
+        job, run, 1, new JobOutcome(JobStatus.COMPLETED_WITH_ERRORS, CSV_COUNTS, 1), NOW);
     return job;
   }
 
+  /**
+   * The failure detail is echoed verbatim. The service builds it from file basenames and S3 error
+   * codes, never from a raw exception message; keeping keys out of it is the job of the code that
+   * writes it (S3SourceStore, LoadManifest), not of this test.
+   */
   private JobId failedCsvJob() {
     JobId job = submitted(SubmissionEvents.bse("run_c3", "2026-01-03"));
     listCsv(job);
