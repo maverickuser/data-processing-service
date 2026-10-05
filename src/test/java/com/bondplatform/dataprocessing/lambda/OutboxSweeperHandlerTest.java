@@ -20,6 +20,7 @@ class OutboxSweeperHandlerTest {
   private final List<Duration> budgets = new ArrayList<>();
   private final OutboxSweeperHandler handler =
       new OutboxSweeperHandler(
+          () -> 2,
           budget -> {
             budgets.add(budget);
             return 3;
@@ -29,7 +30,7 @@ class OutboxSweeperHandlerTest {
   void sweepsWithTheDefaultBudgetWhenTheInvocationHasTimeToSpare() {
     String result = handler.handleRequest(new ScheduledEvent(), remaining(Duration.ofSeconds(59)));
 
-    assertThat(result).isEqualTo("delivered outboxEvents=3");
+    assertThat(result).isEqualTo("failed stuckJobs=2 delivered outboxEvents=3");
     assertThat(budgets).containsExactly(OutboxDispatcher.DEFAULT_SWEEP_BUDGET);
   }
 
@@ -55,8 +56,22 @@ class OutboxSweeperHandlerTest {
         handler.handleRequest(
             new ScheduledEvent(), remaining(Duration.ofSeconds(remainingSeconds)));
 
-    assertThat(result).isEqualTo("delivered outboxEvents=0");
+    assertThat(result).isEqualTo("failed stuckJobs=2 delivered outboxEvents=0");
     assertThat(budgets).isEmpty();
+  }
+
+  @Test
+  void sweepsTheOutboxEvenWhenStuckJobsCannotBeFailed() {
+    OutboxSweeperHandler failing =
+        new OutboxSweeperHandler(
+            () -> {
+              throw new IllegalStateException("database unavailable");
+            },
+            budget -> 1);
+
+    String result = failing.handleRequest(new ScheduledEvent(), remaining(Duration.ofSeconds(59)));
+
+    assertThat(result).isEqualTo("failed stuckJobs=0 delivered outboxEvents=1");
   }
 
   private static Context remaining(Duration time) {
