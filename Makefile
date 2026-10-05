@@ -2,7 +2,7 @@
 MVN := ./mvnw --batch-mode --no-transfer-progress
 COVERAGE_REPORT := target/site/jacoco/jacoco.csv
 
-.PHONY: compile package fmt lint build test-unit coverage-check test-integration check-contracts check-docs
+.PHONY: compile package check-package fmt lint build test-unit coverage-check test-integration check-contracts check-docs
 
 ## compile: compile main and test sources; Error Prone and NullAway findings fail it
 compile:
@@ -19,11 +19,17 @@ lint:
 ## build: compile, run all tests, and package the Lambda deployment artifact (target/data-processing-service-lambda.zip)
 build:
 	$(MVN) verify
+	scripts/check_lambda_package.sh
 
 ## package: build the Lambda deployment artifact without running tests. For the CI package stage only,
 ## which runs after the test stages; a release must use the artifact that CI built, not a local one
 package:
 	$(MVN) package -DskipUnitTests=true
+	scripts/check_lambda_package.sh
+
+## check-package: unpack the Lambda deployment artifact and load each function's handler class from it
+check-package:
+	scripts/check_lambda_package.sh
 
 ## test-unit: run unit tests only (*Test) and write the unit coverage report; no Spring context, Docker, or network
 test-unit:

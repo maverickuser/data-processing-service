@@ -1,0 +1,44 @@
+name: package
+
+# Builds the Lambda deployment artifact and checks that each function's handler loads from it
+# (LLD section 23.1). Reusable: CI calls it after its test stages, and the deployment workflow will
+# deploy the artifact it uploads. It uses no AWS credentials.
+on:
+  workflow_call:
+    outputs:
+      artifact-name:
+        description: Name of the uploaded workflow artifact holding the deployment zip
+        value: ${{ jobs.build.outputs.artifact-name }}
+
+permissions:
+  contents: read
+
+env:
+  JAVA_VERSION: '25'
+  JAVA_DISTRIBUTION: temurin
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      artifact-name: lambda-package
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+      - name: Build the Lambda deployment artifact and load each handler from it
+        run: make package
+      - name: Upload the Lambda deployment artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: lambda-package
+          if-no-files-found: error
+          retention-days: 7
+          path: target/data-processing-service-lambda.zip
