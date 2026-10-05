@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
@@ -25,23 +26,33 @@ public class EmfMetrics implements Metrics {
 
   private static final JsonMapper JSON = JsonMapper.builder().build();
 
-  private final PrintStream out;
+  private final Supplier<PrintStream> out;
   private final Clock clock;
 
-  /** Creates metrics written to standard output. */
+  /** Creates metrics written to standard output as it is when each value is recorded. */
   @Autowired
   public EmfMetrics(Clock clock) {
-    this(System.out, clock);
+    this(() -> System.out, clock);
   }
 
   /** Creates metrics written to the given stream. */
-  EmfMetrics(PrintStream out, Clock clock) {
+  EmfMetrics(Supplier<PrintStream> out, Clock clock) {
     this.out = out;
     this.clock = clock;
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * @throws IllegalArgumentException if the dimensions are not exactly those the metric names, as
+   *     CloudWatch would drop a value missing one
+   */
   @Override
   public void record(Metric metric, long value, Map<String, String> dimensions) {
+    if (!dimensions.keySet().equals(metric.dimensions())) {
+      throw new IllegalArgumentException(
+          metric + " is recorded with " + metric.dimensions() + ", not " + dimensions.keySet());
+    }
     Map<String, String> sorted = new TreeMap<>(dimensions);
     Map<String, Object> directive =
         Map.of(
@@ -55,6 +66,6 @@ public class EmfMetrics implements Metrics {
     line.put("_aws", Map.of("Timestamp", clock.millis(), "CloudWatchMetrics", List.of(directive)));
     line.putAll(sorted);
     line.put(metric.metricName(), value);
-    out.println(JSON.writeValueAsString(line));
+    out.get().println(JSON.writeValueAsString(line));
   }
 }

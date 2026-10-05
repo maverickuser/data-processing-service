@@ -23,7 +23,10 @@ import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import software.amazon.awssdk.core.sync.RequestBody;
@@ -32,6 +35,7 @@ import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.Message;
 import software.amazon.awssdk.services.sqs.model.MessageAttributeValue;
 import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -40,6 +44,7 @@ import tools.jackson.databind.json.JsonMapper;
  * manifest, the source file, and the canonical files, and an SQS-compatible server for the job and
  * security-details queues. The job queue is polled here as Lambda's event source mapping would.
  */
+@ExtendWith(OutputCaptureExtension.class)
 class BhavcopyProcessingIT extends PostgresIntegrationTest {
 
   private static final JsonMapper JSON = JsonMapper.builder().build();
@@ -82,9 +87,10 @@ class BhavcopyProcessingIT extends PostgresIntegrationTest {
     pump = new WorkerPump(SQS, JOBS, runJob);
   }
 
-  // I-CSV-01, I-EVT-01
+  // I-CSV-01, I-EVT-01, I-OPS-05 for the worker function
   @Test
-  void cleanBhavcopyCompletesStoresItsCanonicalFileAndRequestsNewSecuritiesDetails() {
+  void cleanBhavcopyCompletesStoresItsCanonicalFileAndRequestsNewSecuritiesDetails(
+      CapturedOutput output) {
     JobId job =
         process(
             "run_e2e_1",
@@ -121,6 +127,19 @@ class BhavcopyProcessingIT extends PostgresIntegrationTest {
     assertThat(requests)
         .extracting(message -> subjectOf(message.body()))
         .containsExactlyInAnyOrder("isin/INE001A07AB1", "isin/INE002B08CD2");
+    JsonNode ended = JsonLines.log(output, "Attempt ended");
+    assertThat(ended.path("jobId").asString()).isEqualTo(job.value().toString());
+    assertThat(ended.path("attemptNumber").asString()).isEqualTo("1");
+    assertThat(JsonLines.metric(output, "JobOutcome"))
+        .singleElement()
+        .satisfies(
+            line -> {
+              assertThat(line.path("Outcome").asString()).isEqualTo("COMPLETED");
+              assertThat(line.path("Dataset").asString())
+                  .isEqualTo("urn:bond-platform:dataset:bse-debt-trades");
+              assertThat(line.path("JobOutcome").asLong()).isOne();
+            });
+    assertThat(JsonLines.metric(output, "RunDuration")).hasSize(1);
   }
 
   // I-CSV-02 end to end, I-EVT-04

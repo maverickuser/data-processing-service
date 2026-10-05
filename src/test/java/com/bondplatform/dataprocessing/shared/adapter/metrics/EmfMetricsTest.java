@@ -1,6 +1,7 @@
 package com.bondplatform.dataprocessing.shared.adapter.metrics;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 import com.bondplatform.dataprocessing.shared.application.Metric;
 import java.io.ByteArrayOutputStream;
@@ -21,7 +22,8 @@ class EmfMetricsTest {
   private final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
   private final EmfMetrics metrics =
       new EmfMetrics(
-          new PrintStream(bytes, true, StandardCharsets.UTF_8), Clock.fixed(NOW, ZoneOffset.UTC));
+          () -> new PrintStream(bytes, true, StandardCharsets.UTF_8),
+          Clock.fixed(NOW, ZoneOffset.UTC));
 
   @Test
   void writesOneEmbeddedMetricFormatLinePerValue() {
@@ -43,6 +45,39 @@ class EmfMetricsTest {
     assertThat(line.get("Dataset").asString()).isEqualTo("urn:x:dataset:bse");
     assertThat(line.get("Outcome").asString()).isEqualTo("COMPLETED");
     assertThat(line.get("JobOutcome").asLong()).isOne();
+  }
+
+  @Test
+  void metricWithoutDimensionsHasOneEmptyDimensionSet() {
+    metrics.record(Metric.OLDEST_PENDING_OUTBOX_AGE, 90, Map.of());
+
+    JsonNode line = JsonMapper.builder().build().readTree(bytes.toString(StandardCharsets.UTF_8));
+    assertThat(line.get("_aws").get("CloudWatchMetrics").get(0).get("Dimensions").toString())
+        .isEqualTo("[[]]");
+    assertThat(line.get("OldestPendingOutboxAge").asLong()).isEqualTo(90);
+  }
+
+  @Test
+  void valueWithoutExactlyTheMetricsDimensionsIsRefusedAndNothingIsWritten() {
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> metrics.record(Metric.JOB_OUTCOME, 1, Map.of("Outcome", "FAILED")));
+    assertThatIllegalArgumentException()
+        .isThrownBy(() -> metrics.record(Metric.STUCK_JOBS_FAILED, 1, Map.of("Dataset", "urn:x")));
+    assertThat(bytes.size()).isZero();
+  }
+
+  @Test
+  void productionMetricsWriteToStandardOutput() {
+    PrintStream original = System.out;
+    System.setOut(new PrintStream(bytes, true, StandardCharsets.UTF_8));
+    try {
+      new EmfMetrics(Clock.fixed(NOW, ZoneOffset.UTC))
+          .record(Metric.STUCK_JOBS_FAILED, 0, Map.of());
+    } finally {
+      System.setOut(original);
+    }
+
+    assertThat(bytes.toString(StandardCharsets.UTF_8)).contains("\"StuckJobsFailed\":0");
   }
 
   @Test

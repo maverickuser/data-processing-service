@@ -5,14 +5,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.amazonaws.services.lambda.runtime.events.ScheduledEvent;
 import com.bondplatform.dataprocessing.admission.SubmissionEvents;
 import com.bondplatform.dataprocessing.admission.application.AdmitSubmission;
+import com.bondplatform.dataprocessing.operations.application.OutboxBacklogMonitor;
+import com.bondplatform.dataprocessing.operations.application.StuckJobFailer;
 import com.bondplatform.dataprocessing.outbox.adapter.aws.ElasticMq;
 import com.bondplatform.dataprocessing.outbox.application.OutboxDispatcher;
 import com.bondplatform.dataprocessing.persistence.PostgresIntegrationTest;
+import com.bondplatform.dataprocessing.shared.application.Metrics;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import software.amazon.awssdk.services.sqs.SqsClient;
@@ -24,8 +31,10 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * I-EVT-05 and the sweeper's exit evidence (LLD section 23.4): jobs admitted while the job queue
  * cannot be reached stay pending, and the sweeper Lambda later delivers each once, in order, with
- * its stored ID and payload.
+ * its stored ID and payload. I-OPS-05 for the sweeper function: it logs its run and records how
+ * many stuck jobs it failed and how old the oldest pending event is.
  */
+@ExtendWith(OutputCaptureExtension.class)
 class OutboxSweeperIT extends PostgresIntegrationTest {
 
   private static final JsonMapper JSON = JsonMapper.builder().build();
@@ -43,6 +52,9 @@ class OutboxSweeperIT extends PostgresIntegrationTest {
 
   @Autowired private AdmitSubmission admitSubmission;
   @Autowired private OutboxDispatcher dispatcher;
+  @Autowired private StuckJobFailer failer;
+  @Autowired private OutboxBacklogMonitor backlog;
+  @Autowired private Metrics metrics;
 
   @DynamicPropertySource
   static void useTestQueues(DynamicPropertyRegistry registry) {
@@ -52,7 +64,7 @@ class OutboxSweeperIT extends PostgresIntegrationTest {
   }
 
   @Test
-  void pendingJobsLeftByAnUnreachableQueueAreDeliveredOnceInOrder() {
+  void pendingJobsLeftByAnUnreachableQueueAreDeliveredOnceInOrder(CapturedOutput output) {
     List<String> jobs = new ArrayList<>();
     for (String run : List.of("run_301", "run_302", "run_303")) {
       Map<String, Object> event = SubmissionEvents.nsdl(run, "INE121A07QY9");
@@ -83,9 +95,14 @@ class OutboxSweeperIT extends PostgresIntegrationTest {
     // runs ahead of the JVM's cannot leave the events not yet due
     jdbc.sql(
             "UPDATE data_processing.outbox_events"
-                + " SET next_attempt_at = now() - INTERVAL '1 hour'")
+                + " SET next_attempt_at = now() - INTERVAL '1 hour',"
+                + " created_at = now() - INTERVAL '20 minutes'")
         .update();
-    OutboxSweeperHandler sweeper = new OutboxSweeperHandler(() -> 0, dispatcher::sweep);
+    assertThat(backlog.oldestPendingAge())
+        .isBetween(Duration.ofMinutes(19), Duration.ofMinutes(21));
+    OutboxSweeperHandler sweeper =
+        new OutboxSweeperHandler(
+            failer::failStuckJobs, dispatcher::sweep, backlog::oldestPendingAge, metrics);
 
     assertThat(sweeper.handleRequest(new ScheduledEvent(), new FixedLambdaContext()))
         .isEqualTo("failed stuckJobs=0 delivered outboxEvents=3");
@@ -107,6 +124,13 @@ class OutboxSweeperIT extends PostgresIntegrationTest {
           .isEqualTo(JSON.readTree(String.valueOf(stored.get(i).get("payload"))));
     }
     assertThat(statuses()).containsOnly("DELIVERED");
+    assertThat(JsonLines.metric(output, "StuckJobsFailed"))
+        .extracting(line -> line.path("StuckJobsFailed").asLong())
+        .containsExactly(0L, 0L);
+    assertThat(JsonLines.metric(output, "OldestPendingOutboxAge"))
+        .extracting(line -> line.path("OldestPendingOutboxAge").asLong())
+        .containsExactly(0L, 0L);
+    assertThat(JsonLines.log(output, "Sweep done").path("level").asString()).isEqualTo("INFO");
   }
 
   private List<String> statuses() {

@@ -4,10 +4,16 @@ import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.ScheduledEvent;
 import com.bondplatform.dataprocessing.DataProcessingApplication;
+import com.bondplatform.dataprocessing.operations.application.OutboxBacklogMonitor;
 import com.bondplatform.dataprocessing.operations.application.StuckJobFailer;
 import com.bondplatform.dataprocessing.outbox.application.OutboxDispatcher;
+import com.bondplatform.dataprocessing.shared.application.Metric;
+import com.bondplatform.dataprocessing.shared.application.Metrics;
 import java.time.Duration;
+import java.util.Map;
+import java.util.OptionalInt;
 import java.util.function.IntSupplier;
+import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,7 +25,9 @@ import org.springframework.context.ConfigurableApplicationContext;
  * Lambda entry point for the every-minute sweeper schedule (LLD sections 21, 23.3 and 23.4): fails
  * stuck jobs, then delivers outbox events still pending, group by group in order. The event's
  * contents are not used. A failure to fail stuck jobs is logged and does not stop the sweep, so one
- * bad job cannot hold every pending event back.
+ * bad job cannot hold every pending event back. Each run records {@code StuckJobsFailed} and, after
+ * the sweep, {@code OldestPendingOutboxAge} (LLD section 23.8); a metric that cannot be measured or
+ * recorded is logged and skipped.
  *
  * <p>The sweep starts no send once its budget is spent. The budget is the invocation's remaining
  * time less room for one send's call timeout and the recording of its outcome, and never more than
@@ -38,6 +46,8 @@ public class OutboxSweeperHandler implements RequestHandler<ScheduledEvent, Stri
 
   private final IntSupplier failStuckJobs;
   private final ToIntFunction<Duration> sweep;
+  private final Supplier<Duration> oldestPendingAge;
+  private final Metrics metrics;
 
   /** Used by Lambda: starts the application context without a web server. */
   public OutboxSweeperHandler() {
@@ -50,27 +60,42 @@ public class OutboxSweeperHandler implements RequestHandler<ScheduledEvent, Stri
   private OutboxSweeperHandler(ConfigurableApplicationContext application) {
     this(
         application.getBean(StuckJobFailer.class)::failStuckJobs,
-        application.getBean(OutboxDispatcher.class)::sweep);
+        application.getBean(OutboxDispatcher.class)::sweep,
+        application.getBean(OutboxBacklogMonitor.class)::oldestPendingAge,
+        application.getBean(Metrics.class));
   }
 
   /**
-   * Creates a handler that fails stuck jobs with the first function and sweeps with the second,
-   * given its time budget.
+   * Creates a handler that fails stuck jobs with the first function, sweeps with the second given
+   * its time budget, and measures the backlog left with the third.
    */
-  OutboxSweeperHandler(IntSupplier failStuckJobs, ToIntFunction<Duration> sweep) {
+  OutboxSweeperHandler(
+      IntSupplier failStuckJobs,
+      ToIntFunction<Duration> sweep,
+      Supplier<Duration> oldestPendingAge,
+      Metrics metrics) {
     this.failStuckJobs = failStuckJobs;
     this.sweep = sweep;
+    this.oldestPendingAge = oldestPendingAge;
+    this.metrics = metrics;
   }
 
   @Override
   public String handleRequest(ScheduledEvent event, Context context) {
-    int failed = failStuckJobs();
+    OptionalInt stuck = failStuckJobs();
+    stuck.ifPresent(count -> record(Metric.STUCK_JOBS_FAILED, count));
+    int failed = stuck.orElse(0);
     Duration budget = budget(context);
     int delivered = 0;
-    if (budget.isPositive()) {
-      delivered = sweep.applyAsInt(budget);
-    } else {
-      LOG.warn("Outbox sweep skipped: no time left in the invocation");
+    try {
+      if (budget.isPositive()) {
+        delivered = sweep.applyAsInt(budget);
+      } else {
+        LOG.warn("Outbox sweep skipped: no time left in the invocation");
+      }
+    } finally {
+      // Recorded even when the sweep fails, as that is when the backlog matters most.
+      recordBacklog();
     }
     LOG.info(
         "Sweep done, stuckJobsFailed={}, outboxEventsDelivered={}, budgetMillis={}",
@@ -80,16 +105,32 @@ public class OutboxSweeperHandler implements RequestHandler<ScheduledEvent, Stri
     return "failed stuckJobs=" + failed + " delivered outboxEvents=" + delivered;
   }
 
-  /** Fails stuck jobs; returns how many, or zero when that could not be done. */
-  private int failStuckJobs() {
+  /** Fails stuck jobs; returns how many, or empty when that could not be done. */
+  private OptionalInt failStuckJobs() {
     try {
-      return failStuckJobs.getAsInt();
+      return OptionalInt.of(failStuckJobs.getAsInt());
     } catch (RuntimeException e) {
       // A database error can quote key values, so only the type is logged.
       LOG.error(
           "Stuck jobs could not be failed; the outbox is swept anyway, type={}",
           e.getClass().getName());
-      return 0;
+      return OptionalInt.empty();
+    }
+  }
+
+  private void recordBacklog() {
+    try {
+      record(Metric.OLDEST_PENDING_OUTBOX_AGE, oldestPendingAge.get().toSeconds());
+    } catch (RuntimeException e) {
+      LOG.warn("Outbox backlog could not be measured, type={}", e.getClass().getName());
+    }
+  }
+
+  private void record(Metric metric, long value) {
+    try {
+      metrics.record(metric, value, Map.of());
+    } catch (RuntimeException e) {
+      LOG.warn("Metric not recorded, metric={}, type={}", metric, e.getClass().getName());
     }
   }
 
