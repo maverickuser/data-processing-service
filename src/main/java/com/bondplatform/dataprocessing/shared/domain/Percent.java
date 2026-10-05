@@ -38,12 +38,17 @@ public final class Percent {
     if (value.signum() < 0) {
       throw new IllegalArgumentException("Percent must not be negative: " + value);
     }
-    long integerDigits = (long) value.precision() - value.scale();
-    if (integerDigits > MAX_DIGITS_EACH_SIDE_OF_THE_POINT
-        || value.scale() > MAX_DIGITS_EACH_SIDE_OF_THE_POINT) {
+    if (!hasAllowedDigits(value)) {
       throw new IllegalArgumentException("Percent has too many digits: " + value);
     }
     return new Percent(value);
+  }
+
+  /** Returns whether a number has at most 30 digits before and 30 after the decimal point. */
+  public static boolean hasAllowedDigits(BigDecimal value) {
+    long integerDigits = (long) value.precision() - value.scale();
+    return integerDigits <= MAX_DIGITS_EACH_SIDE_OF_THE_POINT
+        && value.scale() <= MAX_DIGITS_EACH_SIDE_OF_THE_POINT;
   }
 
   /**

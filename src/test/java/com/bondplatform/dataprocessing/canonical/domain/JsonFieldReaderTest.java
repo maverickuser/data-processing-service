@@ -196,6 +196,18 @@ class JsonFieldReaderTest {
     assertThat(error(FieldType.PERCENT, text("%"))).isEqualTo(ErrorCode.INVALID_DECIMAL);
   }
 
+  // AG-1: a percent Percent cannot hold fails the field alone in stage 1, not the request later
+  @Test
+  void percentWithTooManyDigitsFails() {
+    String fraction31 = "8." + "9".repeat(31);
+    String integer31 = "1".repeat(31);
+
+    assertThat(error(FieldType.PERCENT, text(fraction31))).isEqualTo(ErrorCode.INVALID_DECIMAL);
+    assertThat(error(FieldType.PERCENT, decimal(integer31))).isEqualTo(ErrorCode.INVALID_DECIMAL);
+    assertThat(read(FieldType.PERCENT, text("8." + "9".repeat(30))).isUsable()).isTrue();
+    assertThat(read(FieldType.DECIMAL, text(fraction31)).isUsable()).isTrue();
+  }
+
   @ParameterizedTest
   @EnumSource(value = FieldType.class, names = "INTEGER")
   void jsonFieldsCannotBeIntegers(FieldType type) {

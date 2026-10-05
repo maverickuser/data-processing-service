@@ -11,6 +11,7 @@ import com.bondplatform.dataprocessing.contract.domain.RuleRegistry;
 import com.bondplatform.dataprocessing.contract.domain.SourceValue;
 import com.bondplatform.dataprocessing.contract.domain.TextFieldReader;
 import com.bondplatform.dataprocessing.shared.domain.ErrorCode;
+import com.bondplatform.dataprocessing.shared.domain.Percent;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -26,7 +27,8 @@ import org.jspecify.annotations.Nullable;
  *   <li>Dates accept strings in {@code DD-MM-YYYY} or {@code YYYY-MM-DD} and become ISO dates.
  *   <li>Decimals accept JSON numbers, or strings with valid Western or Indian comma grouping; a
  *       percent may also end in {@code %}. Both must not be negative; zero is valid. A percent is
- *       in percentage points: {@code "8.94%"} is 8.94.
+ *       in percentage points: {@code "8.94%"} is 8.94, and has at most 30 digits on each side of
+ *       the decimal point, as {@link Percent} requires.
  * </ul>
  *
  * <p>A value of the wrong JSON kind is {@code INVALID_TYPE}; it is never converted. A JSON number's
@@ -119,6 +121,16 @@ public final class JsonFieldReader {
       return reading.failed(normalized, null, issue(rejected));
     }
     BigDecimal value = ((FieldResult.Valid<BigDecimal>) parsed).value();
+    // Stage 2 builds a Percent from this value, so its bound is checked here, where it can fail
+    // the field alone instead of the whole request.
+    if (reading.type() == FieldType.PERCENT && !Percent.hasAllowedDigits(value)) {
+      return reading.failed(
+          normalized,
+          null,
+          new ValidationIssue(
+              ErrorCode.INVALID_DECIMAL,
+              "Expected a percent of at most 30 digits before and 30 after the decimal point."));
+    }
     ValidationIssue[] errors =
         nonNegative.validate(value).stream()
             .map(violation -> new ValidationIssue(violation.code(), violation.message()))
