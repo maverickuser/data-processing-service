@@ -14,6 +14,7 @@ import com.bondplatform.dataprocessing.job.domain.JobOutcome;
 import com.bondplatform.dataprocessing.job.domain.JobStatus;
 import com.bondplatform.dataprocessing.outbox.adapter.aws.ElasticMq;
 import com.bondplatform.dataprocessing.persistence.PostgresIntegrationTest;
+import com.bondplatform.dataprocessing.persistence.WithoutNsdlHandler;
 import com.bondplatform.dataprocessing.shared.domain.JobId;
 import java.util.HashMap;
 import java.util.List;
@@ -205,6 +206,11 @@ class RetryOrderingIT extends PostgresIntegrationTest {
   /** Adds the scripted handler to the application. */
   @TestConfiguration(proxyBeanMethods = false)
   static class ScriptedHandlerConfiguration {
+
+    @Bean
+    static WithoutNsdlHandler withoutNsdlHandler() {
+      return new WithoutNsdlHandler();
+    }
 
     @Bean
     ScriptedHandler scriptedHandler(JobCompletion completion, TransactionOperations transactions) {

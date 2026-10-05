@@ -28,6 +28,11 @@ public enum ErrorCode {
    * one object; the file is skipped and the others continue.
    */
   MALFORMED_JSON,
+  /**
+   * A listed JSON file's content does not match the manifest's checksum or size; the file is
+   * skipped and the others continue (LLD section 19). A CSV mismatch fails the job instead.
+   */
+  CHECKSUM_MISMATCH,
   /** A CSV lacks a header the source contract selects. */
   REQUIRED_HEADER_MISSING,
   /** Two CSV headers are the same after trimming and case-folding, selected or not. */

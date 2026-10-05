@@ -91,7 +91,7 @@ public final class StrictJsonReader implements JsonDocumentReader {
     return switch (token) {
       case START_OBJECT -> object(parser);
       case START_ARRAY -> array(parser);
-      case VALUE_STRING -> new JsonValue.JsonString(parser.getString());
+      case VALUE_STRING -> new JsonValue.JsonString(withoutNul(parser, parser.getString()));
       case VALUE_NUMBER_INT, VALUE_NUMBER_FLOAT ->
           new JsonValue.JsonNumber(parser.getDecimalValue());
       case VALUE_TRUE -> new JsonValue.JsonBoolean(true);
@@ -106,7 +106,7 @@ public final class StrictJsonReader implements JsonDocumentReader {
   private static JsonValue object(JsonParser parser) {
     Map<String, JsonValue> properties = new LinkedHashMap<>();
     while (parser.nextToken() == JsonToken.PROPERTY_NAME) {
-      String name = parser.currentName();
+      String name = withoutNul(parser, parser.currentName());
       TokenStreamLocation location = parser.currentTokenLocation();
       JsonValue value = value(parser, parser.nextToken());
       if (properties.putIfAbsent(name, value) != null) {
@@ -125,6 +125,18 @@ public final class StrictJsonReader implements JsonDocumentReader {
       elements.add(value(parser, token));
     }
     return new JsonValue.JsonArray(elements);
+  }
+
+  /**
+   * Returns the text unless it holds U+0000, which PostgreSQL text and JSONB cannot store; such a
+   * file is malformed (review finding AJ-6).
+   */
+  private static String withoutNul(JsonParser parser, String text) {
+    if (text.indexOf('\0') >= 0) {
+      throw new MalformedContent(
+          "The file has a NUL character (U+0000) in a string " + at(parser.currentTokenLocation()));
+    }
+    return text;
   }
 
   private static String at(@Nullable TokenStreamLocation location) {

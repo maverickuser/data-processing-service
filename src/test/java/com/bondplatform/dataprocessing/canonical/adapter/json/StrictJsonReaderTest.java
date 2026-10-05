@@ -88,6 +88,18 @@ class StrictJsonReaderTest {
         .isEqualTo(new JsonObject(Map.of("a", new JsonNumber(BigDecimal.ONE))));
   }
 
+  // AJ-6: PostgreSQL text and JSONB cannot hold U+0000
+  @Test
+  void nulCharacterInStringOrNameMakesTheFileMalformed() {
+    String nul = "\\" + "u0000";
+
+    assertThat(read("{\"a\": \"x" + nul + "\"}"))
+        .isEqualTo(
+            new JsonRead.Malformed(
+                "The file has a NUL character (U+0000) in a string at line 1, column 7"));
+    assertThat(read("{\"a" + nul + "\": 1}")).isInstanceOf(JsonRead.Malformed.class);
+  }
+
   // U-JSON-07
   @Test
   void repeatedPropertyInOneObjectMakesTheFileMalformed() {

@@ -7,7 +7,6 @@ import com.bondplatform.dataprocessing.canonical.application.RejectedRecordStore
 import com.bondplatform.dataprocessing.canonical.domain.CanonicalRun;
 import com.bondplatform.dataprocessing.canonical.domain.CsvCanonicalizer;
 import com.bondplatform.dataprocessing.contract.application.PinnedContracts;
-import com.bondplatform.dataprocessing.contract.domain.ContractId;
 import com.bondplatform.dataprocessing.contract.domain.DatasetUrn;
 import com.bondplatform.dataprocessing.contract.domain.RuleRegistry;
 import com.bondplatform.dataprocessing.contract.domain.SourceContract;
@@ -15,7 +14,6 @@ import com.bondplatform.dataprocessing.job.application.DatasetHandler;
 import com.bondplatform.dataprocessing.job.application.JobCompletion;
 import com.bondplatform.dataprocessing.job.application.PermanentFailureException;
 import com.bondplatform.dataprocessing.job.domain.ClaimedJob;
-import com.bondplatform.dataprocessing.job.domain.NewIngestionRequest.PinnedContractVersions;
 import com.bondplatform.dataprocessing.mapping.domain.DailyMarketSummaryMapper;
 import com.bondplatform.dataprocessing.publication.application.PublishDailyMarketSummaries;
 import com.bondplatform.dataprocessing.publication.domain.DailyMarketSummary;
@@ -104,7 +102,7 @@ public class BhavcopyHandler implements DatasetHandler {
    */
   @Override
   public void process(ClaimedJob job) {
-    requireDeployedContracts(job.job().contracts());
+    DeployedContracts.require(contracts, job.job().contracts());
     Manifest manifest = manifests.load(job);
     ManifestFile file = manifest.files().get(0);
     VerifiedSource source =
@@ -118,12 +116,12 @@ public class BhavcopyHandler implements DatasetHandler {
         new CanonicalRun(
             job.job().id(),
             job.attemptNumber(),
-            TradeDate.parseIso(input(manifest, "tradeDate")).value(),
+            TradeDate.parseIso(DeployedContracts.input(manifest, "tradeDate")).value(),
             file.bucket(),
             file.key(),
             sourceContract.id().name(),
             contracts.mapping().id().name());
-    ExchangeName exchange = ExchangeName.of(input(manifest, "exchangeName"));
+    ExchangeName exchange = ExchangeName.of(DeployedContracts.input(manifest, "exchangeName"));
     List<DailyMarketSummary> accepted = new ArrayList<>();
     try (CanonicalFile canonical = canonicalFiles.create(run)) {
       RejectedRecordBuffer rejected =
@@ -153,42 +151,5 @@ public class BhavcopyHandler implements DatasetHandler {
         }
       }
     }
-  }
-
-  /** Fails the attempt if the job's pinned contracts are not the ones this handler holds. */
-  private void requireDeployedContracts(PinnedContractVersions pinned) {
-    requireSame(pinned.source(), pinned.sourceHash(), sourceContract.id(), contracts.sourceHash());
-    requireSame(
-        pinned.mapping(), pinned.mappingHash(), contracts.mapping().id(), contracts.mappingHash());
-  }
-
-  /**
-   * Fails unless the pinned contract is the deployed one. The content hash catches a version that
-   * was changed in place after the job was accepted (LLD section 6.2).
-   */
-  private static void requireSame(
-      ContractId pinned, String pinnedHash, ContractId deployed, String deployedHash) {
-    if (!pinned.equals(deployed)) {
-      throw new IllegalStateException(
-          "The job is pinned to " + pinned + ", but this deployment holds " + deployed);
-    }
-    if (!pinnedHash.equals(deployedHash)) {
-      throw new IllegalStateException(
-          "The job is pinned to "
-              + pinned
-              + " with hash "
-              + pinnedHash
-              + ", but this deployment's copy has hash "
-              + deployedHash);
-    }
-  }
-
-  /** Returns a manifest input; the manifest was checked to carry the submission's inputs. */
-  private static String input(Manifest manifest, String name) {
-    String value = manifest.inputs().get(name);
-    if (value == null) {
-      throw new IllegalStateException("The checked manifest has no input " + name);
-    }
-    return value;
   }
 }

@@ -119,6 +119,24 @@ class CsvFileReaderTest {
     assertThat(rows).extracting(CsvRow::recordNumber).containsExactly(2L, 3L);
   }
 
+  // AJ-6: PostgreSQL text and JSONB cannot hold U+0000
+  @Test
+  void nulCharacterRejectsTheWholeFile() {
+    String nul = String.valueOf((char) 0);
+
+    assertThat(
+            read(
+                BhavcopyContract.HEADER
+                    + "\n"
+                    + ROW_1
+                    + "\n"
+                    + ROW_2.replaceFirst(",", nul + ",")
+                    + "\n"))
+        .isEqualTo(rejected(ErrorCode.MALFORMED_CSV, "Record 3 has a NUL character (U+0000)"));
+    assertThat(read(nul + BhavcopyContract.HEADER + "\n" + ROW_1 + "\n"))
+        .isEqualTo(rejected(ErrorCode.MALFORMED_CSV, "The header has a NUL character (U+0000)"));
+  }
+
   // U-CSV-05
   @Test
   void brokenQuotingRejectsTheWholeFile() {
