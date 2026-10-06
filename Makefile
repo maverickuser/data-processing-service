@@ -3,7 +3,7 @@ MVN := ./mvnw --batch-mode --no-transfer-progress
 COVERAGE_REPORT := target/site/jacoco/jacoco.csv
 TERRAFORM ?= terraform
 # Every Terraform directory, each checked on its own with its committed provider lock file
-INFRA_DIRS := infra/modules/network infra/bootstrap
+INFRA_DIRS := infra/modules/network infra/bootstrap infra/persistent
 
 .PHONY: compile package check-package fmt lint build test-unit coverage-check test-integration check-contracts check-docs check-infra
 
