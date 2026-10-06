@@ -44,7 +44,7 @@ class ApiRoutesTest {
   @Test
   void readFunctionServesOnlyTheReadRoutes() {
     runner
-        .withPropertyValues("data-processing.api.submission-routes=false")
+        .withPropertyValues("data-processing.api.read-routes=true")
         .run(
             context -> {
               assertThat(context).doesNotHaveBean(EventIngestionController.class);
@@ -58,7 +58,7 @@ class ApiRoutesTest {
   @Test
   void submissionFunctionServesOnlyTheSubmissionRoute() {
     runner
-        .withPropertyValues("data-processing.api.read-routes=false")
+        .withPropertyValues("data-processing.api.submission-routes=true")
         .run(
             context -> {
               assertThat(context).hasSingleBean(EventIngestionController.class);
@@ -70,13 +70,27 @@ class ApiRoutesTest {
   }
 
   @Test
-  void localRunsServeEveryRoute() {
+  void functionWithoutRouteSettingsServesNothing() {
     runner.run(
         context ->
             assertThat(context)
-                .hasSingleBean(EventIngestionController.class)
-                .hasSingleBean(SecurityController.class)
-                .hasSingleBean(DailyMarketSummaryController.class)
-                .hasSingleBean(JobStatusController.class));
+                .doesNotHaveBean(EventIngestionController.class)
+                .doesNotHaveBean(SecurityController.class)
+                .doesNotHaveBean(DailyMarketSummaryController.class)
+                .doesNotHaveBean(JobStatusController.class));
+  }
+
+  @Test
+  void testsServeEveryRoute() {
+    runner
+        .withPropertyValues(
+            "data-processing.api.read-routes=true", "data-processing.api.submission-routes=true")
+        .run(
+            context ->
+                assertThat(context)
+                    .hasSingleBean(EventIngestionController.class)
+                    .hasSingleBean(SecurityController.class)
+                    .hasSingleBean(DailyMarketSummaryController.class)
+                    .hasSingleBean(JobStatusController.class));
   }
 }

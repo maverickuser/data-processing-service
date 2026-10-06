@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /** Serves daily market summaries by security and by trade date (LLD section 20.2). */
 @RestController
-@ConditionalOnBooleanProperty(name = "data-processing.api.read-routes", matchIfMissing = true)
+@ConditionalOnBooleanProperty("data-processing.api.read-routes")
 public class DailyMarketSummaryController {
 
   private final ListDailyMarketSummaries listSummaries;

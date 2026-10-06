@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /** Serves a job's status, counts and error preview, and its full error list (LLD 16, 20.3). */
 @RestController
-@ConditionalOnBooleanProperty(name = "data-processing.api.read-routes", matchIfMissing = true)
+@ConditionalOnBooleanProperty("data-processing.api.read-routes")
 public class JobStatusController {
 
   static final String NOT_FOUND = "No processing job has this ID.";

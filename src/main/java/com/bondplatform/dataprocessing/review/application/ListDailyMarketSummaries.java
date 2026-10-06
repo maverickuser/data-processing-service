@@ -22,6 +22,11 @@ public class ListDailyMarketSummaries {
   /** Longer than any value the filter could match; longer input is refused unread. */
   private static final int MAX_FILTER_LENGTH = 64;
 
+  /** Every supported date lies in this range; the ISO format allows years far outside it. */
+  private static final LocalDate EARLIEST_DATE = LocalDate.of(1900, 1, 1);
+
+  private static final LocalDate LATEST_DATE = LocalDate.of(9999, 12, 31);
+
   private static final String INVALID_TOKEN = "The pageToken is not valid.";
 
   private final DailyMarketSummaryRepository summaries;
@@ -47,6 +52,8 @@ public class ListDailyMarketSummaries {
       @Nullable LocalDate fromDate,
       @Nullable LocalDate toDate,
       @Nullable String pageToken) {
+    requireSupported("fromDate", fromDate);
+    requireSupported("toDate", toDate);
     if (fromDate != null && toDate != null && fromDate.isAfter(toDate)) {
       throw new InvalidQueryException("The fromDate must not be after the toDate.");
     }
@@ -70,6 +77,7 @@ public class ListDailyMarketSummaries {
    */
   public SummaryPage forTradeDate(
       LocalDate tradeDate, @Nullable String exchangeName, @Nullable String pageToken) {
+    requireSupported("tradeDate", tradeDate);
     String filter = normalized(exchangeName);
     String scope = "trade-date-summaries\n" + tradeDate + "\n" + (filter == null ? "" : filter);
     TradeDatePosition after =
@@ -138,6 +146,13 @@ public class ListDailyMarketSummaries {
 
   private static String text(@Nullable LocalDate date) {
     return date == null ? "" : date.toString();
+  }
+
+  /** Refuses a date the database cannot store, rather than fail while querying with it. */
+  private static void requireSupported(String name, @Nullable LocalDate date) {
+    if (date != null && (date.isBefore(EARLIEST_DATE) || date.isAfter(LATEST_DATE))) {
+      throw new InvalidQueryException("The " + name + " must be between 1900 and 9999.");
+    }
   }
 
   private static @Nullable String normalized(@Nullable String exchangeName) {

@@ -136,6 +136,17 @@ class ListDailyMarketSummariesTest {
     assertThatThrownBy(() -> list.forTradeDate(DAY, "B".repeat(65), null))
         .isInstanceOf(InvalidQueryException.class)
         .hasMessage("The exchangeName filter is too long.");
+    assertThatThrownBy(() -> list.forTradeDate(LocalDate.of(-999_999, 1, 1), null, null))
+        .isInstanceOf(InvalidQueryException.class)
+        .hasMessage("The tradeDate must be between 1900 and 9999.");
+    assertThatThrownBy(
+            () -> list.forSecurity(Isin.of("INE0KH208019"), null, LocalDate.of(99_999, 1, 1), null))
+        .isInstanceOf(InvalidQueryException.class)
+        .hasMessage("The toDate must be between 1900 and 9999.");
+    assertThatThrownBy(
+            () -> list.forSecurity(Isin.of("INE0KH208019"), LocalDate.of(1899, 12, 31), null, null))
+        .isInstanceOf(InvalidQueryException.class)
+        .hasMessage("The fromDate must be between 1900 and 9999.");
     String unfiltered = new PageToken(DATE_SCOPE, "12\nINE000000049BSE").encode();
     List<String> badPositions =
         List.of("INE000000049", "x\nINE", "-1\nINE", "99\nINE", Integer.MAX_VALUE + "\nINE");

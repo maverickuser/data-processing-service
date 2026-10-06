@@ -34,7 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
  * authorization, not here.
  */
 @RestController
-@ConditionalOnBooleanProperty(name = "data-processing.api.submission-routes", matchIfMissing = true)
+@ConditionalOnBooleanProperty("data-processing.api.submission-routes")
 public class EventIngestionController {
 
   /** The only request content type: a structured-mode CloudEvent. */

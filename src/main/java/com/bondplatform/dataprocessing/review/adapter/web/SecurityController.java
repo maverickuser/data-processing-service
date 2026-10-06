@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /** Serves the combined view of one security (LLD section 20.1). */
 @RestController
-@ConditionalOnBooleanProperty(name = "data-processing.api.read-routes", matchIfMissing = true)
+@ConditionalOnBooleanProperty("data-processing.api.read-routes")
 public class SecurityController {
 
   static final String NOT_FOUND = "No security has this ISIN.";

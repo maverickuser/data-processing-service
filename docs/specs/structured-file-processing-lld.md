@@ -1450,8 +1450,8 @@ One build artifact (a single Java application) is deployed as six Lambda functio
 
 | Function | Trigger | Responsibility | Timeout | Concurrency |
 |---|---|---|---|---|
-| Read API | API Gateway HTTP API, `GET` routes | The five public read endpoints only (`API_SUBMISSION_ROUTES=false`) | 29 seconds | Reserved 10 |
-| Submission API | API Gateway HTTP API, `POST` route | `POST /v1/event-ingestions` only (`API_READ_ROUTES=false`) | 29 seconds | Reserved 5 |
+| Read API | API Gateway HTTP API, `GET` routes | The five public read endpoints only (`API_READ_ROUTES=true`) | 29 seconds | Reserved 10 |
+| Submission API | API Gateway HTTP API, `POST` route | `POST /v1/event-ingestions` only (`API_SUBMISSION_ROUTES=true`) | 29 seconds | Reserved 5 |
 | Worker | SQS FIFO processing queue, batch size 1 | Runs one job: source reading, stage 1, stage 2, publication | 15 minutes | Maximum 10 through the event source mapping |
 | Outbox sweeper | EventBridge schedule, every minute | Delivers pending outbox events in order; fails jobs stuck beyond their attempt limit | 1 minute | 1 |
 | Retention | EventBridge schedule, daily | The cleanup in section 21.1 | 5 minutes | 1 |
@@ -1467,8 +1467,8 @@ The artifact is one zip with the compiled classes at its root and the dependenci
 ### 23.2 API Gateway and access
 
 - One HTTP API with the custom domain `processing.kagent.app`.
-- The five `GET` routes have no authorizer and are integrated with the read API function; `POST /v1/event-ingestions` is integrated with the submission function. The public, unauthenticated code therefore runs with a database role that can only read and an IAM role with no AWS permissions beyond its logs and network interfaces (least privilege, agreed 2026-10-06). Each function also turns the other's routes off, so neither can serve them even if misrouted.
-- Every response carries `X-Content-Type-Options: nosniff` and `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`. A problem response never quotes the request: a framework-detected error gets a fixed explanation that names at most a parameter. Query and path values are length-capped (ISIN and filters 64 characters, page tokens 1,024) before any use.
+- The five `GET` routes have no authorizer and are integrated with the read API function; `POST /v1/event-ingestions` is integrated with the submission function. The public, unauthenticated code therefore runs with a database role that can only read and an IAM role with no AWS permissions beyond its logs and network interfaces (least privilege, agreed 2026-10-06). Each function turns on only its own routes, and both settings default to off, so neither function can serve the other's routes even if misrouted, and a function deployed without the setting serves nothing.
+- Every response carries `X-Content-Type-Options: nosniff` and `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`. A problem response never quotes the request: a framework-detected error gets a fixed explanation that names at most a parameter. Query and path values are length-capped (ISIN and filters 64 characters, page tokens 1,024) and dates limited to the years 1900 to 9999 before any use.
 - `POST /v1/event-ingestions` uses AWS IAM authorization. The fetch service's delivery Lambda signs the request with SigV4; its role is granted `execute-api:Invoke` on that route only. An unsigned or unauthorized request is rejected by API Gateway with `403` before reaching the application. This replaces "reachable only through an internal load balancer".
 - The request and response bodies of the submission API are unchanged. The only change for the fetch service is signing the request and calling the API Gateway hostname.
 - API Gateway throttling protects the public read routes and the small database.
