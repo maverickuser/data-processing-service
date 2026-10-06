@@ -64,6 +64,19 @@ run "database_is_private_encrypted_and_iam_authenticated" {
   }
 
   assert {
+    condition = (
+      { for p in aws_db_parameter_group.postgres.parameter : p.name => p.value }["log_connections"] == "1" &&
+      { for p in aws_db_parameter_group.postgres.parameter : p.name => p.value }["log_disconnections"] == "1"
+    )
+    error_message = "Connections and disconnections must be logged."
+  }
+
+  assert {
+    condition     = aws_db_instance.database.port == 5432 && aws_db_instance.database.auto_minor_version_upgrade && aws_db_instance.database.backup_window == "20:30-21:00" && aws_db_instance.database.maintenance_window == "sun:21:30-sun:22:30"
+    error_message = "Port, minor upgrades, and the non-overlapping backup and maintenance windows are fixed."
+  }
+
+  assert {
     condition     = aws_db_subnet_group.database.subnet_ids == toset(["subnet-0aaaaaaaaaaaaaaaa", "subnet-0bbbbbbbbbbbbbbbb"])
     error_message = "The database must use the shared private subnets."
   }
