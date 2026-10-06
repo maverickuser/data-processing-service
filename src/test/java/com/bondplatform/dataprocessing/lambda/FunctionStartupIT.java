@@ -141,10 +141,12 @@ class FunctionStartupIT extends PostgresIntegrationTest {
         JdbcClient.create(new DriverManagerDataSource(newDatabase, APPLICATION_ROLE, "role-check"));
     assertThatThrownBy(
             () -> asApplication.sql("CREATE TABLE data_processing.not_allowed (id INT)").update())
+        .rootCause()
         .hasMessageContaining("permission denied");
     assertThatThrownBy(
             () -> asApplication.sql("DELETE FROM data_processing.flyway_schema_history").update())
         .as("only migrations change the migration history")
+        .rootCause()
         .hasMessageContaining("permission denied");
   }
 
