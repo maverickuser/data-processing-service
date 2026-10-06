@@ -24,7 +24,8 @@ env:
 #
 #   compile ─┬─ static-analysis ───────────────┐
 #            ├─ unit-test ── integration-test ─┼─ package ─┐
-#            └─ contracts-and-docs ────────────┴───────────┴─ ci-passed
+#            └─ contracts-and-docs ────────────┴───────────┼─ ci-passed
+#   infrastructure ────────────────────────────────────────┘
 jobs:
   compile:
     name: 1 · compile
@@ -136,11 +137,32 @@ jobs:
     needs: [static-analysis, integration-test, contracts-and-docs]
     uses: ./.github/workflows/package.yml
 
+  infrastructure:
+    name: 7 · infrastructure
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TERRAFORM_VERSION: 1.16.4
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the pinned Terraform after checking its published checksum
+        run: |
+          zip="terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+          curl -fsSLo "$RUNNER_TEMP/$zip" "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/$zip"
+          curl -fsSL "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_SHA256SUMS" | grep " $zip\$" > "$RUNNER_TEMP/SHA256SUMS"
+          (cd "$RUNNER_TEMP" && sha256sum -c SHA256SUMS)
+          mkdir -p "$HOME/.local/bin" && unzip -oq "$RUNNER_TEMP/$zip" terraform -d "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Terraform format, validate, and mocked tests without AWS credentials
+        run: make check-infra
+
   # The single check to require on `main`: passes only when every stage passed.
   ci-passed:
     name: ci passed
     if: always()
-    needs: [compile, static-analysis, unit-test, integration-test, contracts-and-docs, package]
+    needs: [compile, static-analysis, unit-test, integration-test, contracts-and-docs, package, infrastructure]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
