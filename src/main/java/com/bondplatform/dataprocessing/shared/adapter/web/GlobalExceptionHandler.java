@@ -11,10 +11,11 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.CannotCreateTransactionException;
-import org.springframework.web.ErrorResponse;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 /**
@@ -35,7 +36,6 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
       "The service is temporarily unavailable. Retry the identical request after Retry-After.";
   private static final String RETRY_AFTER_SECONDS = "5";
   private static final String UNKNOWN_ROUTE_DETAIL = "No resource exists at this path.";
-  private static final String FRAMEWORK_PACKAGE_PREFIX = "org.springframework.";
 
   private final ProblemDetailFactory problems;
 
@@ -112,23 +112,24 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
   }
 
   /**
-   * Returns the framework's own caller-safe explanation, or the type's title when it has none.
-   *
-   * <p>Only exceptions defined by the web framework are trusted to carry caller-safe text. An
-   * {@link ErrorResponse} defined anywhere else gets the title, so internal text cannot leak.
+   * Returns a fixed explanation for a framework-detected error. The framework's own text can quote
+   * the request, such as a parameter's value or a content type, so it is never used; only a
+   * parameter's name, which this service declares, may appear.
    */
   private static String detailOf(Exception exception, ProblemType type) {
-    if (type == ProblemType.NOT_FOUND) {
-      return UNKNOWN_ROUTE_DETAIL;
+    if (exception instanceof MethodArgumentTypeMismatchException mismatch) {
+      return "The " + mismatch.getName() + " parameter is not valid.";
     }
-    boolean definedByFramework =
-        exception.getClass().getName().startsWith(FRAMEWORK_PACKAGE_PREFIX);
-    if (definedByFramework && exception instanceof ErrorResponse errorResponse) {
-      String detail = errorResponse.getBody().getDetail();
-      if (detail != null && !detail.isBlank()) {
-        return detail;
-      }
+    if (exception instanceof MissingServletRequestParameterException missing) {
+      return "The " + missing.getParameterName() + " parameter is required.";
     }
-    return type.title() + ".";
+    return switch (type) {
+      case NOT_FOUND -> UNKNOWN_ROUTE_DETAIL;
+      case METHOD_NOT_ALLOWED -> "This path does not accept this method; see the Allow header.";
+      case NOT_ACCEPTABLE -> "This path responds only with the media type its API documents.";
+      case UNSUPPORTED_MEDIA_TYPE -> "This path does not accept a body of this media type.";
+      case REQUEST_TOO_LARGE -> "The request body is too large.";
+      default -> type.title() + ".";
+    };
   }
 }

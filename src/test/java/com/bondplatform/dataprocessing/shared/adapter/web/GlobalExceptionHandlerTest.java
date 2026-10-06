@@ -6,6 +6,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -13,20 +14,25 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.MethodParameter;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.RecoverableDataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.web.ErrorResponse;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 class GlobalExceptionHandlerTest {
@@ -150,8 +156,77 @@ class GlobalExceptionHandlerTest {
     assertThat(problem.getProperties())
         .containsEntry("code", "METHOD_NOT_ALLOWED")
         .containsEntry("correlationId", CORRELATION_ID.toString());
-    assertThat(problem.getDetail()).contains("POST");
+    assertThat(problem.getDetail())
+        .isEqualTo("This path does not accept this method; see the Allow header.");
     assertThat(log.list).isEmpty();
+  }
+
+  @Test
+  void malformedParameterIsNamedButItsValueNeverEchoed() throws NoSuchMethodException {
+    MethodArgumentTypeMismatchException exception =
+        new MethodArgumentTypeMismatchException(
+            "<script>alert(1)</script>",
+            LocalDate.class,
+            "tradeDate",
+            new MethodParameter(Object.class.getMethod("equals", Object.class), 0),
+            null);
+
+    ResponseEntity<Object> response =
+        handler.handleExceptionInternal(
+            exception, null, HttpHeaders.EMPTY, HttpStatus.BAD_REQUEST, request);
+
+    assertThat(problemOf(response).getDetail()).isEqualTo("The tradeDate parameter is not valid.");
+  }
+
+  @Test
+  void missingParameterIsNamed() {
+    ResponseEntity<Object> response =
+        handler.handleExceptionInternal(
+            new MissingServletRequestParameterException("tradeDate", "LocalDate"),
+            null,
+            HttpHeaders.EMPTY,
+            HttpStatus.BAD_REQUEST,
+            request);
+
+    assertThat(problemOf(response).getDetail()).isEqualTo("The tradeDate parameter is required.");
+  }
+
+  @Test
+  void unsupportedContentTypeIsNeverEchoed() {
+    HttpMediaTypeNotSupportedException exception =
+        new HttpMediaTypeNotSupportedException(
+            MediaType.parseMediaType("text/x-injected"), List.of(MediaType.APPLICATION_JSON));
+
+    ResponseEntity<Object> response =
+        handler.handleExceptionInternal(
+            exception, null, HttpHeaders.EMPTY, HttpStatus.UNSUPPORTED_MEDIA_TYPE, request);
+
+    assertThat(problemOf(response).getDetail())
+        .isEqualTo("This path does not accept a body of this media type.");
+  }
+
+  @Test
+  void otherFrameworkErrorsGetFixedExplanations() {
+    assertThat(
+            problemOf(
+                    handler.handleExceptionInternal(
+                        new IllegalStateException("not acceptable"),
+                        null,
+                        HttpHeaders.EMPTY,
+                        HttpStatus.NOT_ACCEPTABLE,
+                        request))
+                .getDetail())
+        .isEqualTo("This path responds only with the media type its API documents.");
+    assertThat(
+            problemOf(
+                    handler.handleExceptionInternal(
+                        new IllegalStateException("too large"),
+                        null,
+                        HttpHeaders.EMPTY,
+                        HttpStatus.PAYLOAD_TOO_LARGE,
+                        request))
+                .getDetail())
+        .isEqualTo("The request body is too large.");
   }
 
   @Test

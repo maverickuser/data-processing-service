@@ -16,6 +16,9 @@ import org.jspecify.annotations.Nullable;
  */
 public class ListJobErrors {
 
+  /** Longer than any value the filter could match; longer input is refused unread. */
+  private static final int MAX_FILTER_LENGTH = 64;
+
   private final JobReviewRepository jobs;
 
   /** Creates the use case. */
@@ -80,6 +83,9 @@ public class ListJobErrors {
     // PostgreSQL text cannot hold U+0000, and no ISIN holds a control character (AN-1)
     if (trimmed.chars().anyMatch(Character::isISOControl)) {
       throw new InvalidQueryException("The isin filter must not hold control characters.");
+    }
+    if (trimmed.length() > MAX_FILTER_LENGTH) {
+      throw new InvalidQueryException("The isin filter is too long.");
     }
     return trimmed.toUpperCase(Locale.ROOT);
   }

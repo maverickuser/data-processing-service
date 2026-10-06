@@ -35,7 +35,7 @@ paths:
         - name: isin
           in: query
           description: Optional filter; trimmed and uppercased before matching.
-          schema: { type: string }
+          schema: { type: string, maxLength: 64 }
         - $ref: '#/components/parameters/PageToken'
       responses:
         '200':
@@ -95,7 +95,7 @@ paths:
           schema: { type: string, format: date }
         - name: exchangeName
           in: query
-          schema: { type: string }
+          schema: { type: string, maxLength: 64 }
         - $ref: '#/components/parameters/PageToken'
       responses:
         '200':
@@ -116,13 +116,13 @@ components:
       name: isin
       in: path
       required: true
-      description: Trimmed and uppercased before lookup.
-      schema: { type: string }
+      description: Trimmed and uppercased before lookup; a longer value is not found.
+      schema: { type: string, maxLength: 64 }
     PageToken:
       name: pageToken
       in: query
       description: Opaque cursor from a previous response's nextToken; may expire.
-      schema: { type: string }
+      schema: { type: string, maxLength: 1024 }
   responses:
     BadRequest:
       description: Malformed parameter or invalid page token

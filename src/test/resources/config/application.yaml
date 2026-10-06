@@ -1,6 +1,10 @@
 # Test-only settings, layered over src/main/resources/application.yaml. Nothing listens at these
 # queue URLs: a send fails, and the event stays pending, as it would during an SQS outage.
 data-processing:
+  api:
+    # Tests serve every route from one application.
+    read-routes: true
+    submission-routes: true
   sources:
     region: ap-south-1
     endpoint: http://127.0.0.1:1

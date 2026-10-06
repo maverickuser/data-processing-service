@@ -44,7 +44,7 @@ class DailyMarketSummaryControllerTest {
   void unknownBlankOrControlIsinIsNotFound() {
     when(list.forSecurity(Isin.of("INE000000000"), null, null, null)).thenReturn(Optional.empty());
 
-    for (String isin : List.of("INE000000000", "  ", "INE" + (char) 0)) {
+    for (String isin : List.of("INE000000000", "  ", "INE" + (char) 0, "I".repeat(65))) {
       assertThatThrownBy(() -> controller.forSecurity(isin, null, null, null))
           .isInstanceOfSatisfying(
               ApiProblemException.class,

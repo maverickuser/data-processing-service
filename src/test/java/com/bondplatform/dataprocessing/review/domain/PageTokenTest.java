@@ -38,6 +38,14 @@ class PageTokenTest {
   }
 
   @Test
+  void overlongTokenIsRejectedUndecoded() {
+    String token = new PageToken(SCOPE, "5".repeat(PageToken.MAX_LENGTH)).encode();
+
+    assertThat(token.length()).isGreaterThan(PageToken.MAX_LENGTH);
+    assertThat(PageToken.decode(token, SCOPE)).isEmpty();
+  }
+
+  @Test
   void changedTokenIsRejected() {
     String token = new PageToken(SCOPE, "50").encode();
     String forged =

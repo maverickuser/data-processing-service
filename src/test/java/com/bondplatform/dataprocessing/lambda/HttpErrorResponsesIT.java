@@ -53,6 +53,12 @@ class HttpErrorResponsesIT {
             415,
             "UNSUPPORTED_MEDIA_TYPE"),
         error(
+            "refused character set",
+            HttpApiEvent.post("/test-probe/echo")
+                .body("application/json; charset=iso-8859-1", "{\"value\": 1}"),
+            415,
+            "UNSUPPORTED_MEDIA_TYPE"),
+        error(
             "malformed JSON body",
             HttpApiEvent.post("/test-probe/echo").body("application/json", "{not json"),
             400,
@@ -78,6 +84,10 @@ class HttpErrorResponsesIT {
     assertThat(problem.get("detail").asString()).isNotBlank().doesNotContain("secret");
     assertThat(problem.get("instance").asString()).startsWith("urn:uuid:");
     assertThat(problem.get("correlationId").asString()).isNotBlank();
+    assertThat(response.get("headers").get("X-Content-Type-Options").asString())
+        .isEqualTo("nosniff");
+    assertThat(response.get("headers").get("Content-Security-Policy").asString())
+        .isEqualTo("default-src 'none'; frame-ancestors 'none'");
   }
 
   @Test
@@ -102,6 +112,19 @@ class HttpErrorResponsesIT {
     assertThat(response.get("statusCode").asInt()).isEqualTo(200);
     assertThat(JSON.readTree(response.get("body").asString()).get("tradeDate").asString())
         .isEqualTo("2026-01-01");
+    assertThat(response.get("headers").get("X-Content-Type-Options").asString())
+        .isEqualTo("nosniff");
+  }
+
+  @Test
+  void malformedParameterIsNamedWithoutEchoingItsValue() throws IOException {
+    JsonNode response = send(HttpApiEvent.get("/test-probe/dated").query("tradeDate=%3Cscript%3E"));
+
+    assertThat(response.get("statusCode").asInt()).isEqualTo(400);
+    assertThat(response.get("headers").get("X-Content-Type-Options").asString())
+        .isEqualTo("nosniff");
+    assertThat(JSON.readTree(response.get("body").asString()).get("detail").asString())
+        .isEqualTo("The tradeDate parameter is not valid.");
   }
 
   @Test
