@@ -26,6 +26,16 @@ resource "aws_cloudwatch_event_target" "schedule" {
   }
 }
 
+# EventBridge retries are set above; Lambda's own asynchronous retries are off, so a failed
+# run is retried only as each schedule says.
+resource "aws_lambda_function_event_invoke_config" "schedule" {
+  for_each                     = local.schedules
+  function_name                = aws_lambda_function.function[each.key].function_name
+  qualifier                    = aws_lambda_alias.live[each.key].name
+  maximum_retry_attempts       = 0
+  maximum_event_age_in_seconds = 3600
+}
+
 resource "aws_lambda_permission" "schedule" {
   for_each      = local.schedules
   statement_id  = "AllowScheduleInvoke"

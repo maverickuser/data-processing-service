@@ -213,6 +213,8 @@ resource "aws_lambda_function" "function" {
     )
   }
 
+  # Text keeps each stdout line as its own log event, unchanged, so the application's JSON lines
+  # and embedded-metric lines reach CloudWatch as written.
   logging_config {
     log_format = "Text"
     log_group  = aws_cloudwatch_log_group.function[each.key].name

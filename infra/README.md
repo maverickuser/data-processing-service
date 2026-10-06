@@ -46,6 +46,10 @@ Inputs: `hosted_zone_id`, `deployment_commit` (full SHA) and `package_sha256` (b
 
 Every function role may `rds-db:connect` only as its own database role, except the migration role, which has no `rds-db:connect`. Terraform publishes a version on each change and creates the `live` alias once; the deploy workflow invokes the migration function's new version, then moves each alias to `published_versions`.
 
+The processing queue's policy refuses `SendMessage` from every principal except the submission and sweeper roles, administrators included, so moving messages back from the dead-letter queue (`StartMessageMoveTask`) or a manual test send needs a temporary policy change.
+
+On the first apply the aliases, the worker mapping, and the schedules are live before the migration has created the database roles, so the sweeper fails, and alarms, until the deploy workflow has migrated.
+
 The reserved concurrency (read 10, submission 5, sweeper, retention, and migration 1 each) needs the account's Lambda concurrency quota to be at least 118, because AWS keeps 100 unreserved.
 
 Outputs for the fetch service: `vpc_id`, `processor_api_endpoint`, `processor_submission_route_arn`, `source_reader_role_arns` (its `processor_reader_role_arns`), `security_details_sender_role_arns` (add to its `external_producer_role_arns`). For the deploy workflow: `function_names`, `published_versions`, `alias_name`, `file_processing_queue_url`.

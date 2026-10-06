@@ -279,13 +279,21 @@ run "processing_queue_orders_retries_and_admits_only_its_senders" {
 
   assert {
     condition = (
+      local.processing_queue_policy.Statement[0].Effect == "Deny" &&
+      local.processing_queue_policy.Statement[0].Condition.Bool["aws:SecureTransport"] == "false" &&
       local.processing_queue_policy.Statement[1].Effect == "Deny" &&
+      local.processing_queue_policy.Statement[1].Action == "sqs:SendMessage" &&
       toset(local.processing_queue_policy.Statement[1].Condition.ArnNotEquals["aws:PrincipalArn"]) == toset([
         "arn:aws:iam::123456789012:role/data-processing-service-submission-api",
         "arn:aws:iam::123456789012:role/data-processing-service-outbox-sweeper",
       ])
     )
-    error_message = "Only the submission function and the sweeper may send to the processing queue."
+    error_message = "The queue refuses plain HTTP, and only the submission function and the sweeper may send to it."
+  }
+
+  assert {
+    condition     = aws_sqs_queue_policy.processing.policy == jsonencode(local.processing_queue_policy)
+    error_message = "The queue carries exactly the policy asserted above."
   }
 }
 
@@ -360,6 +368,21 @@ run "schedules_and_alarms" {
       aws_cloudwatch_metric_alarm.dead_letters.threshold == 0
     )
     error_message = "Alarms cover function errors, the DLQ, failed and stuck jobs, the outbox backlog, and API 5xx."
+  }
+
+  assert {
+    condition = (
+      alltrue([for name, alarm in aws_cloudwatch_metric_alarm.function_errors : alarm.dimensions["FunctionName"] == "data-processing-service-${name}"]) &&
+      aws_cloudwatch_metric_alarm.api_5xx.metric_name == "5xx" &&
+      aws_cloudwatch_metric_alarm.api_5xx.dimensions["ApiId"] == "abc123" &&
+      aws_cloudwatch_metric_alarm.api_5xx.dimensions["Stage"] == "$default"
+    )
+    error_message = "Each error alarm watches its own function, and the 5xx alarm watches this API's stage."
+  }
+
+  assert {
+    condition     = alltrue([for c in aws_lambda_function_event_invoke_config.schedule : c.maximum_retry_attempts == 0 && c.qualifier == "live"])
+    error_message = "Lambda adds no retries of its own to scheduled runs."
   }
 
   assert {
