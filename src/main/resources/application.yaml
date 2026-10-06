@@ -35,6 +35,9 @@ spring:
     default-schema: data_processing
     schemas: data_processing,securities_data
     locations: classpath:db/migration
+    placeholders:
+      # The role the functions log in as; migration V5 creates it and grants it data access.
+      application_role: ${spring.datasource.username}
 
 logging:
   structured:
@@ -44,6 +47,12 @@ logging:
       console: logstash
 
 data-processing:
+  database:
+    # In AWS the functions log in with RDS IAM authentication tokens, not a password, and the
+    # migration function reads the RDS-managed master secret when invoked (LLD section 23.5).
+    iam-authentication: ${DATABASE_IAM_AUTHENTICATION:false}
+    region: ${AWS_REGION:ap-south-1}
+    master-secret-arn: ${DATABASE_MASTER_SECRET_ARN:}
   sources:
     # The fetch service's artifact bucket; no other bucket is read (LLD section 19).
     region: ${AWS_REGION:ap-south-1}

@@ -1,9 +1,11 @@
 package com.bondplatform.dataprocessing.lambda;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.amazonaws.services.lambda.runtime.events.ScheduledEvent;
 import com.bondplatform.dataprocessing.persistence.PostgresIntegrationTest;
+import com.bondplatform.dataprocessing.shared.adapter.database.MasterSecret;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Map;
@@ -11,11 +13,15 @@ import java.util.Objects;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 /**
  * The scheduled and migration functions start as Lambda starts them, through their public
@@ -25,6 +31,10 @@ import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 class FunctionStartupIT extends PostgresIntegrationTest {
 
   private static final String URL = "spring.datasource.url";
+
+  /** A role of its own, so the grants migration V5 makes are what the functions rely on. */
+  private static final String APPLICATION_ROLE = "processing_role_check";
+
   private static final Pattern VERSIONED_FILE = Pattern.compile("^V(\\d+)__");
 
   @Value("${spring.datasource.url}")
@@ -61,7 +71,7 @@ class FunctionStartupIT extends PostgresIntegrationTest {
   }
 
   @Test
-  void migrationAppliesEveryMigrationToANewDatabaseOnce() throws IOException {
+  void migrationAppliesEveryMigrationToANewDatabaseOnceAsTheMaster() throws IOException {
     jdbc.sql("DROP DATABASE IF EXISTS migration_check").update();
     jdbc.sql("CREATE DATABASE migration_check").update();
     Resource[] files =
@@ -69,13 +79,90 @@ class FunctionStartupIT extends PostgresIntegrationTest {
     final int migrations = files.length;
     final int latestVersion = latestVersionOf(files);
     String newDatabase = databaseUrl.replaceFirst("/[^/?]+(\\?|$)", "/migration_check$1");
-    MigrationHandler migration = startedOn(newDatabase, MigrationHandler::new);
+    // As in AWS: the functions are configured with the application role, the migration logs in
+    // with the master user from the secret
+    MigrationHandler migration =
+        startedOn(
+            newDatabase,
+            APPLICATION_ROLE,
+            "",
+            () -> {
+              ConfigurableApplicationContext application = MigrationHandler.start();
+              return new MigrationHandler(
+                  MigrationHandler.asMaster(
+                      application.getBean(Flyway.class),
+                      newDatabase,
+                      () -> new MasterSecret(username, password)));
+            });
 
     assertThat(migration.handleRequest(Map.of(), new FixedLambdaContext()))
         .as("every migration is applied on the first invocation, none at startup")
         .isEqualTo("applied migrations=" + migrations + " schemaVersion=" + latestVersion);
     assertThat(migration.handleRequest(Map.of(), new FixedLambdaContext()))
         .isEqualTo("applied migrations=0 schemaVersion=" + latestVersion);
+  }
+
+  @Test
+  void theApplicationRoleCanRunTheScheduledFunctionsButNotChangeTheSchema() {
+    jdbc.sql("DROP DATABASE IF EXISTS role_check").update();
+    jdbc.sql("CREATE DATABASE role_check").update();
+    String newDatabase = databaseUrl.replaceFirst("/[^/?]+(\\?|$)", "/role_check$1");
+    // A stand-in for the role RDS provides; here it carries no IAM login, so the application role
+    // keeps a password. Roles span the whole server, so it is dropped again before other tests.
+    jdbc.sql("CREATE ROLE rds_iam").update();
+    try {
+      migrateAsMaster(newDatabase, APPLICATION_ROLE);
+      jdbc.sql("DROP DATABASE IF EXISTS role_guard_check").update();
+      jdbc.sql("CREATE DATABASE role_guard_check").update();
+      String guardedDatabase = databaseUrl.replaceFirst("/[^/?]+(\\?|$)", "/role_guard_check$1");
+      assertThatThrownBy(() -> migrateAsMaster(guardedDatabase, username))
+          .as("the master user is never made the application role")
+          .hasStackTraceContaining("must not be the user running the migrations");
+      assertThat(
+              jdbc.sql("SELECT pg_has_role(:role, 'rds_iam', 'MEMBER')")
+                  .param("role", APPLICATION_ROLE)
+                  .query(Boolean.class)
+                  .single())
+          .isTrue();
+    } finally {
+      jdbc.sql("DROP ROLE rds_iam").update();
+    }
+    jdbc.sql("ALTER ROLE " + APPLICATION_ROLE + " PASSWORD 'role-check'").update();
+
+    assertThat(
+            startedOn(newDatabase, APPLICATION_ROLE, "role-check", OutboxSweeperHandler::new)
+                .handleRequest(new ScheduledEvent(), new FixedLambdaContext()))
+        .isEqualTo("failed stuckJobs=0 delivered outboxEvents=0");
+    assertThat(
+            startedOn(newDatabase, APPLICATION_ROLE, "role-check", RetentionHandler::new)
+                .handleRequest(new ScheduledEvent(), new FixedLambdaContext()))
+        .isEqualTo("deleted validationIssues=0 rejectedRecords=0 outboxEvents=0");
+    JdbcClient asApplication =
+        JdbcClient.create(new DriverManagerDataSource(newDatabase, APPLICATION_ROLE, "role-check"));
+    assertThatThrownBy(
+            () -> asApplication.sql("CREATE TABLE data_processing.not_allowed (id INT)").update())
+        .rootCause()
+        .hasMessageContaining("permission denied");
+    assertThatThrownBy(
+            () -> asApplication.sql("DELETE FROM data_processing.flyway_schema_history").update())
+        .as("only migrations change the migration history")
+        .rootCause()
+        .hasMessageContaining("permission denied");
+  }
+
+  /** Runs the migration function on the database as the master, for the given application role. */
+  private void migrateAsMaster(String url, String applicationRole) {
+    startedOn(
+            url,
+            applicationRole,
+            "",
+            () ->
+                new MigrationHandler(
+                    MigrationHandler.asMaster(
+                        MigrationHandler.start().getBean(Flyway.class),
+                        url,
+                        () -> new MasterSecret(username, password))))
+        .handleRequest(Map.of(), new FixedLambdaContext());
   }
 
   /** The highest {@code V<n>__} number among the migration files. */
@@ -92,9 +179,13 @@ class FunctionStartupIT extends PostgresIntegrationTest {
 
   /** Starts a function as Lambda would, with the database settings Lambda's environment gives. */
   private <T> T startedOn(String url, Supplier<T> function) {
+    return startedOn(url, username, password, function);
+  }
+
+  private static <T> T startedOn(String url, String user, String secret, Supplier<T> function) {
     System.setProperty(URL, url);
-    System.setProperty("spring.datasource.username", username);
-    System.setProperty("spring.datasource.password", password);
+    System.setProperty("spring.datasource.username", user);
+    System.setProperty("spring.datasource.password", secret);
     return function.get();
   }
 }
