@@ -1494,7 +1494,7 @@ No function holds a database password (agreed 2026-10-06). Each function logs in
 |---|---|---|
 | `processing_reader` | Public read routes | `SELECT` on the six `securities_data` tables and on `ingestion_requests`, `processing_runs`, `source_files` and `validation_issues`; never `rejected_records`, which holds raw source rows |
 | `processing_submission` | `POST /v1/event-ingestions` | `SELECT`, `INSERT` on `ingestion_requests`; `SELECT`, `INSERT`, `UPDATE` on `outbox_events` |
-| `processing_worker` | Worker | `SELECT`, `UPDATE` on `ingestion_requests`; `SELECT`, `INSERT`, `UPDATE` on `processing_runs`, `outbox_events`, `securities` and `security_daily_market_summaries`; `SELECT`, `INSERT` on `source_files`; `INSERT` on `rejected_records`, `validation_issues` and the four collection tables |
+| `processing_worker` | Worker | `SELECT`, `UPDATE` on `ingestion_requests`; `SELECT`, `INSERT`, `UPDATE` on `processing_runs`, `outbox_events`, `securities` and `security_daily_market_summaries`; `SELECT`, `INSERT` on `source_files` and the four collection tables (an `ON CONFLICT` target reads its columns); `INSERT` on `rejected_records` and `validation_issues` |
 | `processing_sweeper` | Outbox sweeper | `SELECT`, `UPDATE` on `ingestion_requests`, `processing_runs` and `outbox_events` |
 | `processing_retention` | Retention | `SELECT`, `DELETE` on `validation_issues`, `rejected_records` and `outbox_events` |
 

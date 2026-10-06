@@ -4,7 +4,9 @@
 -- here too, to the roles that need it; there are no default privileges.
 --
 -- In AWS the roles log in with RDS IAM authentication tokens: granting rds_iam disables password
--- login for them. A database without that role, such as the test container, keeps password login.
+-- login for them. A database without that role, such as the test container, keeps password login;
+-- the roles get no password here, so outside RDS they cannot log in until one is set. Only these
+-- fixed roles ever get rds_iam, so the master user, which the migrations log in as, never does.
 DO $$
 DECLARE
   function_role TEXT;
@@ -23,9 +25,10 @@ BEGIN
 END
 $$;
 
-GRANT USAGE ON SCHEMA data_processing, securities_data TO
+GRANT USAGE ON SCHEMA data_processing TO
   processing_reader, processing_submission, processing_worker,
   processing_sweeper, processing_retention;
+GRANT USAGE ON SCHEMA securities_data TO processing_reader, processing_worker;
 
 -- Public read API: reads only what the read routes show.
 GRANT SELECT ON
@@ -54,7 +57,8 @@ GRANT INSERT ON data_processing.rejected_records, data_processing.validation_iss
 GRANT SELECT, INSERT, UPDATE ON data_processing.outbox_events TO processing_worker;
 GRANT SELECT, INSERT, UPDATE ON securities_data.securities,
   securities_data.security_daily_market_summaries TO processing_worker;
-GRANT INSERT ON
+-- SELECT because an ON CONFLICT target reads the columns it names.
+GRANT SELECT, INSERT ON
   securities_data.security_cash_flows,
   securities_data.security_listings,
   securities_data.security_ratings,

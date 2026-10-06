@@ -21,6 +21,7 @@ import com.bondplatform.dataprocessing.shared.domain.JobId;
 import com.bondplatform.dataprocessing.source.adapter.aws.S3Mock;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HexFormat;
@@ -112,12 +113,16 @@ class FunctionRolesIT extends PostgresIntegrationTest {
       processing_worker securities_data.securities SELECT
       processing_worker securities_data.securities UPDATE
       processing_worker securities_data.security_cash_flows INSERT
+      processing_worker securities_data.security_cash_flows SELECT
       processing_worker securities_data.security_collateral_assets INSERT
+      processing_worker securities_data.security_collateral_assets SELECT
       processing_worker securities_data.security_daily_market_summaries INSERT
       processing_worker securities_data.security_daily_market_summaries SELECT
       processing_worker securities_data.security_daily_market_summaries UPDATE
       processing_worker securities_data.security_listings INSERT
+      processing_worker securities_data.security_listings SELECT
       processing_worker securities_data.security_ratings INSERT
+      processing_worker securities_data.security_ratings SELECT
       """;
 
   @Value("${spring.datasource.url}")
@@ -158,6 +163,12 @@ class FunctionRolesIT extends PostgresIntegrationTest {
     // A job admitted but never run, an hour past its submission, with its dispatch still due
     JobId stuck = submit(submission, SubmissionEvents.bse("run_roles_3", "2026-01-02"), List.of());
     SQS.purgeQueue(request -> request.queueUrl(JOBS));
+    assertThat(
+            jdbc.sql("SELECT DISTINCT status FROM data_processing.outbox_events")
+                .query(String.class)
+                .list())
+        .as("submission and worker delivered every event they wrote")
+        .containsExactly("DELIVERED");
     jdbc.sql(
             "UPDATE data_processing.ingestion_requests"
                 + " SET submitted_at = now() - INTERVAL '2 hours' WHERE id = :id")
@@ -171,7 +182,8 @@ class FunctionRolesIT extends PostgresIntegrationTest {
     ConfigurableApplicationContext sweeper = function("processing_sweeper");
     assertThat(sweeper.getBean(StuckJobFailer.class).failStuckJobs()).isEqualTo(1);
     assertThat(sweeper.getBean(OutboxDispatcher.class).sweep()).isEqualTo(1);
-    assertThat(sweeper.getBean(OutboxBacklogMonitor.class).oldestPendingAge()).isNotNull();
+    assertThat(sweeper.getBean(OutboxBacklogMonitor.class).oldestPendingAge())
+        .isEqualTo(Duration.ZERO);
 
     assertThat(function("processing_retention").getBean(RetentionCleaner.class).clean())
         .isNotNull();
@@ -184,6 +196,12 @@ class FunctionRolesIT extends PostgresIntegrationTest {
                 .forTradeDate(LocalDate.parse("2026-01-01"), null, null)
                 .items())
         .isNotEmpty();
+    assertThat(
+            reader
+                .getBean(ListDailyMarketSummaries.class)
+                .forSecurity(Isin.of("INE121A07QY9"), null, null, null))
+        .as("an unknown ISIN, checked against the securities")
+        .isEmpty();
     assertThat(reader.getBean(GetJobStatus.class).find(bhavcopy)).isPresent();
     assertThat(reader.getBean(ListJobErrors.class).list(bhavcopy, null, null)).isPresent();
   }
@@ -201,7 +219,8 @@ class FunctionRolesIT extends PostgresIntegrationTest {
             .query(String.class)
             .list();
 
-    assertThat(held).containsExactlyElementsOf(GRANTS.lines().map(String::strip).toList());
+    assertThat(held)
+        .containsExactlyInAnyOrderElementsOf(GRANTS.lines().map(String::strip).toList());
   }
 
   /** Starts a function's application context, logged in as the given role. */
