@@ -47,7 +47,7 @@ import tools.jackson.databind.node.ObjectNode;
 class NsdlProcessingIT extends PostgresIntegrationTest {
 
   private static final JsonMapper JSON = JsonMapper.builder().build();
-  private static final String ISIN = "INE831R08076";
+  static final String ISIN = "INE831R08076";
   private static final String SOURCE_BUCKET = "data-fetch-service-artifacts";
   private static final String CANONICAL_BUCKET = "data-processing-service-canonical";
   private static final List<String> SAMPLES =
@@ -435,7 +435,7 @@ class NsdlProcessingIT extends PostgresIntegrationTest {
     return ((Timestamp) Objects.requireNonNull(security.get("updated_at"))).toInstant();
   }
 
-  private static Map<String, byte[]> samples() {
+  static Map<String, byte[]> samples() {
     Map<String, byte[]> files = new LinkedHashMap<>();
     SAMPLES.forEach(suffix -> files.put(suffix, sample(suffix)));
     return files;

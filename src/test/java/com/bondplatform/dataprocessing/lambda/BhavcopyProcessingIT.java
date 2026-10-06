@@ -295,7 +295,7 @@ class BhavcopyProcessingIT extends PostgresIntegrationTest {
     return (HEADER + "\n" + String.join("\n", rows) + "\n").getBytes(StandardCharsets.UTF_8);
   }
 
-  private static byte[] golden() {
+  static byte[] golden() {
     try (InputStream in =
         BhavcopyProcessingIT.class.getResourceAsStream("/fixtures/bse/BSE_fgroup01012026.csv")) {
       if (in == null) {
