@@ -73,13 +73,13 @@ Versions marked assumed must be checked against the current stable releases and 
 | `processing` Lambda security group in the network repository | PR 44, PR 47 | pending: needs a pull request there adding `processing` to `lambda_security_groups`, then a version tag |
 | Network repository version tag | PR 47 | pending: `v1` is not tagged yet |
 | Function environment variables | PR 45, PR 47 | known (2026-10-03): every function shares one application context, so all five need `FILE_PROCESSING_QUEUE_URL` (must end in `.fifo`), `SECURITY_DETAILS_QUEUE_URL`, `SOURCE_BUCKETS` (the fetch service's artifact bucket), and `CANONICAL_BUCKET` (the service's canonical-file bucket), and `EVENT_SOURCE` (the CloudEvent `source` of produced events, including the environment, for example `urn:bond-platform:structured-file-processing:prod`; added in PR 29a) or they fail to start; optional `PUBLIC_BASE_URL`. `AWS_REGION` is set by Lambda |
-| Route 53 hosted-zone ID for `kagent.app` | PR 46 | pending |
-| Security-details queue ARN, URL, and type (Standard or FIFO) | PR 46, PR 29 configuration | pending: from data-fetch-service Terraform outputs |
-| Fetch-service artifact bucket name | PR 46 | pending: `data-fetch-service-artifacts` appears in examples; confirm the deployed name |
+| Route 53 hosted-zone ID for `kagent.app` | PR 46 (input `hosted_zone_id`), PR 47 | pending: the deploy workflow supplies it; the fetch service uses the same zone (`HOSTED_ZONE_ID`) |
+| Security-details queue ARN, URL, and type (Standard or FIFO) | PR 46, PR 29 configuration | known (2026-10-06): the fetch service's ingress queue `data-fetch-service-ingress`, a Standard queue in the same account and region (its Terraform `queues.tf`). PR 46 takes the name (`security_details_queue_name`) and builds the ARN and URL, so this service can be applied before the fetch service. Its queue policy admits only roles in the fetch service's `external_producer_role_arns`, which must list this service's worker and sweeper roles (output `security_details_sender_role_arns`) |
+| Fetch-service artifact bucket name | PR 46 | known (2026-10-06): `data-fetch-service-artifacts` (its Terraform `storage.tf`); the worker reads only `runs/*`. Its bucket policy names this service's worker role through `processor_reader_role_arns` (output `source_reader_role_arns`); in the same account the worker's own IAM policy already allows the read |
 | Canonical-file bucket name | PR 45 | assumed: `data-processing-service-canonical` |
 | Encryption | PR 45–46 | assumed: SSE-S3, SSE-SQS, RDS default encryption; no customer-managed keys |
-| Alert recipient | PR 42, PR 46 | pending |
-| Fetch delivery role ARN | PR 46 | pending: from data-fetch-service Terraform outputs; needed for the `execute-api:Invoke` grant |
+| Alert recipient | PR 42, PR 46 | pending: PR 46 creates the alarm topic and subscribes `alert_email` only when it is set |
+| Fetch delivery role ARN | — | not needed (2026-10-06): HTTP APIs have no resource policy, so in the same account the fetch delivery role's own `execute-api:Invoke` grant on `processor_submission_route_arn` is the whole authorization |
 | Artifact bucket for Lambda packages | PR 44 | assumed: `data-processing-service-artifacts`, defined in `infra/bootstrap` (PR 44) |
 
 ## Collection order for pending inputs
