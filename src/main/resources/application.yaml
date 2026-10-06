@@ -35,9 +35,6 @@ spring:
     default-schema: data_processing
     schemas: data_processing,securities_data
     locations: classpath:db/migration
-    placeholders:
-      # The role the functions log in as; migration V5 creates it and grants it data access.
-      application_role: ${spring.datasource.username}
 
 logging:
   structured:

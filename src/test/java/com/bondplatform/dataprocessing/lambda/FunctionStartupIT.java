@@ -8,6 +8,7 @@ import com.bondplatform.dataprocessing.persistence.PostgresIntegrationTest;
 import com.bondplatform.dataprocessing.shared.adapter.database.MasterSecret;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Supplier;
@@ -32,8 +33,20 @@ class FunctionStartupIT extends PostgresIntegrationTest {
 
   private static final String URL = "spring.datasource.url";
 
-  /** A role of its own, so the grants migration V5 makes are what the functions rely on. */
-  private static final String APPLICATION_ROLE = "processing_role_check";
+  /** The login roles migration V5 creates, one per function. */
+  static final List<String> FUNCTION_ROLES =
+      List.of(
+          "processing_reader",
+          "processing_submission",
+          "processing_worker",
+          "processing_sweeper",
+          "processing_retention");
+
+  /**
+   * The login the migration function is configured with; it is never used, because the migration
+   * logs in as the master user from the secret.
+   */
+  private static final String UNUSED_LOGIN = "processing_reader";
 
   private static final Pattern VERSIONED_FILE = Pattern.compile("^V(\\d+)__");
 
@@ -79,12 +92,11 @@ class FunctionStartupIT extends PostgresIntegrationTest {
     final int migrations = files.length;
     final int latestVersion = latestVersionOf(files);
     String newDatabase = databaseUrl.replaceFirst("/[^/?]+(\\?|$)", "/migration_check$1");
-    // As in AWS: the functions are configured with the application role, the migration logs in
-    // with the master user from the secret
+    // As in AWS: the migration logs in with the master user from the secret, not its own login
     MigrationHandler migration =
         startedOn(
             newDatabase,
-            APPLICATION_ROLE,
+            UNUSED_LOGIN,
             "",
             () -> {
               ConfigurableApplicationContext application = MigrationHandler.start();
@@ -103,58 +115,51 @@ class FunctionStartupIT extends PostgresIntegrationTest {
   }
 
   @Test
-  void theApplicationRoleCanRunTheScheduledFunctionsButNotChangeTheSchema() {
+  void everyFunctionRoleGetsIamLoginAndCannotChangeTheSchemaOrTheMigrationHistory() {
     jdbc.sql("DROP DATABASE IF EXISTS role_check").update();
     jdbc.sql("CREATE DATABASE role_check").update();
     String newDatabase = databaseUrl.replaceFirst("/[^/?]+(\\?|$)", "/role_check$1");
-    // A stand-in for the role RDS provides; here it carries no IAM login, so the application role
-    // keeps a password. Roles span the whole server, so it is dropped again before other tests.
+    // A stand-in for the role RDS provides; here it carries no IAM login, so the function roles
+    // keep a password. Roles span the whole server, so it is dropped again before other tests.
     jdbc.sql("CREATE ROLE rds_iam").update();
     try {
-      migrateAsMaster(newDatabase, APPLICATION_ROLE);
-      jdbc.sql("DROP DATABASE IF EXISTS role_guard_check").update();
-      jdbc.sql("CREATE DATABASE role_guard_check").update();
-      String guardedDatabase = databaseUrl.replaceFirst("/[^/?]+(\\?|$)", "/role_guard_check$1");
-      assertThatThrownBy(() -> migrateAsMaster(guardedDatabase, username))
-          .as("the master user is never made the application role")
-          .hasStackTraceContaining("must not be the user running the migrations");
-      assertThat(
-              jdbc.sql("SELECT pg_has_role(:role, 'rds_iam', 'MEMBER')")
-                  .param("role", APPLICATION_ROLE)
-                  .query(Boolean.class)
-                  .single())
-          .isTrue();
+      migrateAsMaster(newDatabase);
+      assertThat(FUNCTION_ROLES)
+          .allSatisfy(
+              role ->
+                  assertThat(
+                          jdbc.sql("SELECT pg_has_role(:role, 'rds_iam', 'MEMBER')")
+                              .param("role", role)
+                              .query(Boolean.class)
+                              .single())
+                      .as(role)
+                      .isTrue());
     } finally {
       jdbc.sql("DROP ROLE rds_iam").update();
     }
-    jdbc.sql("ALTER ROLE " + APPLICATION_ROLE + " PASSWORD 'role-check'").update();
 
-    assertThat(
-            startedOn(newDatabase, APPLICATION_ROLE, "role-check", OutboxSweeperHandler::new)
-                .handleRequest(new ScheduledEvent(), new FixedLambdaContext()))
-        .isEqualTo("failed stuckJobs=0 delivered outboxEvents=0");
-    assertThat(
-            startedOn(newDatabase, APPLICATION_ROLE, "role-check", RetentionHandler::new)
-                .handleRequest(new ScheduledEvent(), new FixedLambdaContext()))
-        .isEqualTo("deleted validationIssues=0 rejectedRecords=0 outboxEvents=0");
-    JdbcClient asApplication =
-        JdbcClient.create(new DriverManagerDataSource(newDatabase, APPLICATION_ROLE, "role-check"));
-    assertThatThrownBy(
-            () -> asApplication.sql("CREATE TABLE data_processing.not_allowed (id INT)").update())
-        .rootCause()
-        .hasMessageContaining("permission denied");
-    assertThatThrownBy(
-            () -> asApplication.sql("DELETE FROM data_processing.flyway_schema_history").update())
-        .as("only migrations change the migration history")
-        .rootCause()
-        .hasMessageContaining("permission denied");
+    for (String role : FUNCTION_ROLES) {
+      jdbc.sql("ALTER ROLE " + role + " PASSWORD 'role-check'").update();
+      JdbcClient asFunction =
+          JdbcClient.create(new DriverManagerDataSource(newDatabase, role, "role-check"));
+      assertThatThrownBy(
+              () -> asFunction.sql("CREATE TABLE data_processing.not_allowed (id INT)").update())
+          .as(role)
+          .rootCause()
+          .hasMessageContaining("permission denied");
+      assertThatThrownBy(
+              () -> asFunction.sql("DELETE FROM data_processing.flyway_schema_history").update())
+          .as("only migrations change the migration history")
+          .rootCause()
+          .hasMessageContaining("permission denied");
+    }
   }
 
-  /** Runs the migration function on the database as the master, for the given application role. */
-  private void migrateAsMaster(String url, String applicationRole) {
+  /** Runs the migration function on the database as the master. */
+  private void migrateAsMaster(String url) {
     startedOn(
             url,
-            applicationRole,
+            UNUSED_LOGIN,
             "",
             () ->
                 new MigrationHandler(
