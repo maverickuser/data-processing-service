@@ -31,7 +31,8 @@ Do not resolve a contradiction between documents by inventing behaviour. Name th
 ```text
 contracts/                      four YAML processing contracts, packaged as classpath resources
 docs/                           specs, plans, engineering standards, decision records
-infra/bootstrap                 Terraform state bucket
+infra/bootstrap                 Lambda package bucket (the deploy workflow creates the state bucket)
+infra/modules/network           read-only view of the shared network state for this service
 infra/persistent                RDS PostgreSQL, canonical-file S3 bucket (never destroyed by the application workflow)
 infra/application               Lambda functions, API Gateway, SQS queues, schedules, alarms, DNS, IAM (disposable)
 src/main/java/com/bondplatform/dataprocessing/
@@ -72,6 +73,7 @@ A documented command must never be a placeholder that returns success. Commands 
 | `make build` | Compile, run all tests, and package the Lambda artifact `target/data-processing-service-lambda.zip` | yes |
 | `make check-contracts` | Validate the four YAML contracts and both OpenAPI documents (YAML and JSON equivalent) | yes |
 | `make check-docs` | Validate documentation links | yes |
+| `make check-infra` | Terraform `fmt`, `validate`, and mocked `terraform test` in every `infra/` directory; needs Terraform 1.16.4 (`TERRAFORM=/path/to/terraform`) but no AWS credentials | yes |
 
 Unit tests need no Docker and no AWS credentials. Database integration tests need Docker; without it they are skipped locally and still run in CI. Nothing on a pull request uses real AWS.
 

@@ -1,8 +1,11 @@
 # Local command contract. See AGENTS.md. Each target must do what its comment says.
 MVN := ./mvnw --batch-mode --no-transfer-progress
 COVERAGE_REPORT := target/site/jacoco/jacoco.csv
+TERRAFORM ?= terraform
+# Every Terraform directory, each checked on its own with its committed provider lock file
+INFRA_DIRS := infra/modules/network infra/bootstrap
 
-.PHONY: compile package check-package fmt lint build test-unit coverage-check test-integration check-contracts check-docs
+.PHONY: compile package check-package fmt lint build test-unit coverage-check test-integration check-contracts check-docs check-infra
 
 ## compile: compile main and test sources; Error Prone and NullAway findings fail it
 compile:
@@ -53,3 +56,12 @@ check-contracts:
 check-docs:
 	python3 scripts/test_check_docs.py
 	python3 scripts/check_docs.py
+
+## check-infra: Terraform formatting, then validate and the mocked `terraform test` suites in every infra directory; no AWS credentials
+check-infra:
+	$(TERRAFORM) fmt -check -recursive infra
+	set -e; for dir in $(INFRA_DIRS); do \
+	  $(TERRAFORM) -chdir=$$dir init -backend=false -input=false -lockfile=readonly; \
+	  $(TERRAFORM) -chdir=$$dir validate; \
+	  $(TERRAFORM) -chdir=$$dir test; \
+	done
