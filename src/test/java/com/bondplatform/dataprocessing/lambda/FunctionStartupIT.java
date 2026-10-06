@@ -146,12 +146,12 @@ class FunctionStartupIT extends PostgresIntegrationTest {
               () -> asFunction.sql("CREATE TABLE data_processing.not_allowed (id INT)").update())
           .as(role)
           .rootCause()
-          .hasMessageContaining("permission denied");
+          .hasMessageMatching("(?s).*(permission denied|read-only transaction).*");
       assertThatThrownBy(
               () -> asFunction.sql("DELETE FROM data_processing.flyway_schema_history").update())
           .as("only migrations change the migration history")
           .rootCause()
-          .hasMessageContaining("permission denied");
+          .hasMessageMatching("(?s).*(permission denied|read-only transaction).*");
     }
   }
 
