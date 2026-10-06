@@ -21,6 +21,28 @@ class MasterSecretTest {
   }
 
   @Test
+  void rejectsSecretWithoutUsername() {
+    assertThatThrownBy(() -> MasterSecret.parse("{\"password\":\"p@ss\"}"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("The master secret has no username or password");
+  }
+
+  @Test
+  void rejectsBlankPassword() {
+    assertThatThrownBy(() -> MasterSecret.parse("{\"username\":\"postgres\",\"password\":\" \"}"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("The master secret has no username or password");
+  }
+
+  @Test
+  void rejectsMalformedSecretWithoutQuotingIt() {
+    assertThatThrownBy(() -> MasterSecret.parse("{\"password\":\"p@ss"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("The master secret is not a JSON object")
+        .hasNoCause();
+  }
+
+  @Test
   void neverShowsThePassword() {
     assertThat(new MasterSecret("postgres", "p@ss")).hasToString("MasterSecret[username=postgres]");
   }

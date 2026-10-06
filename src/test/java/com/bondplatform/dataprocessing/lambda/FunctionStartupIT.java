@@ -107,18 +107,26 @@ class FunctionStartupIT extends PostgresIntegrationTest {
     jdbc.sql("DROP DATABASE IF EXISTS role_check").update();
     jdbc.sql("CREATE DATABASE role_check").update();
     String newDatabase = databaseUrl.replaceFirst("/[^/?]+(\\?|$)", "/role_check$1");
-    startedOn(
-            newDatabase,
-            APPLICATION_ROLE,
-            "",
-            () ->
-                new MigrationHandler(
-                    MigrationHandler.asMaster(
-                        MigrationHandler.start().getBean(Flyway.class),
-                        newDatabase,
-                        () -> new MasterSecret(username, password))))
-        .handleRequest(Map.of(), new FixedLambdaContext());
-    // The test database has no rds_iam role, so the application role logs in with a password
+    // A stand-in for the role RDS provides; here it carries no IAM login, so the application role
+    // keeps a password. Roles span the whole server, so it is dropped again before other tests.
+    jdbc.sql("CREATE ROLE rds_iam").update();
+    try {
+      migrateAsMaster(newDatabase, APPLICATION_ROLE);
+      jdbc.sql("DROP DATABASE IF EXISTS role_guard_check").update();
+      jdbc.sql("CREATE DATABASE role_guard_check").update();
+      String guardedDatabase = databaseUrl.replaceFirst("/[^/?]+(\\?|$)", "/role_guard_check$1");
+      assertThatThrownBy(() -> migrateAsMaster(guardedDatabase, username))
+          .as("the master user is never made the application role")
+          .hasStackTraceContaining("must not be the user running the migrations");
+      assertThat(
+              jdbc.sql("SELECT pg_has_role(:role, 'rds_iam', 'MEMBER')")
+                  .param("role", APPLICATION_ROLE)
+                  .query(Boolean.class)
+                  .single())
+          .isTrue();
+    } finally {
+      jdbc.sql("DROP ROLE rds_iam").update();
+    }
     jdbc.sql("ALTER ROLE " + APPLICATION_ROLE + " PASSWORD 'role-check'").update();
 
     assertThat(
@@ -134,6 +142,25 @@ class FunctionStartupIT extends PostgresIntegrationTest {
     assertThatThrownBy(
             () -> asApplication.sql("CREATE TABLE data_processing.not_allowed (id INT)").update())
         .hasMessageContaining("permission denied");
+    assertThatThrownBy(
+            () -> asApplication.sql("DELETE FROM data_processing.flyway_schema_history").update())
+        .as("only migrations change the migration history")
+        .hasMessageContaining("permission denied");
+  }
+
+  /** Runs the migration function on the database as the master, for the given application role. */
+  private void migrateAsMaster(String url, String applicationRole) {
+    startedOn(
+            url,
+            applicationRole,
+            "",
+            () ->
+                new MigrationHandler(
+                    MigrationHandler.asMaster(
+                        MigrationHandler.start().getBean(Flyway.class),
+                        url,
+                        () -> new MasterSecret(username, password))))
+        .handleRequest(Map.of(), new FixedLambdaContext());
   }
 
   /** The highest {@code V<n>__} number among the migration files. */
