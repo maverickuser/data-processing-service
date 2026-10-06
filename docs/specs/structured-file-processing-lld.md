@@ -1446,11 +1446,12 @@ Agreed 2026-10-02. The service runs on AWS Lambda and API Gateway instead of ECS
 
 ### 23.1 Functions
 
-One build artifact (a single Java application) is deployed as five Lambda functions that differ only in their handler. All run in the private subnets of the shared VPC, on arm64 with SnapStart.
+One build artifact (a single Java application) is deployed as six Lambda functions that differ only in their handler and settings. All run in the private subnets of the shared VPC, on arm64 with SnapStart.
 
 | Function | Trigger | Responsibility | Timeout | Concurrency |
 |---|---|---|---|---|
-| API | API Gateway HTTP API | `POST /v1/event-ingestions` and the five read endpoints | 29 seconds | Reserved 10 |
+| Read API | API Gateway HTTP API, `GET` routes | The five public read endpoints only (`API_SUBMISSION_ROUTES=false`) | 29 seconds | Reserved 10 |
+| Submission API | API Gateway HTTP API, `POST` route | `POST /v1/event-ingestions` only (`API_READ_ROUTES=false`) | 29 seconds | Reserved 5 |
 | Worker | SQS FIFO processing queue, batch size 1 | Runs one job: source reading, stage 1, stage 2, publication | 15 minutes | Maximum 10 through the event source mapping |
 | Outbox sweeper | EventBridge schedule, every minute | Delivers pending outbox events in order; fails jobs stuck beyond their attempt limit | 1 minute | 1 |
 | Retention | EventBridge schedule, daily | The cleanup in section 21.1 | 5 minutes | 1 |
@@ -1466,7 +1467,8 @@ The artifact is one zip with the compiled classes at its root and the dependenci
 ### 23.2 API Gateway and access
 
 - One HTTP API with the custom domain `processing.kagent.app`.
-- The five `GET` routes have no authorizer.
+- The five `GET` routes have no authorizer and are integrated with the read API function; `POST /v1/event-ingestions` is integrated with the submission function. The public, unauthenticated code therefore runs with a database role that can only read and an IAM role with no AWS permissions beyond its logs and network interfaces (least privilege, agreed 2026-10-06). Each function also turns the other's routes off, so neither can serve them even if misrouted.
+- Every response carries `X-Content-Type-Options: nosniff` and `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`. A problem response never quotes the request: a framework-detected error gets a fixed explanation that names at most a parameter. Query and path values are length-capped (ISIN and filters 64 characters, page tokens 1,024) before any use.
 - `POST /v1/event-ingestions` uses AWS IAM authorization. The fetch service's delivery Lambda signs the request with SigV4; its role is granted `execute-api:Invoke` on that route only. An unsigned or unauthorized request is rejected by API Gateway with `403` before reaching the application. This replaces "reachable only through an internal load balancer".
 - The request and response bodies of the submission API are unchanged. The only change for the fetch service is signing the request and calling the API Gateway hostname.
 - API Gateway throttling protects the public read routes and the small database.
@@ -1498,7 +1500,7 @@ No function holds a database password (agreed 2026-10-06). Each function logs in
 | `processing_sweeper` | Outbox sweeper | `SELECT`, `UPDATE` on `ingestion_requests`, `processing_runs` and `outbox_events` |
 | `processing_retention` | Retention | `SELECT`, `DELETE` on `validation_issues`, `rejected_records` and `outbox_events` |
 
-No role has DDL, `DELETE` outside retention, or any access to Flyway's history table, and there are no default privileges: a migration that adds a table grants it to the roles that need it. `FunctionRolesIT` runs every function's real work logged in as its role and fails if any role holds a privilege missing from this table. The migration function logs in only as the master user. RDS requires a master user; its password is generated, stored and rotated by RDS in Secrets Manager. Only the migration function may read that secret, when invoked, and it migrates as the master user, which owns the schema. IAM authentication requires TLS: the connection URL verifies the server against the RDS certificate bundle for the region, which the package carries as `rds/ap-south-1-bundle.pem` and `make package` checks. Terraform (plan PR 46) sets `DATABASE_URL` with `sslmode=verify-full` and `sslrootcert=/var/task/rds/ap-south-1-bundle.pem`, a file path because the driver does not read classpath resources. Tests and local runs log in with a password, because the IAM switch (`DATABASE_IAM_AUTHENTICATION`) is off there.
+No role has DDL, `DELETE` outside retention, or any access to Flyway's history table, and there are no default privileges: a migration that adds a table grants it to the roles that need it. `FunctionRolesIT` runs every function's real work logged in as its role and fails if any role holds a privilege missing from this table. The reader role's sessions are also read-only (`default_transaction_read_only`) with a 10-second `statement_timeout`, set on the role by migration V6. The migration function logs in only as the master user. RDS requires a master user; its password is generated, stored and rotated by RDS in Secrets Manager. Only the migration function may read that secret, when invoked, and it migrates as the master user, which owns the schema. IAM authentication requires TLS: the connection URL verifies the server against the RDS certificate bundle for the region, which the package carries as `rds/ap-south-1-bundle.pem` and `make package` checks. Terraform (plan PR 46) sets `DATABASE_URL` with `sslmode=verify-full` and `sslrootcert=/var/task/rds/ap-south-1-bundle.pem`, a file path because the driver does not read classpath resources. Tests and local runs log in with a password, because the IAM switch (`DATABASE_IAM_AUTHENTICATION`) is off there.
 
 ### 23.6 Deployment
 

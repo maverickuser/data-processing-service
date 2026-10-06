@@ -19,6 +19,9 @@ import org.jspecify.annotations.Nullable;
  */
 public class ListDailyMarketSummaries {
 
+  /** Longer than any value the filter could match; longer input is refused unread. */
+  private static final int MAX_FILTER_LENGTH = 64;
+
   private static final String INVALID_TOKEN = "The pageToken is not valid.";
 
   private final DailyMarketSummaryRepository summaries;
@@ -148,6 +151,9 @@ public class ListDailyMarketSummaries {
     // PostgreSQL text cannot hold U+0000, and no exchange name holds a control character
     if (trimmed.chars().anyMatch(Character::isISOControl)) {
       throw new InvalidQueryException("The exchangeName filter must not hold control characters.");
+    }
+    if (trimmed.length() > MAX_FILTER_LENGTH) {
+      throw new InvalidQueryException("The exchangeName filter is too long.");
     }
     return trimmed;
   }

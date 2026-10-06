@@ -82,7 +82,7 @@ class SecurityControllerTest {
   // No 400 is documented: a blank ISIN, or one with a control character, names no security
   @Test
   void unusableIsinIsNotFound() {
-    for (String isin : List.of(" ", "INE" + (char) 0)) {
+    for (String isin : List.of(" ", "INE" + (char) 0, "I".repeat(65))) {
       assertThatThrownBy(() -> controller.get(isin))
           .isInstanceOfSatisfying(
               ApiProblemException.class,

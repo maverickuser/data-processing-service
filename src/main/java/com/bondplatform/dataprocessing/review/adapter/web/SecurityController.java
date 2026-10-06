@@ -5,6 +5,7 @@ import com.bondplatform.dataprocessing.shared.adapter.web.ApiProblemException;
 import com.bondplatform.dataprocessing.shared.adapter.web.ProblemType;
 import com.bondplatform.dataprocessing.shared.domain.Isin;
 import java.util.Locale;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -12,9 +13,13 @@ import org.springframework.web.bind.annotation.RestController;
 
 /** Serves the combined view of one security (LLD section 20.1). */
 @RestController
+@ConditionalOnBooleanProperty(name = "data-processing.api.read-routes", matchIfMissing = true)
 public class SecurityController {
 
   static final String NOT_FOUND = "No security has this ISIN.";
+
+  /** Longer than any stored ISIN; a longer path segment is not looked up. */
+  static final int MAX_ISIN_LENGTH = 64;
 
   private final GetSecurity getSecurity;
 
@@ -32,8 +37,11 @@ public class SecurityController {
   @GetMapping(path = "/v1/securities/{isin}", produces = MediaType.APPLICATION_JSON_VALUE)
   public SecurityResponse get(@PathVariable String isin) {
     String normalized = isin.strip().toUpperCase(Locale.ROOT);
-    // No ISIN is blank or holds a control character, which PostgreSQL text cannot always store
-    if (normalized.isEmpty() || normalized.chars().anyMatch(Character::isISOControl)) {
+    // No ISIN is blank, very long, or holds a control character, which PostgreSQL text cannot
+    // always store
+    if (normalized.isEmpty()
+        || normalized.length() > MAX_ISIN_LENGTH
+        || normalized.chars().anyMatch(Character::isISOControl)) {
       throw notFound();
     }
     return getSecurity

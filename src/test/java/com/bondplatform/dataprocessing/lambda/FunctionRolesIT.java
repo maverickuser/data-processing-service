@@ -1,6 +1,7 @@
 package com.bondplatform.dataprocessing.lambda;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.bondplatform.dataprocessing.DataProcessingApplication;
 import com.bondplatform.dataprocessing.admission.SubmissionEvents;
@@ -36,6 +37,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.sqs.SqsClient;
@@ -221,6 +224,20 @@ class FunctionRolesIT extends PostgresIntegrationTest {
 
     assertThat(held)
         .containsExactlyInAnyOrderElementsOf(GRANTS.lines().map(String::strip).toList());
+  }
+
+  @Test
+  void readerSessionsAreReadOnlyAndCutOffLongStatements() {
+    JdbcClient asReader =
+        JdbcClient.create(new DriverManagerDataSource(databaseUrl, "processing_reader", PASSWORD));
+
+    assertThat(asReader.sql("SHOW default_transaction_read_only").query(String.class).single())
+        .isEqualTo("on");
+    assertThat(asReader.sql("SHOW statement_timeout").query(String.class).single())
+        .isEqualTo("10s");
+    assertThatThrownBy(() -> asReader.sql("CREATE TEMPORARY TABLE scratch (id INT)").update())
+        .rootCause()
+        .hasMessageContaining("read-only transaction");
   }
 
   /** Starts a function's application context, logged in as the given role. */

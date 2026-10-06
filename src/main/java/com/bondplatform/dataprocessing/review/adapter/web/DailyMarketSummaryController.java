@@ -8,6 +8,7 @@ import com.bondplatform.dataprocessing.shared.domain.Isin;
 import java.time.LocalDate;
 import java.util.Locale;
 import org.jspecify.annotations.Nullable;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.format.annotation.DateTimeFormat.ISO;
 import org.springframework.http.MediaType;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /** Serves daily market summaries by security and by trade date (LLD section 20.2). */
 @RestController
+@ConditionalOnBooleanProperty(name = "data-processing.api.read-routes", matchIfMissing = true)
 public class DailyMarketSummaryController {
 
   private final ListDailyMarketSummaries listSummaries;
@@ -43,8 +45,11 @@ public class DailyMarketSummaryController {
       @RequestParam(required = false) @DateTimeFormat(iso = ISO.DATE) @Nullable LocalDate toDate,
       @RequestParam(required = false) @Nullable String pageToken) {
     String normalized = isin.strip().toUpperCase(Locale.ROOT);
-    // No ISIN is blank or holds a control character, which PostgreSQL text cannot always store
-    if (normalized.isEmpty() || normalized.chars().anyMatch(Character::isISOControl)) {
+    // No ISIN is blank, very long, or holds a control character, which PostgreSQL text cannot
+    // always store
+    if (normalized.isEmpty()
+        || normalized.length() > SecurityController.MAX_ISIN_LENGTH
+        || normalized.chars().anyMatch(Character::isISOControl)) {
       throw notFound();
     }
     try {

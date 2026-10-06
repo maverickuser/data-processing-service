@@ -7,6 +7,7 @@ import com.bondplatform.dataprocessing.shared.adapter.web.ApiProblemException;
 import com.bondplatform.dataprocessing.shared.adapter.web.ProblemType;
 import com.bondplatform.dataprocessing.shared.domain.JobId;
 import org.jspecify.annotations.Nullable;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /** Serves a job's status, counts and error preview, and its full error list (LLD 16, 20.3). */
 @RestController
+@ConditionalOnBooleanProperty(name = "data-processing.api.read-routes", matchIfMissing = true)
 public class JobStatusController {
 
   static final String NOT_FOUND = "No processing job has this ID.";

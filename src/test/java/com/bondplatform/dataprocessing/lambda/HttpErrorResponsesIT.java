@@ -102,6 +102,19 @@ class HttpErrorResponsesIT {
     assertThat(response.get("statusCode").asInt()).isEqualTo(200);
     assertThat(JSON.readTree(response.get("body").asString()).get("tradeDate").asString())
         .isEqualTo("2026-01-01");
+    assertThat(response.get("headers").get("X-Content-Type-Options").asString())
+        .isEqualTo("nosniff");
+  }
+
+  @Test
+  void malformedParameterIsNamedWithoutEchoingItsValue() throws IOException {
+    JsonNode response = send(HttpApiEvent.get("/test-probe/dated").query("tradeDate=%3Cscript%3E"));
+
+    assertThat(response.get("statusCode").asInt()).isEqualTo(400);
+    assertThat(response.get("headers").get("X-Content-Type-Options").asString())
+        .isEqualTo("nosniff");
+    assertThat(JSON.readTree(response.get("body").asString()).get("detail").asString())
+        .isEqualTo("The tradeDate parameter is not valid.");
   }
 
   @Test

@@ -112,6 +112,9 @@ class ListJobErrorsTest {
     assertThatThrownBy(() -> listJobErrors.list(JOB, "INE" + (char) 0, null))
         .isInstanceOf(InvalidQueryException.class)
         .hasMessage("The isin filter must not hold control characters.");
+    assertThatThrownBy(() -> listJobErrors.list(JOB, "I".repeat(65), null))
+        .isInstanceOf(InvalidQueryException.class)
+        .hasMessage("The isin filter is too long.");
     verifyNoInteractions(jobs);
   }
 

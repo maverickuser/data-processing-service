@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
  * authorization, not here.
  */
 @RestController
+@ConditionalOnBooleanProperty(name = "data-processing.api.submission-routes", matchIfMissing = true)
 public class EventIngestionController {
 
   /** The only request content type: a structured-mode CloudEvent. */

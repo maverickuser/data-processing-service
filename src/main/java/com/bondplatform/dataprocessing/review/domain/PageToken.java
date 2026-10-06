@@ -23,6 +23,10 @@ public record PageToken(String scope, String position) {
 
   private static final String VERSION = "v1";
   private static final int CHECK_BYTES = 12;
+
+  /** Far longer than any token this service issues; a longer one is refused undecoded. */
+  static final int MAX_LENGTH = 1024;
+
   private static final Base64.Encoder ENCODER = Base64.getUrlEncoder().withoutPadding();
   private static final Base64.Decoder DECODER = Base64.getUrlDecoder();
 
@@ -37,6 +41,9 @@ public record PageToken(String scope, String position) {
    * the scope: malformed, changed, or from another list.
    */
   public static Optional<String> decode(String token, String scope) {
+    if (token.length() > MAX_LENGTH) {
+      return Optional.empty();
+    }
     int dot = token.indexOf('.');
     if (dot < 0) {
       return Optional.empty();
