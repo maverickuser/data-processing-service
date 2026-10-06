@@ -47,4 +47,9 @@ run "package_bucket_is_private_versioned_and_encrypted" {
     condition     = jsondecode(aws_s3_bucket_policy.tls.policy).Statement[0].Effect == "Deny" && jsondecode(aws_s3_bucket_policy.tls.policy).Statement[0].Condition.Bool["aws:SecureTransport"] == "false" && jsondecode(aws_s3_bucket_policy.tls.policy).Statement[0].Resource == ["arn:aws:s3:::data-processing-service-artifacts", "arn:aws:s3:::data-processing-service-artifacts/*"]
     error_message = "The bucket policy must refuse requests without TLS."
   }
+
+  assert {
+    condition     = jsondecode(aws_s3_bucket_policy.tls.policy).Statement[1].Effect == "Deny" && jsondecode(aws_s3_bucket_policy.tls.policy).Statement[1].Condition.NumericLessThan["s3:TlsVersion"] == "1.2"
+    error_message = "The bucket policy must refuse TLS older than 1.2."
+  }
 }

@@ -103,6 +103,17 @@ run "refuses_a_subnet_outside_the_shared_vpc" {
   expect_failures = [data.aws_subnet.private]
 }
 
+run "refuses_a_subnet_listed_under_the_wrong_zone" {
+  command = plan
+
+  override_data {
+    target = data.aws_subnet.private["ap-south-1b"]
+    values = { id = "subnet-0bbbbbbbbbbbbbbbb", vpc_id = "vpc-0123456789abcdef0", availability_zone = "ap-south-1a", map_public_ip_on_launch = false }
+  }
+
+  expect_failures = [data.aws_subnet.private]
+}
+
 run "refuses_a_public_subnet" {
   command = plan
 

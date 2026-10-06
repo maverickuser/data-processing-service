@@ -57,8 +57,16 @@ data "aws_subnet" "private" {
 
   lifecycle {
     postcondition {
-      condition     = self.vpc_id == local.network.vpc_id && self.availability_zone == each.key && !self.map_public_ip_on_launch
-      error_message = "Every private subnet must be in the shared VPC, in its declared zone, and assign no public addresses."
+      condition     = self.vpc_id == local.network.vpc_id
+      error_message = "Every private subnet must be in the shared VPC."
+    }
+    postcondition {
+      condition     = self.availability_zone == each.key
+      error_message = "Every private subnet must be in the zone it is listed under."
+    }
+    postcondition {
+      condition     = !self.map_public_ip_on_launch
+      error_message = "A private subnet must not assign public addresses."
     }
   }
 }

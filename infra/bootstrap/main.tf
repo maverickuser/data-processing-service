@@ -72,6 +72,13 @@ locals {
       Action    = "s3:*"
       Resource  = [aws_s3_bucket.packages.arn, "${aws_s3_bucket.packages.arn}/*"]
       Condition = { Bool = { "aws:SecureTransport" = "false" } }
+      }, {
+      Sid       = "DenyOutdatedTls"
+      Effect    = "Deny"
+      Principal = "*"
+      Action    = "s3:*"
+      Resource  = [aws_s3_bucket.packages.arn, "${aws_s3_bucket.packages.arn}/*"]
+      Condition = { NumericLessThan = { "s3:TlsVersion" = "1.2" } }
     }]
   }
 }

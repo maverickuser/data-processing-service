@@ -147,13 +147,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Install the pinned Terraform after checking its published checksum
+      - name: Install the pinned Terraform after checking its pinned checksum
+        env:
+          # From HashiCorp's SHA256SUMS for 1.16.4; change it together with TERRAFORM_VERSION.
+          TERRAFORM_SHA256: dc94af0eef1147718ad7c8daea792ed199e3e0492eec180d0adafa2a65a879df
         run: |
-          zip="terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
-          curl -fsSLo "$RUNNER_TEMP/$zip" "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/$zip"
-          curl -fsSL "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_SHA256SUMS" | grep " $zip\$" > "$RUNNER_TEMP/SHA256SUMS"
-          (cd "$RUNNER_TEMP" && sha256sum -c SHA256SUMS)
-          mkdir -p "$HOME/.local/bin" && unzip -oq "$RUNNER_TEMP/$zip" terraform -d "$HOME/.local/bin"
+          zip="$RUNNER_TEMP/terraform.zip"
+          curl -fsSLo "$zip" "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+          echo "$TERRAFORM_SHA256  $zip" | sha256sum -c -
+          mkdir -p "$HOME/.local/bin" && unzip -oq "$zip" terraform -d "$HOME/.local/bin"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Terraform format, validate, and mocked tests without AWS credentials
         run: make check-infra
