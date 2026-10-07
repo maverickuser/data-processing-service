@@ -1,5 +1,6 @@
 /**
- * Public read APIs: job status, job errors, securities and daily market summaries (LLD section 20).
+ * Read APIs, for allowed IAM roles only: job status, job errors, securities and daily market
+ * summaries (LLD section 20).
  */
 @NullMarked
 package com.bondplatform.dataprocessing.review;

@@ -1,9 +1,5 @@
 # Read by data-fetch-service from this root's state (see its infra/README.md).
 
-output "vpc_id" {
-  value = module.network.vpc_id
-}
-
 output "processor_api_endpoint" {
   value = "https://${local.domain}/v1/event-ingestions"
 }
@@ -21,6 +17,12 @@ output "source_reader_role_arns" {
 output "security_details_sender_role_arns" {
   description = "For the fetch service's external_producer_role_arns: the roles that send to its ingress queue."
   value       = [aws_iam_role.function["worker"].arn, aws_iam_role.function["outbox-sweeper"].arn]
+}
+
+# For the roles that call the read routes: grant each execute-api:Invoke on these, and list it
+# in read_api_caller_role_arns. A path parameter is a wildcard.
+output "read_route_arns" {
+  value = sort([for route in local.read_routes : "${aws_apigatewayv2_api.http.execution_arn}/${aws_apigatewayv2_stage.default.name}/${replace(replace(route, " ", ""), "/\\{[^}]+\\}/", "*")}"])
 }
 
 # Used by the deployment workflow.

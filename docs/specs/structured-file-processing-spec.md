@@ -15,7 +15,7 @@ Define a simple, traceable process for reading CSV files and JSON objects, valid
 
 ## Deployment network constraint
 
-The processing service and the data-fetch service run in the same AWS VPC. A separate shared-network Terraform state owns the VPC, private subnets, route tables, NAT gateways, VPC endpoints, and shared service security groups. The two application Terraform stacks consume the same versioned outputs rather than accepting independent VPC or subnet configuration. Processing submission uses a private internal load balancer and private DNS; the fetch Lambda security group is the only approved client of that listener. A deployment must fail if the VPC IDs, subnet VPC IDs, load-balancer VPC, or security-group VPCs do not match.
+Superseded by the LLD (sections 1 and 23). The processing service runs in a shared VPC owned by a separate shared-network Terraform state, with no NAT gateway; the data-fetch service runs outside any VPC. Processing submission and the read routes are served by an API Gateway HTTP API that requires AWS IAM authorization (SigV4); there is no internal load balancer.
 
 ## CSV example input
 

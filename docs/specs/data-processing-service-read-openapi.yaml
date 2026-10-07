@@ -1,16 +1,19 @@
 openapi: 3.1.0
 info:
-  title: Data Processing Service — Public Read API
+  title: Data Processing Service — Read API
   version: 1.0.0
   description: >-
-    Design contract, not evidence of deployment. Public, unauthenticated, read-only
-    endpoints for job status, error review, securities and daily market summaries.
+    Design contract, not evidence of deployment. Read-only endpoints for job status,
+    error review, securities and daily market summaries. Every request must be signed
+    with AWS Signature Version 4 by an IAM role the service allows; any other request is
+    refused with 403.
     Responses never expose S3 buckets, keys, version IDs, presigned URLs or upstream
     source URLs. The upstream submission endpoint is defined separately in
     data-processing-service-openapi.yaml.
 servers:
   - url: https://processing.kagent.app
-security: []
+security:
+  - awsSigV4: []
 paths:
   /v1/processing-jobs/{jobId}:
     get:
@@ -24,6 +27,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ProcessingJob' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/ServerError' }
   /v1/processing-jobs/{jobId}/errors:
@@ -43,6 +47,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorPage' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/ServerError' }
@@ -58,6 +63,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Security' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/ServerError' }
   /v1/securities/{isin}/daily-market-summaries:
@@ -81,6 +87,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DailyMarketSummaryPage' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/ServerError' }
@@ -103,6 +110,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DailyMarketSummaryPage' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '500': { $ref: '#/components/responses/ServerError' }
 components:
@@ -123,7 +131,29 @@ components:
       in: query
       description: Opaque cursor from a previous response's nextToken; may expire.
       schema: { type: string, maxLength: 1024 }
+  securitySchemes:
+    awsSigV4:
+      type: apiKey
+      name: Authorization
+      in: header
+      description: >-
+        AWS Signature Version 4 for service execute-api, by an IAM role allowed
+        execute-api:Invoke on the route. API Gateway refuses an unsigned or unauthorized
+        request with 403 and its own JSON body before the request reaches the service;
+        the service refuses a signed request from any role it does not allow with a 403
+        problem.
   responses:
+    Forbidden:
+      description: Unsigned request, or a caller that may not read
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+        application/json:
+          schema:
+            type: object
+            description: API Gateway's own refusal body.
+            properties:
+              message: { type: string }
     BadRequest:
       description: Malformed parameter or invalid page token
       content:

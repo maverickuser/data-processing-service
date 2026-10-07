@@ -1,5 +1,7 @@
-# One HTTP API at processing.kagent.app (LLD section 23.2). The read routes are public and go to
-# the read function; the submission route needs SigV4 (AWS_IAM) and goes to the submission
+# One HTTP API at processing.kagent.app (LLD section 23.2). Every route needs SigV4 (AWS_IAM):
+# API Gateway refuses an unsigned request, or one from a caller without execute-api:Invoke on the
+# route, before any function runs. The read routes go to the read function, which also refuses
+# every role not in read_api_caller_role_arns; the submission route goes to the submission
 # function. The default execute-api hostname is off, so the custom domain is the only way in.
 
 locals {
@@ -33,7 +35,7 @@ resource "aws_apigatewayv2_route" "read" {
   for_each           = local.read_routes
   api_id             = aws_apigatewayv2_api.http.id
   route_key          = each.key
-  authorization_type = "NONE"
+  authorization_type = "AWS_IAM"
   target             = "integrations/${aws_apigatewayv2_integration.function["read-api"].id}"
 }
 

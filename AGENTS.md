@@ -19,7 +19,7 @@ It does not download source files, and it does not expose any write operation on
 1. `docs/README.md` — documentation map and which file is authoritative for what.
 2. `docs/specs/structured-file-processing-lld.md` — the design. It is the source of truth for behaviour. Sections 17.5 and 20–22 override earlier sections where they differ.
 3. `contracts/*.yaml` — the four processing contracts (two stages per dataset). They override the illustrative YAML in LLD section 6.
-4. `docs/specs/data-processing-service-openapi.yaml` (submission) and `docs/specs/data-processing-service-read-openapi.yaml` (public reads).
+4. `docs/specs/data-processing-service-openapi.yaml` (submission) and `docs/specs/data-processing-service-read-openapi.yaml` (reads).
 5. `docs/plans/data-processing-service-implementation-plan.md` and `docs/plans/implementation-status.md` — the PR stack and verified progress.
 6. `docs/plans/implementation-context-spec.md` — toolchain pins, deployment inputs, and what is still pending.
 7. `docs/engineering/java-standards.md`, `docs/engineering/testing-strategy.md`, `docs/engineering/pr-review.md` — how code is written, tested, and reviewed.
@@ -45,7 +45,7 @@ src/main/java/com/bondplatform/dataprocessing/
   publication/                  atomic writes to securities_data, new-security detection
   outbox/                       outbox table, dispatcher, SQS publishers
   pipeline/                     dataset handlers joining source, both stages, and publication for a job
-  review/                       public read APIs
+  review/                       read APIs (IAM-authorized, allowed roles only)
   operations/                   retention cleanup, failing of stuck jobs
   lambda/                       thin Lambda entry points: API, queue, sweeper, retention, migration
   shared/                       value types (Isin, Percent), clock and ID suppliers, problem details
@@ -53,7 +53,7 @@ src/main/resources/db/migration Flyway migrations for securities_data and data_p
 src/test/java                   unit tests (*Test) and integration tests (*IT)
 ```
 
-The network (VPC, subnets, NAT gateway, endpoints, Lambda security groups) is not in this repository. It is owned by [cloud-platform-network](https://github.com/maverickuser/cloud-platform-network); this service's deployment calls that repository's reusable workflow and its Terraform reads the network state. Never define network resources here.
+The network (VPC, subnets, endpoints, Lambda security groups; no NAT gateway) is not in this repository. It is owned by [cloud-platform-network](https://github.com/maverickuser/cloud-platform-network); this service's deployment calls that repository's reusable workflow and its Terraform reads the network state. Never define network resources here.
 
 Each feature package has `domain` (pure Java, no framework imports), `application` (use cases and ports), and `adapter` (web, persistence, AWS) sub-packages. Dependencies point inward: adapter → application → domain. ArchUnit tests enforce this.
 

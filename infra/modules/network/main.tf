@@ -1,6 +1,7 @@
 # Reads the shared network owned by maverickuser/cloud-platform-network and exposes only what
-# this service needs. It defines no network resources: the VPC, subnets, NAT gateway, endpoints,
-# and Lambda security groups belong to that repository.
+# this service needs. It defines no network resources: the VPC, subnets, endpoints, and Lambda
+# security groups belong to that repository. The network has no NAT gateway, so this service's
+# Lambdas reach only the VPC, S3, and SQS.
 
 terraform {
   required_version = "~> 1.16.4"
@@ -106,4 +107,14 @@ output "private_subnet_ids" {
 
 output "lambda_security_group_id" {
   value = data.aws_security_group.lambda.id
+}
+
+output "database_zone" {
+  description = "The zone of the network's interface endpoints, where the single-zone database goes: losing that zone then takes down both together, never only the endpoints."
+  value       = try(local.network.interface_endpoint_zones[0], "")
+
+  precondition {
+    condition     = contains(keys(local.subnet_ids), try(local.network.interface_endpoint_zones[0], ""))
+    error_message = "The shared network must report its interface_endpoint_zones, the first in a private subnet zone; use cloud-platform-network v1 or later."
+  }
 }

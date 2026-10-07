@@ -50,6 +50,11 @@ data-processing:
     # routes, the submission function only the submission route.
     read-routes: ${API_READ_ROUTES:false}
     submission-routes: ${API_SUBMISSION_ROUTES:false}
+    # The IAM roles that may call the read routes, as comma-separated role ARNs (LLD section
+    # 23.2). API Gateway requires a SigV4 signature; the read function then refuses every other
+    # caller. Empty allows nobody.
+    read-callers:
+      role-arns: ${API_READ_CALLER_ROLE_ARNS:}
     # The public origin of the API; links in responses (Location, statusUrl) are built from it.
     public-base-url: ${PUBLIC_BASE_URL:https://processing.kagent.app}
   database:

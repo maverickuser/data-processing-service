@@ -17,9 +17,9 @@ This document records the CSV and JSON processing rules. Both formats are submit
 - Repository: `https://github.com/maverickuser/data-processing-service`. GitHub Actions provides CI and CD; Terraform manages service-owned infrastructure. Service documents, contracts, and code live in that repository; the implementation plan is [docs/plans/data-processing-service-implementation-plan.md](../plans/data-processing-service-implementation-plan.md). Adapt the fetch-service engineering guidance to Java/Spring Boot rather than adopting its Go/Lambda architecture or language-specific commands.
 - AWS deployment region is `ap-south-1`, supplied by the GitHub Actions configuration variable `aws_region` (`${{ vars.aws_region }}`). Pass it to Terraform as `TF_VAR_aws_region` and to AWS authentication/SDK configuration consistently; do not hardcode the region in application logic.
 - Deploy one environment, `prod`, initially. Do not provision separate development or staging environments. Persistent and disposable Terraform roots/states both belong to this production environment; lifecycle separation does not imply multiple deployment environments.
-- Lambda functions and RDS run in private subnets of the shared VPC. Public read-only APIs and the submission route are served by one API Gateway HTTP API. Read routes are public and unauthenticated. `POST /v1/event-ingestions` requires AWS IAM authorization (SigV4) and only the fetch service's delivery role is permitted to invoke it; there are no load balancers. Authentication for the public read surface may be added later. AWS IAM roles govern service access to S3, SQS, and other AWS resources. See section 23.
-- Shared-VPC enforcement: the separate repository `cloud-platform-network` (https://github.com/maverickuser/cloud-platform-network) is the sole owner of the VPC, subnets, route tables, NAT gateway, VPC endpoints, and the per-service Lambda security groups, in its own Terraform state. Both this service and data-fetch-service call its reusable workflow first in their deployment and read its outputs. Neither application stack may create a second VPC or accept independently configured subnet IDs.
-- Agreed API hostname: `processing.kagent.app`. The existing public Route 53 hosted zone for `kagent.app` is shared with another application. Reference that existing zone (prefer an explicitly supplied hosted-zone ID); do not create or assume Terraform ownership of the zone. The hostname is an API Gateway custom domain. Manage only this service's subdomain alias and its own certificate-validation records. Preserve apex records and all other applications' records during deployment and teardown. Application authentication is disabled initially; detailed public/private DNS records remain to be finalized; the shared-VPC and private-submission network contract is fixed above.
+- Lambda functions and RDS run in private subnets of the shared VPC. The read-only APIs and the submission route are served by one API Gateway HTTP API on the public internet. Every route requires AWS IAM authorization (SigV4) (read routes since 2026-10-07): `POST /v1/event-ingestions` only for the fetch service's delivery role, and the read routes only for the roles the read function is configured to allow, such as the smoke test role. There are no load balancers. AWS IAM roles govern service access to S3, SQS, and other AWS resources. See section 23.
+- Shared-VPC enforcement: the separate repository `cloud-platform-network` (https://github.com/maverickuser/cloud-platform-network) is the sole owner of the VPC, subnets, route tables, VPC endpoints, and the per-service Lambda security groups, in its own Terraform state. Since 2026-10-07 it has no NAT gateway: this service's Lambdas reach only the VPC, S3 (gateway endpoint), and SQS (interface endpoint, in the database's zone), and data-fetch-service runs its Lambdas outside the VPC. This service calls the network's reusable workflow first in its deployment and reads its outputs. Neither application stack may create a second VPC or accept independently configured subnet IDs.
+- Agreed API hostname: `processing.kagent.app`. The existing public Route 53 hosted zone for `kagent.app` is shared with another application. Reference that existing zone (prefer an explicitly supplied hosted-zone ID); do not create or assume Terraform ownership of the zone. The hostname is an API Gateway custom domain. Manage only this service's subdomain alias and its own certificate-validation records. Preserve apex records and all other applications' records during deployment and teardown. Callers authenticate with AWS IAM (SigV4), not application credentials; detailed public/private DNS records remain to be finalized; the shared-VPC and private-submission network contract is fixed above.
 - Application teardown must preserve PostgreSQL, including accepted securities data, processing jobs, rejected records, and outbox records; the canonical-file S3 bucket is preserved the same way. Manage the database and the supporting resources it depends on through a separate persistent Terraform root/state and lifecycle, outside the disposable application's destroy workflow.
 - Versioned YAML source-validation and mapping contracts in Git. Java implements a fixed set of referenced rules; YAML contains no executable code or expressions.
 - Initially approximately 10 CSV files per day, each no larger than 10 MB. A JSON manifest request has a combined 10 MB limit across its listed JSON files. Agreed: 10 MB means 10,485,760 bytes (10 × 1024 × 1024) of S3 object size, for one CSV or for the listed JSON files combined; the manifest object itself is limited to 1,048,576 bytes. Exceeding a limit makes the job `FAILED` with `SOURCE_TOO_LARGE` and no business-data changes.
@@ -70,7 +70,7 @@ Idempotency-Key: run_202
 
 The formal upstream request/response/error contract is [data-processing-service-openapi.yaml](data-processing-service-openapi.yaml), also available as [JSON](data-processing-service-openapi.json) (OpenAPI 3.1). Both serializations must remain equivalent. HTTP carries the complete CloudEvent with `data.manifest`; the immutable S3 manifest retains the previously agreed CloudEvent with `data.files`. Distinguish their IDs: `urn:bond-platform:submission:{run_id}` for HTTP and `urn:bond-platform:manifest:{run_id}` for the S3 event. A `(source, id)` pair must never identify two different payloads. Retain the same HTTP event, including `time`, across retries. The HTTP reference is `data.manifest.bucket/key`, optionally pinned by `version_id`; it is never a prefix. Dataset URN, source, type, subject, schema version, fetch event ID/type, run ID, inputs, and fingerprint must agree between submission and stored manifest. `job_id` never determines which JSON fields are extracted: the one dataset contract applies all configured paths present in every file.
 
-Admission validates the HTTP envelope and idempotency, then atomically persists the job, immutable admission receipt, pinned processing contracts, and dispatch intent before returning `202`. S3 reads and manifest/file checks run asynchronously. Failures discovered there appear in job status/errors, not as a later HTTP rejection. HTTP request limit is 65536 UTF-8 bytes, separate from source-data limits. Responses use processor camelCase; upstream event data retains snake_case. Replays return the same receipt with admission status `ACCEPTED`, even after processing ends; the status URL provides current state. `Location` and `statusUrl` point to the public read-only job resource. HTTP errors use RFC 9457 `application/problem+json`; see the OpenAPI document for 400/409/413/415/429/500/503 responses and retry rules. Read APIs carry no authentication. POST requires AWS IAM authorization (SigV4) at API Gateway, permitted only to the fetch service's delivery role (section 23). Read APIs remain public and unauthenticated.
+Admission validates the HTTP envelope and idempotency, then atomically persists the job, immutable admission receipt, pinned processing contracts, and dispatch intent before returning `202`. S3 reads and manifest/file checks run asynchronously. Failures discovered there appear in job status/errors, not as a later HTTP rejection. HTTP request limit is 65536 UTF-8 bytes, separate from source-data limits. Responses use processor camelCase; upstream event data retains snake_case. Replays return the same receipt with admission status `ACCEPTED`, even after processing ends; the status URL provides current state. `Location` and `statusUrl` point to the read-only job resource, which answers only a signed request from an allowed role. HTTP errors use RFC 9457 `application/problem+json`; see the OpenAPI document for 400/409/413/415/429/500/503 responses and retry rules. Read APIs carry no authentication. POST requires AWS IAM authorization (SigV4) at API Gateway, permitted only to the fetch service's delivery role (section 23). Read APIs remain public and unauthenticated.
 
 
 - A durably accepted new job returns `202 Accepted` and a job ID.
@@ -83,7 +83,7 @@ Admission validates the HTTP envelope and idempotency, then atomically persists 
 - The manifest supplies the authoritative `tradeDate` in ISO `YYYY-MM-DD` format, derived by the fetch service from its already resolved logical run date. For example, `inputs: {"exchangeName": "BSE", "tradeDate": "2026-01-01"}` must agree with `BSE_fgroup01012026.csv`. Do not infer either required manifest value solely from the filename or current worker time. A mismatch rejects processing without business-data changes; precise exchange normalization remains part of contract validation.
 - Agreed: the CSV basename must match `{exchangeName}_...{DDMMYYYY}.csv` — the exchange is the text before the first underscore and the date is the eight digits immediately before `.csv`. A filename with no exchange prefix, no eight-digit date, or an impossible calendar date makes the job `FAILED` with `INVALID_SOURCE_FILENAME` and no business-data changes.
 
-Submission request, response and error schemas are defined in the linked OpenAPI document; read API schemas are in section 20. The agreed access split is: read-only endpoints are public and unauthenticated initially; processing submission requires AWS IAM authorization and is granted only to the fetch service (section 23). The public surface must not accept S3 locations, idempotency-key submissions, or any operation that changes business data.
+Submission request, response and error schemas are defined in the linked OpenAPI document; read API schemas are in section 20. The agreed access split is: read-only endpoints require AWS IAM authorization and are served only to allowed roles (since 2026-10-07); processing submission requires AWS IAM authorization and is granted only to the fetch service (section 23). The read surface must not accept S3 locations, idempotency-key submissions, or any operation that changes business data.
 
 ### 2.2 Selected columns and mapping
 
@@ -544,12 +544,12 @@ Do not retain an entire file as a large object graph merely because the input li
 
 All design decisions needed for implementation were closed on 2026-10-02. Deliberately out of v1 scope:
 
-- Authentication for the public read APIs.
+- Read access for callers without AWS credentials, such as a web UI or a partner; it would need a JWT authorizer.
 - Mapping of the NSDL redemptions file.
 - Per-submission collection-membership tracking (which collateral assets or listings appear in the latest source).
 - Downloadable error reports, review-correction workflow, and S3 export of rejected records.
 - Manual refresh or re-fetch of security details for an existing ISIN.
-- Multi-AZ database, second NAT gateway, and additional environments.
+- Multi-AZ database, a NAT gateway, interface endpoints in a second zone, and additional environments.
 
 Java/Spring versions and the CSV parser library are implementation-plan choices.
 
@@ -1084,7 +1084,7 @@ The fetch service stops at durable HTTP 202 and does not need to poll. Processor
 
 ## 20. Read APIs
 
-Agreed v1 read surface (2026-10-02). All endpoints are public, unauthenticated, read-only `GET` operations on `processing.kagent.app`; none accepts S3 locations or changes data.
+Agreed v1 read surface (2026-10-02; IAM authorization since 2026-10-07). All endpoints are read-only `GET` operations on `processing.kagent.app` that require a SigV4-signed request from an allowed IAM role (section 23.2); none accepts S3 locations or changes data.
 
 | Endpoint | Returns |
 |---|---|
@@ -1251,12 +1251,12 @@ Revised 2026-10-02 for the Lambda runtime (section 23).
 |---|---|
 | Compute | AWS Lambda, Java, arm64, 1024 MB, SnapStart enabled; no always-on compute |
 | API | One API Gateway HTTP API with custom domain `processing.kagent.app` |
-| Database | RDS PostgreSQL 16, `db.t4g.micro`, 20 GB gp3 storage, single availability zone |
+| Database | RDS PostgreSQL 16, `db.t4g.micro`, 20 GB gp3 storage, single availability zone, in the zone of the network's interface endpoints (`ap-south-1a`) |
 | Network | One shared VPC `10.20.0.0/16` across two availability zones, one public and one private subnet in each |
-| NAT gateway | One, shared by both zones |
+| Internet egress | None: no NAT gateway. S3 through the gateway endpoint, SQS through one interface endpoint in the database's zone |
 | Load balancers | None |
 
-Accepted trade-off: a single-zone database and a single NAT gateway mean an availability-zone outage stops the service until it recovers; data is protected by the daily backups. The VPC, subnets, NAT gateway, and endpoints belong to the `cloud-platform-network` repository, consumed by both this service and the fetch service.
+Accepted trade-off: a single-zone database, and the SQS endpoint in the same zone, mean an availability-zone outage stops the service until it recovers; data is protected by the daily backups. Putting the endpoint in the database's zone means its zone failing never matters on its own. The VPC, subnets, and endpoints belong to the `cloud-platform-network` repository.
 
 ## 22. Table definitions
 
@@ -1450,7 +1450,7 @@ One build artifact (a single Java application) is deployed as six Lambda functio
 
 | Function | Trigger | Responsibility | Timeout | Concurrency |
 |---|---|---|---|---|
-| Read API | API Gateway HTTP API, `GET` routes | The five public read endpoints only (`API_READ_ROUTES=true`) | 29 seconds | Reserved 10 |
+| Read API | API Gateway HTTP API, `GET` routes | The five read endpoints only (`API_READ_ROUTES=true`), for allowed IAM roles only | 29 seconds | Reserved 10 |
 | Submission API | API Gateway HTTP API, `POST` route | `POST /v1/event-ingestions` only (`API_SUBMISSION_ROUTES=true`) | 29 seconds | Reserved 5 |
 | Worker | SQS FIFO processing queue, batch size 1 | Runs one job: source reading, stage 1, stage 2, publication | 15 minutes | Maximum 10 through the event source mapping |
 | Outbox sweeper | EventBridge schedule, every minute | Delivers pending outbox events in order; fails jobs stuck beyond their attempt limit | 1 minute | 1 |
@@ -1467,11 +1467,11 @@ The artifact is one zip with the compiled classes at its root and the dependenci
 ### 23.2 API Gateway and access
 
 - One HTTP API with the custom domain `processing.kagent.app`.
-- The five `GET` routes have no authorizer and are integrated with the read API function; `POST /v1/event-ingestions` is integrated with the submission function. The public, unauthenticated code therefore runs with a database role that can only read and an IAM role with no AWS permissions beyond its logs and network interfaces (least privilege, agreed 2026-10-06). Each function turns on only its own routes, and both settings default to off, so neither function can serve the other's routes even if misrouted, and a function deployed without the setting serves nothing.
+- The five `GET` routes use AWS IAM authorization (since 2026-10-07) and are integrated with the read API function; `POST /v1/event-ingestions` is integrated with the submission function. API Gateway refuses an unsigned request, or one from a caller without `execute-api:Invoke` on the route, with `403` and its own JSON body before any function runs. Because an HTTP API has no resource policy, any role in the account allowed `execute-api:Invoke` could otherwise sign a read, so the read function also checks the caller: it maps the assumed-role session ARN API Gateway passes (`requestContext.authorizer.iam.userArn`) to its role and serves only the roles in `API_READ_CALLER_ROLE_ARNS` (Terraform `read_api_caller_role_arns`, matched by partition, account, and role name, the name without case). Any other caller, or a request without that context, gets a `403` problem with a fixed explanation; an empty list serves nobody. The first allowed caller is the smoke test role. A caller anywhere on the internet signs with temporary credentials for an allowed role, for example `curl --aws-sigv4 "aws:amz:ap-south-1:execute-api"`; Terraform outputs the five route ARNs (`read_route_arns`) to grant. The read code therefore runs only for allowed roles, with a database role that can only read and an IAM role with no AWS permissions beyond its logs and network interfaces (least privilege, agreed 2026-10-06). Each function turns on only its own routes, and both settings default to off, so neither function can serve the other's routes even if misrouted, and a function deployed without the setting serves nothing.
 - Every response carries `X-Content-Type-Options: nosniff` and `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`. A problem response never quotes the request: a framework-detected error gets a fixed explanation that names at most a parameter. Query and path values are length-capped (ISIN and filters 64 characters, page tokens 1,024) and dates limited to the years 1900 to 9999 before any use.
 - `POST /v1/event-ingestions` uses AWS IAM authorization. The fetch service's delivery Lambda signs the request with SigV4; its role is granted `execute-api:Invoke` on that route only. An unsigned or unauthorized request is rejected by API Gateway with `403` before reaching the application. This replaces "reachable only through an internal load balancer".
 - The request and response bodies of the submission API are unchanged. The only change for the fetch service is signing the request and calling the API Gateway hostname.
-- API Gateway throttling protects the public read routes and the small database.
+- API Gateway throttling protects the read routes and the small database.
 
 ### 23.3 Queue, ordering, and retries
 
@@ -1494,7 +1494,7 @@ No function holds a database password (agreed 2026-10-06). Each function logs in
 
 | Role | Function | Privileges |
 |---|---|---|
-| `processing_reader` | Public read routes | `SELECT` on the six `securities_data` tables and on `ingestion_requests`, `processing_runs`, `source_files` and `validation_issues`; never `rejected_records`, which holds raw source rows |
+| `processing_reader` | Read routes | `SELECT` on the six `securities_data` tables and on `ingestion_requests`, `processing_runs`, `source_files` and `validation_issues`; never `rejected_records`, which holds raw source rows |
 | `processing_submission` | `POST /v1/event-ingestions` | `SELECT`, `INSERT` on `ingestion_requests`; `SELECT`, `INSERT`, `UPDATE` on `outbox_events` |
 | `processing_worker` | Worker | `SELECT`, `UPDATE` on `ingestion_requests`; `SELECT`, `INSERT`, `UPDATE` on `processing_runs`, `outbox_events`, `securities` and `security_daily_market_summaries`; `SELECT`, `INSERT` on `source_files` and the four collection tables (an `ON CONFLICT` target reads its columns); `INSERT` on `rejected_records` and `validation_issues` |
 | `processing_sweeper` | Outbox sweeper | `SELECT`, `UPDATE` on `ingestion_requests`, `processing_runs` and `outbox_events` |
@@ -1508,7 +1508,7 @@ The deployment workflow uploads the build artifact to S3, applies Terraform, pub
 
 ### 23.7 Consequences for data-fetch-service
 
-Its Terraform currently requires the processor's internal load balancer and security group. It must instead consume this service's API endpoint and route ARN, sign the submission request, and grant its delivery role `execute-api:Invoke`. The shared network contract (VPC, subnets, NAT gateway, endpoints) is unchanged.
+It consumes this service's API endpoint and route ARN, signs the submission request, and grants its delivery role `execute-api:Invoke`. Since 2026-10-07 its Lambdas run outside the VPC (data-fetch-service PR #10), so it no longer reads this service's `vpc_id`, and this service no longer outputs it.
 
 ### 23.8 Logs and metrics
 

@@ -80,6 +80,7 @@ resource "aws_db_instance" "database" {
   vpc_security_group_ids = [aws_security_group.database.id]
   publicly_accessible    = false
   multi_az               = false
+  availability_zone      = module.network.database_zone
 
   backup_retention_period    = 7
   backup_window              = "20:30-21:00"

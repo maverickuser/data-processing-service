@@ -5,7 +5,7 @@
 | [specs/structured-file-processing-lld.md](specs/structured-file-processing-lld.md) | Low-level design | Authoritative for behaviour. Sections 17.5 and 20–22 override earlier sections where they differ |
 | [../contracts/](../contracts) | Four YAML processing contracts | Authoritative for field paths, rules, and mappings; override the YAML snippets in LLD section 6 |
 | [specs/data-processing-service-openapi.yaml](specs/data-processing-service-openapi.yaml) (and `.json`) | Submission API, shared with data-fetch-service | Authoritative for `POST /v1/event-ingestions` |
-| [specs/data-processing-service-read-openapi.yaml](specs/data-processing-service-read-openapi.yaml) (and `.json`) | Public read API | Authoritative for the five `GET` endpoints |
+| [specs/data-processing-service-read-openapi.yaml](specs/data-processing-service-read-openapi.yaml) (and `.json`) | Read API (IAM-authorized) | Authoritative for the five `GET` endpoints |
 | [specs/structured-file-processing-spec.md](specs/structured-file-processing-spec.md) | Original functional specification | Historical; the LLD supersedes it where they differ |
 | [plans/data-processing-service-implementation-plan.md](plans/data-processing-service-implementation-plan.md) | 48 PRs in nine stacks | Authoritative for order and scope of work |
 | [plans/implementation-context-spec.md](plans/implementation-context-spec.md) | Toolchain pins and deployment inputs | Authoritative for versions and pending inputs |

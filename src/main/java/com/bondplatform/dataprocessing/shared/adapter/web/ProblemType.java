@@ -11,6 +11,7 @@ import java.util.Locale;
  */
 public enum ProblemType {
   INVALID_REQUEST(400, "Invalid Request"),
+  FORBIDDEN(403, "Forbidden"),
   NOT_FOUND(404, "Not Found"),
   METHOD_NOT_ALLOWED(405, "Method Not Allowed"),
   NOT_ACCEPTABLE(406, "Not Acceptable"),

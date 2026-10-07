@@ -19,6 +19,7 @@ override_module {
     vpc_cidr                 = "10.20.0.0/16"
     private_subnet_ids       = ["subnet-0aaaaaaaaaaaaaaaa", "subnet-0bbbbbbbbbbbbbbbb"]
     lambda_security_group_id = "sg-0123456789abcdef0"
+    database_zone            = "ap-south-1a"
   }
 }
 
@@ -33,9 +34,10 @@ run "database_is_private_encrypted_and_iam_authenticated" {
       aws_db_instance.database.allocated_storage == 20 &&
       aws_db_instance.database.storage_type == "gp3" &&
       !aws_db_instance.database.multi_az &&
+      aws_db_instance.database.availability_zone == "ap-south-1a" &&
       aws_db_instance.database.db_name == "data_processing"
     )
-    error_message = "The database must be single-AZ PostgreSQL 16 on db.t4g.micro with 20 GB gp3, database data_processing."
+    error_message = "The database must be single-AZ PostgreSQL 16 in the endpoint zone ap-south-1a on db.t4g.micro with 20 GB gp3, database data_processing."
   }
 
   assert {

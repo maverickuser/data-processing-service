@@ -5,14 +5,15 @@ override_data {
   target = data.terraform_remote_state.network
   values = {
     outputs = {
-      vpc_id   = "vpc-0123456789abcdef0"
-      vpc_cidr = "10.20.0.0/16"
+      vpc_id                   = "vpc-0123456789abcdef0"
+      vpc_cidr                 = "10.20.0.0/16"
+      interface_endpoint_zones = ["ap-south-1a"]
       private_subnet_ids_by_az = {
         "ap-south-1a" = "subnet-0aaaaaaaaaaaaaaaa"
         "ap-south-1b" = "subnet-0bbbbbbbbbbbbbbbb"
       }
       lambda_security_group_ids = {
-        fetch      = "sg-0fffffffffffffff0"
+        reporting  = "sg-0fffffffffffffff0"
         processing = "sg-0123456789abcdef0"
       }
     }
@@ -49,8 +50,50 @@ run "exposes_the_processing_view_of_the_shared_network" {
 
   assert {
     condition     = output.lambda_security_group_id == "sg-0123456789abcdef0"
-    error_message = "The processing Lambda security group must be selected, not the fetch one."
+    error_message = "The processing Lambda security group must be selected, not another consumer's."
   }
+
+  assert {
+    condition     = output.database_zone == "ap-south-1a"
+    error_message = "The database goes in the zone of the network's interface endpoints."
+  }
+}
+
+run "refuses_a_network_without_endpoint_zones" {
+  command = plan
+
+  override_data {
+    target = data.terraform_remote_state.network
+    values = {
+      outputs = {
+        vpc_id                    = "vpc-0123456789abcdef0"
+        vpc_cidr                  = "10.20.0.0/16"
+        private_subnet_ids_by_az  = { "ap-south-1a" = "subnet-0aaaaaaaaaaaaaaaa", "ap-south-1b" = "subnet-0bbbbbbbbbbbbbbbb" }
+        lambda_security_group_ids = { processing = "sg-0123456789abcdef0" }
+      }
+    }
+  }
+
+  expect_failures = [output.database_zone]
+}
+
+run "refuses_an_endpoint_zone_without_a_private_subnet" {
+  command = plan
+
+  override_data {
+    target = data.terraform_remote_state.network
+    values = {
+      outputs = {
+        vpc_id                    = "vpc-0123456789abcdef0"
+        vpc_cidr                  = "10.20.0.0/16"
+        interface_endpoint_zones  = ["ap-south-1c"]
+        private_subnet_ids_by_az  = { "ap-south-1a" = "subnet-0aaaaaaaaaaaaaaaa", "ap-south-1b" = "subnet-0bbbbbbbbbbbbbbbb" }
+        lambda_security_group_ids = { processing = "sg-0123456789abcdef0" }
+      }
+    }
+  }
+
+  expect_failures = [output.database_zone]
 }
 
 run "refuses_a_network_with_one_private_subnet" {
@@ -62,6 +105,7 @@ run "refuses_a_network_with_one_private_subnet" {
       outputs = {
         vpc_id                    = "vpc-0123456789abcdef0"
         vpc_cidr                  = "10.20.0.0/16"
+        interface_endpoint_zones  = ["ap-south-1a"]
         private_subnet_ids_by_az  = { "ap-south-1a" = "subnet-0aaaaaaaaaaaaaaaa" }
         lambda_security_group_ids = { processing = "sg-0123456789abcdef0" }
       }
@@ -78,8 +122,9 @@ run "refuses_a_network_without_a_processing_security_group" {
     target = data.terraform_remote_state.network
     values = {
       outputs = {
-        vpc_id   = "vpc-0123456789abcdef0"
-        vpc_cidr = "10.20.0.0/16"
+        vpc_id                   = "vpc-0123456789abcdef0"
+        vpc_cidr                 = "10.20.0.0/16"
+        interface_endpoint_zones = ["ap-south-1a"]
         private_subnet_ids_by_az = {
           "ap-south-1a" = "subnet-0aaaaaaaaaaaaaaaa"
           "ap-south-1b" = "subnet-0bbbbbbbbbbbbbbbb"

@@ -10,7 +10,7 @@ locals {
       timeout     = 29
       reserved    = var.reserved_concurrency.read_api
       db_role     = "processing_reader"
-      environment = { API_READ_ROUTES = "true" }
+      environment = { API_READ_ROUTES = "true", API_READ_CALLER_ROLE_ARNS = join(",", var.read_api_caller_role_arns) }
     }
     submission-api = {
       handler     = "ApiGatewayHandler"

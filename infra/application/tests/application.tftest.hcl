@@ -76,6 +76,7 @@ override_module {
     vpc_cidr                 = "10.20.0.0/16"
     private_subnet_ids       = ["subnet-0aaaaaaaaaaaaaaaa", "subnet-0bbbbbbbbbbbbbbbb"]
     lambda_security_group_id = "sg-0123456789abcdef0"
+    database_zone            = "ap-south-1a"
   }
 }
 
@@ -297,7 +298,7 @@ run "processing_queue_orders_retries_and_admits_only_its_senders" {
   }
 }
 
-run "public_reads_and_signed_submission_at_the_custom_domain" {
+run "every_route_is_signed_at_the_custom_domain" {
   command = plan
 
   assert {
@@ -308,9 +309,9 @@ run "public_reads_and_signed_submission_at_the_custom_domain" {
   assert {
     condition = (
       length(aws_apigatewayv2_route.read) == 5 &&
-      alltrue([for key, route in aws_apigatewayv2_route.read : startswith(key, "GET /v1/") && route.authorization_type == "NONE"])
+      alltrue([for key, route in aws_apigatewayv2_route.read : startswith(key, "GET /v1/") && route.authorization_type == "AWS_IAM"])
     )
-    error_message = "The five read routes are GET and have no authorizer."
+    error_message = "The five read routes are GET and require SigV4."
   }
 
   assert {
@@ -405,9 +406,62 @@ run "outputs_match_what_the_fetch_service_checks" {
   }
 
   assert {
-    condition     = output.vpc_id == "vpc-0123456789abcdef0" && output.source_reader_role_arns == ["arn:aws:iam::123456789012:role/data-processing-service-worker"]
-    error_message = "The fetch service reads the VPC and grants artifact reads to the worker only."
+    condition     = output.source_reader_role_arns == ["arn:aws:iam::123456789012:role/data-processing-service-worker"]
+    error_message = "The fetch service grants artifact reads to the worker only."
   }
+}
+
+run "read_callers_are_named_roles_only" {
+  command = plan
+
+  variables {
+    read_api_caller_role_arns = ["arn:aws:iam::123456789012:role/smoke-test", "arn:aws:iam::123456789012:role/ops/reader"]
+  }
+
+  assert {
+    condition = (
+      one(aws_lambda_function.function["read-api"].environment).variables["API_READ_CALLER_ROLE_ARNS"] == "arn:aws:iam::123456789012:role/smoke-test,arn:aws:iam::123456789012:role/ops/reader" &&
+      alltrue([for name, f in aws_lambda_function.function : name == "read-api" || !contains(keys(one(f.environment).variables), "API_READ_CALLER_ROLE_ARNS")])
+    )
+    error_message = "Only the read function receives the allowed caller roles."
+  }
+}
+
+run "read_route_arns_cover_each_read_route" {
+  command = plan
+
+  override_resource {
+    target          = aws_apigatewayv2_api.http
+    override_during = plan
+    values          = { id = "abc123", execution_arn = "arn:aws:execute-api:ap-south-1:123456789012:abc123" }
+  }
+
+  override_resource {
+    target          = aws_apigatewayv2_stage.default
+    override_during = plan
+    values          = { name = "$default" }
+  }
+
+  assert {
+    condition = output.read_route_arns == tolist([
+      "arn:aws:execute-api:ap-south-1:123456789012:abc123/$default/GET/v1/daily-market-summaries",
+      "arn:aws:execute-api:ap-south-1:123456789012:abc123/$default/GET/v1/processing-jobs/*",
+      "arn:aws:execute-api:ap-south-1:123456789012:abc123/$default/GET/v1/processing-jobs/*/errors",
+      "arn:aws:execute-api:ap-south-1:123456789012:abc123/$default/GET/v1/securities/*",
+      "arn:aws:execute-api:ap-south-1:123456789012:abc123/$default/GET/v1/securities/*/daily-market-summaries",
+    ])
+    error_message = "Each read route has one ARN, its path parameters as wildcards."
+  }
+}
+
+run "refuses_a_read_caller_that_is_not_a_role" {
+  command = plan
+
+  variables {
+    read_api_caller_role_arns = ["arn:aws:iam::123456789012:user/someone"]
+  }
+
+  expect_failures = [var.read_api_caller_role_arns]
 }
 
 run "refuses_a_short_commit" {

@@ -96,3 +96,13 @@ variable "submission_throttle" {
   type    = object({ rate_limit = number, burst_limit = number })
   default = { rate_limit = 5, burst_limit = 10 }
 }
+
+variable "read_api_caller_role_arns" {
+  type        = list(string)
+  default     = []
+  description = "IAM roles the read function serves, such as the smoke test role. Each also needs execute-api:Invoke on read_route_arns. Empty serves nobody."
+  validation {
+    condition     = alltrue([for arn in var.read_api_caller_role_arns : can(regex("^arn:aws[a-z-]*:iam::[0-9]{12}:role/([\\w+=,.@-]+/)*[\\w+=,.@-]{1,64}$", arn))])
+    error_message = "read_api_caller_role_arns must hold only IAM role ARNs."
+  }
+}

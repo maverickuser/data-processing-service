@@ -8,6 +8,7 @@ import com.bondplatform.dataprocessing.admission.application.AdmitSubmission;
 import com.bondplatform.dataprocessing.admission.domain.SubmissionValidator;
 import com.bondplatform.dataprocessing.review.adapter.web.DailyMarketSummaryController;
 import com.bondplatform.dataprocessing.review.adapter.web.JobStatusController;
+import com.bondplatform.dataprocessing.review.adapter.web.ReadCallerFilter;
 import com.bondplatform.dataprocessing.review.adapter.web.SecurityController;
 import com.bondplatform.dataprocessing.review.application.GetJobStatus;
 import com.bondplatform.dataprocessing.review.application.GetSecurity;
@@ -17,10 +18,12 @@ import com.bondplatform.dataprocessing.shared.adapter.web.PublicApiProperties;
 import java.net.URI;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
+import org.springframework.web.servlet.HandlerExceptionResolver;
 
 /**
  * The read API function and the submission function each serve only their own routes (LLD section
- * 23.1): the public, unauthenticated read function has no route that writes.
+ * 23.1): the read function has no route that writes, and only it checks its callers.
  */
 class ApiRoutesTest {
 
@@ -92,5 +95,21 @@ class ApiRoutesTest {
                     .hasSingleBean(SecurityController.class)
                     .hasSingleBean(DailyMarketSummaryController.class)
                     .hasSingleBean(JobStatusController.class));
+  }
+
+  @Test
+  void onlyTheReadFunctionChecksItsCallers() {
+    WebApplicationContextRunner web =
+        new WebApplicationContextRunner()
+            .withBean(
+                "handlerExceptionResolver",
+                HandlerExceptionResolver.class,
+                () -> (request, response, handler, exception) -> null)
+            .withUserConfiguration(ReadCallerFilter.class);
+
+    web.withPropertyValues("data-processing.api.read-routes=true")
+        .run(context -> assertThat(context).hasSingleBean(ReadCallerFilter.class));
+    web.withPropertyValues("data-processing.api.submission-routes=true")
+        .run(context -> assertThat(context).doesNotHaveBean(ReadCallerFilter.class));
   }
 }

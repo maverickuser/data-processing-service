@@ -33,8 +33,9 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
  */
 @Component
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
-// After SecurityHeadersFilter, so its refusals carry the security headers too
-@Order(Ordered.HIGHEST_PRECEDENCE + 1)
+// After SecurityHeadersFilter, so its refusals carry the security headers too, and after
+// ReadCallerFilter, so a read from a caller that is not allowed is refused first
+@Order(Ordered.HIGHEST_PRECEDENCE + 2)
 public class RequestCharsetFilter extends OncePerRequestFilter {
 
   private static final String CHARSET = "charset";
