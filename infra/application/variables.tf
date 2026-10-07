@@ -89,7 +89,7 @@ variable "reserved_concurrency" {
 variable "read_throttle" {
   type        = object({ rate_limit = number, burst_limit = number })
   default     = { rate_limit = 20, burst_limit = 40 }
-  description = "API Gateway throttling for the public read routes, per second."
+  description = "API Gateway throttling for the read routes, per second."
 }
 
 variable "submission_throttle" {
@@ -100,9 +100,9 @@ variable "submission_throttle" {
 variable "read_api_caller_role_arns" {
   type        = list(string)
   default     = []
-  description = "IAM roles the read function serves, such as the smoke test role. Each also needs execute-api:Invoke on read_route_arns. Empty serves nobody."
+  description = "IAM roles the read function serves, such as the smoke test role. Each also needs execute-api:Invoke on read_route_arns. Empty serves nobody. A name or path holding a comma is refused, since the function receives the list comma-separated."
   validation {
-    condition     = alltrue([for arn in var.read_api_caller_role_arns : can(regex("^arn:aws[a-z-]*:iam::[0-9]{12}:role/([\\w+=,.@-]+/)*[\\w+=,.@-]{1,64}$", arn))])
+    condition     = alltrue([for arn in var.read_api_caller_role_arns : can(regex("^arn:aws[a-z-]*:iam::[0-9]{12}:role/([\\w+=.@-]+/)*[\\w+=.@-]{1,64}$", arn))])
     error_message = "read_api_caller_role_arns must hold only IAM role ARNs."
   }
 }

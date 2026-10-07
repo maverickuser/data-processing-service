@@ -68,6 +68,7 @@ class ReadCallerFilterTest {
         "arn:aws:iam::123456789012:role/smoke-test",
         "arn:aws:sts::123456789012:assumed-role/smoke-test/session/extra",
         "arn:aws:sts::123456789012:assumed-role/smoke-test/session\nforged",
+        "arn:aws:sts::123456789012:assumed-role/smoke-test,x/session",
         ""
       })
   void anyOtherCallerIsRefused(String callerArn) throws Exception {
@@ -94,6 +95,17 @@ class ReadCallerFilterTest {
   void emptyListRefusesEveryone() throws Exception {
     assertRefused(
         new ReadCallerFilter(new ReadCallerProperties(null), resolver), read(iam(SMOKE_SESSION)));
+  }
+
+  @Test
+  void otherMethodsOnReadPathsAreChecked() throws Exception {
+    MockHttpServletRequest options = read(null);
+    options.setMethod("OPTIONS");
+    assertRefused(filter(SMOKE_ROLE), options);
+
+    MockHttpServletRequest post = read(null);
+    post.setMethod("POST");
+    assertRefused(filter(SMOKE_ROLE), post);
   }
 
   @Test
@@ -133,6 +145,11 @@ class ReadCallerFilterTest {
   @Test
   void entryThatIsNotRoleArnStopsTheApplication() {
     assertThatThrownBy(() -> new ReadCallerProperties(List.of("arn:aws:iam::123456789012:user/x")))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(
+            () ->
+                new ReadCallerProperties(
+                    List.of("arn:aws:iam::123456789012:role/a,arn:aws:iam::123456789012:role/b")))
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(() -> new ReadCallerProperties(List.of("*")))
         .isInstanceOf(IllegalArgumentException.class);

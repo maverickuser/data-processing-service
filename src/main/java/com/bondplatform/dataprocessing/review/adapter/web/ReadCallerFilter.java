@@ -30,9 +30,10 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
  *
  * <p>API Gateway checks the SigV4 signature and the caller's {@code execute-api:Invoke} permission,
  * then passes the caller in the request context; without that context, as for a request that did
- * not come through API Gateway, nobody is allowed. Only {@code GET} and {@code HEAD} requests are
- * checked, so an application serving both kinds of route, as in tests, still admits submissions.
- * The refusal says nothing about why, and the log names only the caller's role.
+ * not come through API Gateway, nobody is allowed. Every request is checked except {@code POST
+ * /v1/event-ingestions}, so an application serving both kinds of route, as in tests, still admits
+ * submissions, and no other method reaches a read route unchecked. The refusal says nothing about
+ * why, and the log names only the caller's role.
  */
 @Component
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
@@ -44,6 +45,8 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
 public class ReadCallerFilter extends OncePerRequestFilter {
 
   static final String NOT_ALLOWED = "This caller may not read from this API.";
+
+  private static final String SUBMISSION_PATH = "/v1/event-ingestions";
 
   private static final Logger LOG = LoggerFactory.getLogger(ReadCallerFilter.class);
 
@@ -60,8 +63,7 @@ public class ReadCallerFilter extends OncePerRequestFilter {
 
   @Override
   protected boolean shouldNotFilter(HttpServletRequest request) {
-    String method = request.getMethod();
-    return !"GET".equals(method) && !"HEAD".equals(method);
+    return "POST".equals(request.getMethod()) && SUBMISSION_PATH.equals(request.getRequestURI());
   }
 
   @Override

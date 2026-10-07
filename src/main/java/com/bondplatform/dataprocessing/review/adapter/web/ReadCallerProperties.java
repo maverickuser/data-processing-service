@@ -17,7 +17,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * <p>A caller arrives as an assumed-role session ARN, {@code
  * arn:aws:sts::123456789012:assumed-role/Name/session}, which carries no role path, so roles are
  * matched by partition, account, and name. Role names are unique per account regardless of case, so
- * the name is compared without case. An empty list allows nobody.
+ * the name is compared without case. An empty list allows nobody. Names holding a comma, which IAM
+ * allows, are refused, because the setting is a comma-separated list: a comma inside one entry
+ * would otherwise read as a second role.
  *
  * @param roleArns role ARNs such as {@code arn:aws:iam::123456789012:role/smoke-test}
  */
@@ -27,14 +29,14 @@ public record ReadCallerProperties(List<String> roleArns) {
   /** A role ARN, optionally with a path; groups: partition, account, name. */
   private static final Pattern ROLE_ARN =
       Pattern.compile(
-          "arn:(aws[a-z-]{0,20}):iam::(\\d{12}):role/(?:[\\w+=,.@-]{1,128}/){0,32}"
-              + "([\\w+=,.@-]{1,64})");
+          "arn:(aws[a-z-]{0,20}):iam::(\\d{12}):role/(?:[\\w+=.@-]{1,128}/){0,32}"
+              + "([\\w+=.@-]{1,64})");
 
   /** An assumed-role session ARN; groups: partition, account, role name. */
   private static final Pattern SESSION_ARN =
       Pattern.compile(
-          "arn:(aws[a-z-]{0,20}):sts::(\\d{12}):assumed-role/([\\w+=,.@-]{1,64})/"
-              + "[\\w+=,.@-]{2,64}");
+          "arn:(aws[a-z-]{0,20}):sts::(\\d{12}):assumed-role/([\\w+=.@-]{1,64})/"
+              + "[\\w+=.@-]{2,64}");
 
   /**
    * Checks every entry.
