@@ -23,6 +23,10 @@ class HttpErrorResponsesIT {
 
   private static final JsonMapper JSON = JsonMapper.builder().build();
 
+  /** A session of the role allowed in src/test/resources/config/application.yaml. */
+  private static final String ALLOWED_CALLER =
+      "arn:aws:sts::000000000000:assumed-role/test-reader/session";
+
   private static ApiGatewayHandler handler;
 
   @BeforeAll
@@ -32,39 +36,38 @@ class HttpErrorResponsesIT {
 
   static Stream<Arguments> requestErrors() {
     return Stream.of(
-        error("unknown route", HttpApiEvent.get("/v1/unknown"), 404, "NOT_FOUND"),
-        error("wrong method", HttpApiEvent.post("/test-probe/dated"), 405, "METHOD_NOT_ALLOWED"),
-        error("missing parameter", HttpApiEvent.get("/test-probe/dated"), 400, "INVALID_REQUEST"),
+        error("unknown route", signedGet("/v1/unknown"), 404, "NOT_FOUND"),
+        error("wrong method", signedPost("/test-probe/dated"), 405, "METHOD_NOT_ALLOWED"),
+        error("missing parameter", signedGet("/test-probe/dated"), 400, "INVALID_REQUEST"),
         error(
             "malformed date",
-            HttpApiEvent.get("/test-probe/dated").query("tradeDate=2026-13-45"),
+            signedGet("/test-probe/dated").query("tradeDate=2026-13-45"),
             400,
             "INVALID_REQUEST"),
         error(
             "unacceptable response type",
-            HttpApiEvent.get("/test-probe/dated")
+            signedGet("/test-probe/dated")
                 .query("tradeDate=2026-01-01")
                 .header("accept", "application/xml"),
             406,
             "NOT_ACCEPTABLE"),
         error(
             "unsupported content type",
-            HttpApiEvent.post("/test-probe/echo").body("text/plain", "hello"),
+            signedPost("/test-probe/echo").body("text/plain", "hello"),
             415,
             "UNSUPPORTED_MEDIA_TYPE"),
         error(
             "refused character set",
-            HttpApiEvent.post("/test-probe/echo")
+            signedPost("/test-probe/echo")
                 .body("application/json; charset=iso-8859-1", "{\"value\": 1}"),
             415,
             "UNSUPPORTED_MEDIA_TYPE"),
         error(
             "malformed JSON body",
-            HttpApiEvent.post("/test-probe/echo").body("application/json", "{not json"),
+            signedPost("/test-probe/echo").body("application/json", "{not json"),
             400,
             "INVALID_REQUEST"),
-        error(
-            "unexpected failure", HttpApiEvent.get("/test-probe/failing"), 500, "INTERNAL_ERROR"));
+        error("unexpected failure", signedGet("/test-probe/failing"), 500, "INTERNAL_ERROR"));
   }
 
   @ParameterizedTest
@@ -92,14 +95,14 @@ class HttpErrorResponsesIT {
 
   @Test
   void wrongMethodResponseNamesTheAllowedMethod() throws IOException {
-    JsonNode response = send(HttpApiEvent.post("/test-probe/dated"));
+    JsonNode response = send(signedPost("/test-probe/dated"));
 
     assertThat(response.get("headers").get("Allow").asString()).isEqualTo("GET");
   }
 
   @Test
   void unknownRouteDetailDoesNotEchoFrameworkInternals() throws IOException {
-    JsonNode response = send(HttpApiEvent.get("/v1/unknown"));
+    JsonNode response = send(signedGet("/v1/unknown"));
 
     assertThat(JSON.readTree(response.get("body").asString()).get("detail").asString())
         .isEqualTo("No resource exists at this path.");
@@ -107,7 +110,7 @@ class HttpErrorResponsesIT {
 
   @Test
   void validRequestSucceeds() throws IOException {
-    JsonNode response = send(HttpApiEvent.get("/test-probe/dated").query("tradeDate=2026-01-01"));
+    JsonNode response = send(signedGet("/test-probe/dated").query("tradeDate=2026-01-01"));
 
     assertThat(response.get("statusCode").asInt()).isEqualTo(200);
     assertThat(JSON.readTree(response.get("body").asString()).get("tradeDate").asString())
@@ -118,7 +121,7 @@ class HttpErrorResponsesIT {
 
   @Test
   void malformedParameterIsNamedWithoutEchoingItsValue() throws IOException {
-    JsonNode response = send(HttpApiEvent.get("/test-probe/dated").query("tradeDate=%3Cscript%3E"));
+    JsonNode response = send(signedGet("/test-probe/dated").query("tradeDate=%3Cscript%3E"));
 
     assertThat(response.get("statusCode").asInt()).isEqualTo(400);
     assertThat(response.get("headers").get("X-Content-Type-Options").asString())
@@ -131,11 +134,39 @@ class HttpErrorResponsesIT {
   void fractionalNumbersRoundTripExactly() throws IOException {
     JsonNode response =
         send(
-            HttpApiEvent.post("/test-probe/echo")
+            signedPost("/test-probe/echo")
                 .body("application/json", "{\"amount\": 89400.10, \"large\": 1E+3}"));
 
     assertThat(response.get("statusCode").asInt()).isEqualTo(200);
     assertThat(response.get("body").asString()).contains("89400.10").contains("1000");
+  }
+
+  @Test
+  void unsignedReadIsForbiddenWithTheProblemShape() throws IOException {
+    JsonNode response = send(HttpApiEvent.get("/test-probe/dated").query("tradeDate=2026-01-01"));
+
+    assertThat(response.get("statusCode").asInt()).isEqualTo(403);
+    assertThat(JSON.readTree(response.get("body").asString()).get("code").asString())
+        .isEqualTo("FORBIDDEN");
+  }
+
+  @Test
+  void signedCallerOutsideTheAllowedRolesIsForbidden() throws IOException {
+    JsonNode response =
+        send(
+            HttpApiEvent.get("/test-probe/dated")
+                .query("tradeDate=2026-01-01")
+                .signedBy("arn:aws:sts::000000000000:assumed-role/other-role/session"));
+
+    assertThat(response.get("statusCode").asInt()).isEqualTo(403);
+  }
+
+  private static HttpApiEvent signedGet(String path) {
+    return HttpApiEvent.get(path).signedBy(ALLOWED_CALLER);
+  }
+
+  private static HttpApiEvent signedPost(String path) {
+    return HttpApiEvent.post(path).signedBy(ALLOWED_CALLER);
   }
 
   private static JsonNode send(HttpApiEvent event) throws IOException {

@@ -18,6 +18,7 @@ final class HttpApiEvent {
   private final Map<String, String> headers = new LinkedHashMap<>();
   private String rawQueryString = "";
   private @Nullable String body;
+  private @Nullable String callerArn;
 
   private HttpApiEvent(String method, String path) {
     this.method = method;
@@ -48,6 +49,12 @@ final class HttpApiEvent {
     return header("content-type", contentType);
   }
 
+  /** Marks the request as signed by the given IAM caller, as API Gateway reports it. */
+  HttpApiEvent signedBy(String callerArn) {
+    this.callerArn = callerArn;
+    return this;
+  }
+
   /** Adds a body and leaves the content type unset. */
   HttpApiEvent bodyWithoutContentType(String body) {
     this.body = body;
@@ -71,6 +78,10 @@ final class HttpApiEvent {
     requestContext.put("routeKey", "$default");
     requestContext.put("stage", "$default");
     requestContext.put("timeEpoch", 1790935200000L);
+    String caller = callerArn;
+    if (caller != null) {
+      requestContext.put("authorizer", Map.of("iam", Map.of("userArn", caller)));
+    }
 
     Map<String, Object> event = new LinkedHashMap<>();
     event.put("version", "2.0");

@@ -5,6 +5,9 @@ data-processing:
     # Tests serve every route from one application.
     read-routes: true
     submission-routes: true
+    # The one role tests may sign requests in as; any other caller is refused.
+    read-callers:
+      role-arns: arn:aws:iam::000000000000:role/test-reader
   sources:
     region: ap-south-1
     endpoint: http://127.0.0.1:1
