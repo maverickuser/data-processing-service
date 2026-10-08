@@ -111,6 +111,16 @@ class ReadContractIT extends PostgresIntegrationTest {
         get(BY_DATE).param("tradeDate", "2026-01-01").param("exchangeName", "NSE"));
     check(http, BY_DATE, 400, get(BY_DATE));
 
+    MockMvc forbiddenHttp =
+        MockMvcBuilders.webAppContextSetup(context)
+            .addFilters(context.getBean(ReadCallerFilter.class))
+            .build();
+    check(forbiddenHttp, JOB, 403, get(JOB, csvJob.toString()));
+    check(forbiddenHttp, ERRORS, 403, get(ERRORS, csvJob.toString()));
+    check(forbiddenHttp, SECURITY, 403, get(SECURITY, ISIN));
+    check(forbiddenHttp, SUMMARIES, 403, get(SUMMARIES, ISIN));
+    check(forbiddenHttp, BY_DATE, 403, get(BY_DATE).param("tradeDate", "2026-01-01"));
+
     // A 500 cannot be caused from outside; HttpErrorResponsesIT checks its problem shape
     assertThat(covered)
         .containsAll(
