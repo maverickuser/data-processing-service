@@ -36,7 +36,7 @@ public record ReadCallerProperties(List<String> roleArns) {
   private static final Pattern SESSION_ARN =
       Pattern.compile(
           "arn:(aws[a-z-]{0,20}):sts::(\\d{12}):assumed-role/([\\w+=.@-]{1,64})/"
-              + "[\\w+=.@-]{2,64}");
+              + "[\\w+=,.@-]{2,64}");
 
   /**
    * Checks every entry.

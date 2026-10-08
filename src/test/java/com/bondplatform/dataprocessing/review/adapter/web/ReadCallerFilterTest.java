@@ -48,6 +48,20 @@ class ReadCallerFilterTest {
   }
 
   @Test
+  void allowedRoleSessionMayContainComma() throws Exception {
+    MockFilterChain chain = new MockFilterChain();
+
+    filter(SMOKE_ROLE)
+        .doFilter(
+            read(iam("arn:aws:sts::123456789012:assumed-role/smoke-test/session,one")),
+            new MockHttpServletResponse(),
+            chain);
+
+    assertThat(chain.getRequest()).isNotNull();
+    assertThat(resolved).isEmpty();
+  }
+
+  @Test
   void roleWithPathMatchesItsSessionAndNameIgnoresCase() throws Exception {
     MockFilterChain chain = new MockFilterChain();
 
