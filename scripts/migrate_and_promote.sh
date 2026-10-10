@@ -19,7 +19,11 @@ jq -e '
 
 migration_name="$(jq -er '.function_names.value.migration' "$outputs_file")"
 migration_version="$(jq -er '.published_versions.value.migration' "$outputs_file")"
-aws lambda invoke \
+# The CLI's default 60 s read timeout is shorter than the migration function's 300 s timeout,
+# and a CLI retry would start a second Flyway run. Wait past the function timeout; never retry.
+AWS_MAX_ATTEMPTS=1 aws lambda invoke \
+  --cli-connect-timeout 10 \
+  --cli-read-timeout 310 \
   --function-name "$migration_name" \
   --qualifier "$migration_version" \
   --invocation-type RequestResponse \

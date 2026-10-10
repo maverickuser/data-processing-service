@@ -17,7 +17,7 @@ import sys
 
 args = sys.argv[1:]
 with open(os.environ["AWS_CALLS"], "a", encoding="utf-8") as calls:
-    calls.write(" ".join(args) + "\\n")
+    calls.write(" ".join(args) + " AWS_MAX_ATTEMPTS=" + os.environ.get("AWS_MAX_ATTEMPTS", "unset") + "\\n")
 if args[:2] == ["s3api", "get-object"]:
     state = {
         "outputs": {
@@ -107,6 +107,27 @@ class ReleaseScriptsTest(unittest.TestCase):
         self.environment.pop("MIGRATION_FAIL")
         self.assertEqual(self.run_script("migrate_and_promote.sh", outputs).returncode, 0)
         self.assertEqual(self.calls.read_text(encoding="utf-8").count("update-alias"), 2)
+
+    def test_migration_waits_past_the_function_timeout_without_retrying(self):
+        outputs = Path(self.directory.name) / "outputs.json"
+        outputs.write_text(
+            json.dumps(
+                {
+                    "alias_name": {"value": "live"},
+                    "function_names": {"value": {"migration": "processor-migration"}},
+                    "published_versions": {"value": {"migration": "2"}},
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.assertEqual(self.run_script("migrate_and_promote.sh", outputs).returncode, 0)
+        invoke = next(
+            line
+            for line in self.calls.read_text(encoding="utf-8").splitlines()
+            if line.startswith("lambda invoke")
+        )
+        self.assertIn("--cli-read-timeout 310", invoke)
+        self.assertIn("AWS_MAX_ATTEMPTS=1", invoke)
 
 
 if __name__ == "__main__":
