@@ -30,7 +30,7 @@ resource "aws_apigatewayv2_integration" "function" {
 }
 
 resource "aws_apigatewayv2_route" "read" {
-  for_each           = local.read_routes
+  for_each           = var.enable_live_triggers ? local.read_routes : toset([])
   api_id             = aws_apigatewayv2_api.http.id
   route_key          = each.key
   authorization_type = "NONE"
@@ -38,6 +38,7 @@ resource "aws_apigatewayv2_route" "read" {
 }
 
 resource "aws_apigatewayv2_route" "submission" {
+  count              = var.enable_live_triggers ? 1 : 0
   api_id             = aws_apigatewayv2_api.http.id
   route_key          = local.submission_route
   authorization_type = "AWS_IAM"
@@ -59,10 +60,13 @@ resource "aws_apigatewayv2_stage" "default" {
     throttling_burst_limit = var.read_throttle.burst_limit
   }
 
-  route_settings {
-    route_key              = local.submission_route
-    throttling_rate_limit  = var.submission_throttle.rate_limit
-    throttling_burst_limit = var.submission_throttle.burst_limit
+  dynamic "route_settings" {
+    for_each = var.enable_live_triggers ? [1] : []
+    content {
+      route_key              = local.submission_route
+      throttling_rate_limit  = var.submission_throttle.rate_limit
+      throttling_burst_limit = var.submission_throttle.burst_limit
+    }
   }
 
   # No query string, headers, or body: only the route, status, and timing.
@@ -93,7 +97,7 @@ locals {
 }
 
 resource "aws_lambda_permission" "api" {
-  for_each      = local.api_functions
+  for_each      = var.enable_live_triggers ? local.api_functions : toset([])
   statement_id  = "AllowApiGatewayInvoke"
   action        = "lambda:InvokeFunction"
   principal     = "apigateway.amazonaws.com"

@@ -22,7 +22,7 @@ The LLD defines behaviour. This document records the repository, tooling, contra
 | Stacking | GitHub Stacked PRs with the `gh stack` extension (`github/gh-stack`) | known |
 | GitHub to AWS authentication | OIDC role assumption; role ARN in repository secret `AWS_ROLE_TO_ASSUME` | known (same mechanism as data-fetch-service) |
 | API hostname | `processing.kagent.app` in the existing shared Route 53 zone `kagent.app` | known |
-| Network | VPC `10.20.0.0/16`, two AZs, one NAT gateway, no load balancers | known |
+| Network | VPC `10.20.0.0/16`, two AZs, no NAT gateway by default, SQS and Secrets Manager interface endpoints, no load balancers | known; network PR must merge and be applied |
 | Submission access | AWS IAM authorization (SigV4) on `POST /v1/event-ingestions`, granted to the fetch service's delivery role | known |
 | Review | Implementer agent and separate reviewer agent; no human approval required | known |
 | Test gate | Unit line coverage strictly greater than 95%; integration tests on Testcontainers and LocalStack; smoke tests after deployment | known (confirmed 2026-10-02) |
