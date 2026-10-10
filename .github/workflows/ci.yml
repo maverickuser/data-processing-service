@@ -14,7 +14,9 @@ permissions:
 
 # A newer push cancels the run for the commit it replaces. An `edited` event that only changes the
 # title or description gets its own group: it can arrive after a push and still name the older commit,
-# and in the shared group it would cancel the newer commit's run. A base change stays in the shared group.
+# and in the shared group it would cancel the newer commit's run. A base change stays in the shared group,
+# so a retarget restarts the checks; a stale retarget arriving after a push can still cancel the newer
+# commit's run, which then needs a rerun.
 concurrency:
   group: ci-${{ github.ref }}${{ github.event.action == 'edited' && !github.event.changes.base && '-edited' || '' }}
   cancel-in-progress: true
