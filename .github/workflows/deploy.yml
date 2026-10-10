@@ -85,6 +85,9 @@ jobs:
       TF_VAR_aws_region: ${{ vars.AWS_REGION || 'ap-south-1' }}
       TF_VAR_hosted_zone_id: ${{ vars.HOSTED_ZONE_ID }}
       TF_VAR_deployment_commit: ${{ github.sha }}
+      # Empty when the network workflow does not report them; the endpoint check then uses its defaults.
+      NETWORK_STATE_BUCKET: ${{ needs.network.outputs.state_bucket }}
+      NETWORK_STATE_KEY: ${{ needs.network.outputs.state_key }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -169,7 +172,7 @@ jobs:
           triggers=false
           if probe="$(aws s3api head-object --bucket "$STATE_BUCKET" --key application/terraform.tfstate 2>&1)"; then
             terraform -chdir=infra/application state list > "$RUNNER_TEMP/application-state.txt"
-            if grep -Eq '^aws_apigatewayv2_route.submission(\[0\])?$|^aws_lambda_event_source_mapping.worker(\[0\])?$|^aws_cloudwatch_event_target.schedule\[' "$RUNNER_TEMP/application-state.txt"; then
+            if grep -Eq '^aws_apigatewayv2_route.read\[|^aws_apigatewayv2_route.submission(\[0\])?$|^aws_lambda_event_source_mapping.worker(\[0\])?$|^aws_cloudwatch_event_target.schedule\[' "$RUNNER_TEMP/application-state.txt"; then
               triggers=true
             fi
           elif grep -q '(404)' <<<"$probe"; then

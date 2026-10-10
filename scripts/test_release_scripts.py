@@ -37,14 +37,22 @@ elif args[:2] == ["ec2", "describe-vpc-endpoints"]:
         "State": os.environ.get("ENDPOINT_STATE", "available"),
     }]}))
 elif args[:2] == ["lambda", "invoke"]:
-    Path(args[-1]).write_text(json.dumps("applied migrations=1 schemaVersion=6"), encoding="utf-8")
+    if os.environ.get("INVOKE_EXIT"):
+        raise SystemExit(255)
+    payload = os.environ.get("MIGRATION_PAYLOAD", "applied migrations=1 schemaVersion=6")
+    Path(args[-1]).write_text(json.dumps(payload), encoding="utf-8")
     if os.environ.get("MIGRATION_FAIL") == "1":
         print('{"StatusCode":200,"FunctionError":"Unhandled"}')
     else:
         print('{"StatusCode":200}')
 elif args[:2] == ["lambda", "get-alias"]:
-    print('{"FunctionVersion":"1","RevisionId":"revision-one"}')
+    alias = {"FunctionVersion": "1", "RevisionId": "revision-one"}
+    if os.environ.get("WEIGHTED"):
+        alias["RoutingConfig"] = {"AdditionalVersionWeights": {"2": 0.1}}
+    print(json.dumps(alias))
 elif args[:2] == ["lambda", "update-alias"]:
+    if os.environ.get("UPDATE_FAIL_FOR") == args[args.index("--function-name") + 1]:
+        raise SystemExit(254)
     print("{}")
 else:
     raise SystemExit("Unexpected AWS call: " + " ".join(args))
@@ -81,26 +89,34 @@ class ReleaseScriptsTest(unittest.TestCase):
         self.environment["ENDPOINT_STATE"] = "pending"
         self.assertNotEqual(self.run_script("check_network_endpoint.sh").returncode, 0)
         self.environment.pop("ENDPOINT_STATE")
-        for refusal in ("NO_ENDPOINT", "NO_PRIVATE_DNS", "NAT_ENABLED"):
+        for refusal in ("NO_ENDPOINT", "NO_PRIVATE_DNS"):
             with self.subTest(refusal=refusal):
                 self.environment[refusal] = "1"
                 self.assertNotEqual(self.run_script("check_network_endpoint.sh").returncode, 0)
                 self.environment.pop(refusal)
 
-    def test_failed_migration_never_moves_an_alias(self):
+    def test_network_with_nat_only_warns(self):
+        self.environment["NAT_ENABLED"] = "1"
+        result = self.run_script("check_network_endpoint.sh")
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("::warning::", result.stdout)
+
+    def write_outputs(self, versions):
         outputs = Path(self.directory.name) / "outputs.json"
         outputs.write_text(
             json.dumps(
                 {
                     "alias_name": {"value": "live"},
-                    "function_names": {
-                        "value": {"migration": "processor-migration", "worker": "processor-worker"}
-                    },
-                    "published_versions": {"value": {"migration": "2", "worker": "3"}},
+                    "function_names": {"value": {name: f"processor-{name}" for name in versions}},
+                    "published_versions": {"value": versions},
                 }
             ),
             encoding="utf-8",
         )
+        return outputs
+
+    def test_failed_migration_never_moves_an_alias(self):
+        outputs = self.write_outputs({"migration": "2", "worker": "3"})
         self.environment["MIGRATION_FAIL"] = "1"
         self.assertNotEqual(self.run_script("migrate_and_promote.sh", outputs).returncode, 0)
         self.assertNotIn("update-alias", self.calls.read_text(encoding="utf-8"))
@@ -108,18 +124,33 @@ class ReleaseScriptsTest(unittest.TestCase):
         self.assertEqual(self.run_script("migrate_and_promote.sh", outputs).returncode, 0)
         self.assertEqual(self.calls.read_text(encoding="utf-8").count("update-alias"), 2)
 
+    def test_migration_refusals_never_move_an_alias(self):
+        outputs = self.write_outputs({"migration": "2", "worker": "3"})
+        for name, value in (("INVOKE_EXIT", "1"), ("MIGRATION_PAYLOAD", "something else")):
+            with self.subTest(refusal=name):
+                self.environment[name] = value
+                self.assertNotEqual(self.run_script("migrate_and_promote.sh", outputs).returncode, 0)
+                self.assertNotIn("update-alias", self.calls.read_text(encoding="utf-8"))
+                self.environment.pop(name)
+
+    def test_weighted_alias_is_refused(self):
+        outputs = self.write_outputs({"migration": "2", "worker": "3"})
+        self.environment["WEIGHTED"] = "1"
+        self.assertNotEqual(self.run_script("migrate_and_promote.sh", outputs).returncode, 0)
+        self.assertNotIn("update-alias", self.calls.read_text(encoding="utf-8"))
+
+    def test_failed_promotion_stops_and_a_rerun_completes_it(self):
+        outputs = self.write_outputs({"migration": "2", "read": "4", "worker": "3"})
+        self.environment["UPDATE_FAIL_FOR"] = "processor-read"
+        self.assertNotEqual(self.run_script("migrate_and_promote.sh", outputs).returncode, 0)
+        self.assertNotIn("processor-worker --name live --function-version", self.calls.read_text(encoding="utf-8"))
+        self.environment.pop("UPDATE_FAIL_FOR")
+        self.calls.write_text("", encoding="utf-8")
+        self.assertEqual(self.run_script("migrate_and_promote.sh", outputs).returncode, 0)
+        self.assertEqual(self.calls.read_text(encoding="utf-8").count("update-alias"), 3)
+
     def test_migration_waits_past_the_function_timeout_without_retrying(self):
-        outputs = Path(self.directory.name) / "outputs.json"
-        outputs.write_text(
-            json.dumps(
-                {
-                    "alias_name": {"value": "live"},
-                    "function_names": {"value": {"migration": "processor-migration"}},
-                    "published_versions": {"value": {"migration": "2"}},
-                }
-            ),
-            encoding="utf-8",
-        )
+        outputs = self.write_outputs({"migration": "2"})
         self.assertEqual(self.run_script("migrate_and_promote.sh", outputs).returncode, 0)
         invoke = next(
             line
