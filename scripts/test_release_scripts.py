@@ -46,13 +46,21 @@ elif args[:2] == ["lambda", "invoke"]:
     else:
         print('{"StatusCode":200}')
 elif args[:2] == ["lambda", "get-alias"]:
-    alias = {"FunctionVersion": "1", "RevisionId": "revision-one"}
+    function = args[args.index("--function-name") + 1]
+    aliases = Path(os.environ["AWS_ALIASES"])
+    moved = json.loads(aliases.read_text(encoding="utf-8")) if aliases.exists() else {}
+    alias = {"FunctionVersion": moved.get(function, "1"), "RevisionId": "revision-one"}
     if os.environ.get("WEIGHTED"):
         alias["RoutingConfig"] = {"AdditionalVersionWeights": {"2": 0.1}}
     print(json.dumps(alias))
 elif args[:2] == ["lambda", "update-alias"]:
-    if os.environ.get("UPDATE_FAIL_FOR") == args[args.index("--function-name") + 1]:
+    function = args[args.index("--function-name") + 1]
+    if os.environ.get("UPDATE_FAIL_FOR") == function:
         raise SystemExit(254)
+    aliases = Path(os.environ["AWS_ALIASES"])
+    moved = json.loads(aliases.read_text(encoding="utf-8")) if aliases.exists() else {}
+    moved[function] = args[args.index("--function-version") + 1]
+    aliases.write_text(json.dumps(moved), encoding="utf-8")
     print("{}")
 else:
     raise SystemExit("Unexpected AWS call: " + " ".join(args))
@@ -72,6 +80,7 @@ class ReleaseScriptsTest(unittest.TestCase):
         self.environment.update(
             PATH=f"{root}:{os.environ['PATH']}",
             AWS_CALLS=str(self.calls),
+            AWS_ALIASES=str(root / "aliases.json"),
             AWS_REGION="ap-south-1",
         )
 
@@ -146,8 +155,10 @@ class ReleaseScriptsTest(unittest.TestCase):
         self.assertNotIn("processor-worker --name live --function-version", self.calls.read_text(encoding="utf-8"))
         self.environment.pop("UPDATE_FAIL_FOR")
         self.calls.write_text("", encoding="utf-8")
-        self.assertEqual(self.run_script("migrate_and_promote.sh", outputs).returncode, 0)
-        self.assertEqual(self.calls.read_text(encoding="utf-8").count("update-alias"), 3)
+        result = self.run_script("migrate_and_promote.sh", outputs)
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("migration already points to version 2.", result.stdout)
+        self.assertEqual(self.calls.read_text(encoding="utf-8").count("update-alias"), 2)
 
     def test_migration_waits_past_the_function_timeout_without_retrying(self):
         outputs = self.write_outputs({"migration": "2"})
@@ -157,7 +168,7 @@ class ReleaseScriptsTest(unittest.TestCase):
             for line in self.calls.read_text(encoding="utf-8").splitlines()
             if line.startswith("lambda invoke")
         )
-        self.assertIn("--cli-read-timeout 310", invoke)
+        self.assertIn("--cli-read-timeout 360", invoke)
         self.assertIn("AWS_MAX_ATTEMPTS=1", invoke)
 
 

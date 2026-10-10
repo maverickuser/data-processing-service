@@ -3,6 +3,8 @@
 set -euo pipefail
 
 : "${AWS_REGION:?AWS_REGION is required}"
+# The same state infra/modules/network reads (its variable defaults), so the endpoint checked here is in
+# the VPC Terraform places the functions in. Change both together.
 network_bucket="${NETWORK_STATE_BUCKET:-cloud-platform-network-terraform-state}"
 network_key="${NETWORK_STATE_KEY:-network/terraform.tfstate}"
 state_file="$(mktemp)"
