@@ -56,25 +56,11 @@ class DailyMarketSummaryControllerTest {
   void invalidQueryIsBadRequest() {
     when(list.forSecurity(Isin.of("INE0KH208019"), DAY, DAY, "bad"))
         .thenThrow(new InvalidQueryException("The pageToken is not valid."));
-    when(list.forTradeDate(DAY, " ", null))
-        .thenThrow(new InvalidQueryException("The exchangeName filter must not be blank."));
 
     assertThatThrownBy(() -> controller.forSecurity("INE0KH208019", DAY, DAY, "bad"))
         .isInstanceOfSatisfying(
             ApiProblemException.class,
             e -> assertThat(e.type()).isEqualTo(ProblemType.INVALID_REQUEST));
-    assertThatThrownBy(() -> controller.forTradeDate(DAY, " ", null))
-        .isInstanceOfSatisfying(
-            ApiProblemException.class,
-            e -> assertThat(e.type()).isEqualTo(ProblemType.INVALID_REQUEST));
-  }
-
-  @Test
-  void tradeDatePageIsShown() {
-    when(list.forTradeDate(DAY, "BSE", null)).thenReturn(new SummaryPage(List.of(SUMMARY), null));
-
-    assertThat(controller.forTradeDate(DAY, "BSE", null))
-        .isEqualTo(new SummaryPageResponse(List.of(SUMMARY), null));
   }
 
   @Test

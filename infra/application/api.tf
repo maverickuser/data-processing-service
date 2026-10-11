@@ -6,9 +6,9 @@ locals {
   read_routes = toset([
     "GET /v1/processing-jobs/{jobId}",
     "GET /v1/processing-jobs/{jobId}/errors",
+    "GET /v1/securities",
     "GET /v1/securities/{isin}",
     "GET /v1/securities/{isin}/daily-market-summaries",
-    "GET /v1/daily-market-summaries",
     # The read API's documentation: Swagger UI and the read OpenAPI document, fixed files only
     "GET /docs",
     "GET /docs/openapi.yaml",

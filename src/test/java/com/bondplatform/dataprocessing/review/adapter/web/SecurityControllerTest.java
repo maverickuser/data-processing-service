@@ -7,6 +7,9 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.bondplatform.dataprocessing.review.application.GetSecurity;
+import com.bondplatform.dataprocessing.review.application.InvalidQueryException;
+import com.bondplatform.dataprocessing.review.application.ListSecurities;
+import com.bondplatform.dataprocessing.review.domain.IsinPage;
 import com.bondplatform.dataprocessing.review.domain.RatingObservation;
 import com.bondplatform.dataprocessing.review.domain.SecurityView;
 import com.bondplatform.dataprocessing.shared.adapter.web.ApiProblemException;
@@ -24,7 +27,28 @@ class SecurityControllerTest {
   private static final Instant AT = Instant.parse("2026-09-27T14:31:02Z");
 
   private final GetSecurity getSecurity = mock(GetSecurity.class);
-  private final SecurityController controller = new SecurityController(getSecurity);
+  private final ListSecurities listSecurities = mock(ListSecurities.class);
+  private final SecurityController controller = new SecurityController(listSecurities, getSecurity);
+
+  @Test
+  void isinPageIsShown() {
+    when(listSecurities.list("t"))
+        .thenReturn(new IsinPage(List.of("INE0KH208019", "INE831R08076"), "next"));
+
+    assertThat(controller.list("t"))
+        .isEqualTo(new IsinPageResponse(List.of("INE0KH208019", "INE831R08076"), "next"));
+  }
+
+  @Test
+  void invalidTokenIsBadRequest() {
+    when(listSecurities.list("bad"))
+        .thenThrow(new InvalidQueryException("The pageToken is not valid."));
+
+    assertThatThrownBy(() -> controller.list("bad"))
+        .isInstanceOfSatisfying(
+            ApiProblemException.class,
+            e -> assertThat(e.type()).isEqualTo(ProblemType.INVALID_REQUEST));
+  }
 
   @Test
   void isinIsTrimmedAndUppercasedAndViewIsShown() {

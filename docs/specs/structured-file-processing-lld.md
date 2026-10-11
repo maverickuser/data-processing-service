@@ -1090,11 +1090,11 @@ Agreed v1 read surface (2026-10-02). All endpoints are public, unauthenticated, 
 |---|---|
 | `GET /v1/processing-jobs/{jobId}` | Job status, counts, total error count, and the first five errors (section 16) |
 | `GET /v1/processing-jobs/{jobId}/errors` | All final-attempt errors, 50 per page with cursor pagination and an optional `isin` filter (section 16) |
+| `GET /v1/securities` | Every known ISIN in ascending order, 50 per page with cursor pagination (section 20.4) |
 | `GET /v1/securities/{isin}` | One combined security view: scalar details, current ratings and rating history, listings, cash-flow schedule, and collateral assets |
 | `GET /v1/securities/{isin}/daily-market-summaries` | Daily market summaries for one ISIN, with optional `fromDate` and `toDate` |
-| `GET /v1/daily-market-summaries?tradeDate=` | All summaries for one trade date, optional `exchangeName`, 50 per page with cursor pagination |
 
-Separate per-collection endpoints for ratings, listings, and cash flows are not part of v1. Path and query ISINs are trimmed and uppercased before lookup.
+Separate per-collection endpoints for ratings, listings, and cash flows are not part of v1. Change (2026-10-11): `GET /v1/daily-market-summaries?tradeDate=` was removed and replaced by `GET /v1/securities`, the list of known ISINs; summaries are read per ISIN only. Path and query ISINs are trimmed and uppercased before lookup.
 
 ### 20.1 Security response
 
@@ -1143,7 +1143,7 @@ Agreed shape of `GET /v1/securities/{isin}`:
 
 ### 20.2 Daily market summary responses
 
-Agreed. Both daily-market-summary endpoints return `{ "items": [...], "nextToken": null }` where each item is:
+Agreed. The daily-market-summary endpoint returns `{ "items": [...], "nextToken": null }` where each item is:
 
 ```json
 {
@@ -1165,9 +1165,8 @@ Agreed. Both daily-market-summary endpoints return `{ "items": [...], "nextToken
 ```
 
 - `GET /v1/securities/{isin}/daily-market-summaries`: ordered by `tradeDate` descending then `exchangeName`; 50 per page; optional inclusive `fromDate` and `toDate` (ISO dates). Without either, the most recent 50 are returned and paging continues backwards. Unknown ISIN returns `404`; a known ISIN with no matching summaries returns `200` with empty `items`.
-- `GET /v1/daily-market-summaries`: `tradeDate` is required; optional `exchangeName`; ordered by `isin` then `exchangeName`; 50 per page. No matches returns `200` with empty `items`.
-- Pagination uses the same opaque cursor convention as the error list: `pageToken` request parameter, `nextToken` in the response, `null` on the last page. Implementation choice (2026-10-05, PR 39a): the token is bound to the ISIN and both dates, or to the trade date and exchange filter, and pages by key (trade date and exchange name, or ISIN and exchange name), so a summary written between pages neither repeats nor shifts later ones. `exchangeName` is trimmed and matched exactly as stored (`BSE`); a blank one, or one holding a control character, is `400`. A blank or control-character path ISIN names no security (`404`), as for the security view.
-- A malformed date, `fromDate` after `toDate`, a missing `tradeDate`, or an invalid `pageToken` returns `400` as `application/problem+json`.
+- Pagination uses the same opaque cursor convention as the error list: `pageToken` request parameter, `nextToken` in the response, `null` on the last page. Implementation choice (2026-10-05, PR 39a): the token is bound to the ISIN and both dates and pages by key (trade date and exchange name), so a summary written between pages neither repeats nor shifts later ones. A blank or control-character path ISIN names no security (`404`), as for the security view.
+- A malformed date, `fromDate` after `toDate`, or an invalid `pageToken` returns `400` as `application/problem+json`.
 
 ### 20.3 Job status response
 
@@ -1215,6 +1214,21 @@ For `urn:bond-platform:dataset:nsdl-security` jobs `counts` is:
 - While a job is `QUEUED`, `PROCESSING`, or `RETRY_PENDING`, `counts` and `completedAt` are `null`, `errorCount` is `0`, and `errors` is empty. `startedAt` is `null` until the first attempt starts.
 - A `FAILED` job that could not be completely evaluated reports the counts it has and `null` for those it cannot determine. Implementation choice (2026-10-05, PR 36): a job that failed before storing any counts shows every count of its dataset as `null`.
 - An unknown job ID returns `404` as `application/problem+json`.
+
+### 20.4 ISIN list response
+
+Agreed (2026-10-11). `GET /v1/securities` returns every ISIN in `securities_data.securities`, ISIN-only securities included, as plain strings:
+
+```json
+{
+  "items": ["INE0KH208019", "INE831R08076"],
+  "nextToken": null
+}
+```
+
+- Ordered by `isin` ascending; 50 per page; no filters. No securities returns `200` with empty `items`.
+- Pagination uses the same opaque cursor convention as the other lists. The token holds the last ISIN shown and pages by key, so a security inserted between pages neither repeats nor shifts later ones; one inserted before the cursor is not shown in that pass.
+- A changed `pageToken`, or one issued by another list, returns `400` as `application/problem+json`.
 
 ## 21. Operational defaults
 

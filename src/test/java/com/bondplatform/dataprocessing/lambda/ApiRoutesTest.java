@@ -14,6 +14,7 @@ import com.bondplatform.dataprocessing.review.application.GetJobStatus;
 import com.bondplatform.dataprocessing.review.application.GetSecurity;
 import com.bondplatform.dataprocessing.review.application.ListDailyMarketSummaries;
 import com.bondplatform.dataprocessing.review.application.ListJobErrors;
+import com.bondplatform.dataprocessing.review.application.ListSecurities;
 import com.bondplatform.dataprocessing.shared.adapter.web.PublicApiProperties;
 import java.net.URI;
 import org.junit.jupiter.api.Test;
@@ -33,6 +34,7 @@ class ApiRoutesTest {
               PublicApiProperties.class,
               () -> new PublicApiProperties(URI.create("https://processing.example")))
           .withBean(GetSecurity.class, () -> mock(GetSecurity.class))
+          .withBean(ListSecurities.class, () -> mock(ListSecurities.class))
           .withBean(GetJobStatus.class, () -> mock(GetJobStatus.class))
           .withBean(ListJobErrors.class, () -> mock(ListJobErrors.class))
           .withBean(ListDailyMarketSummaries.class, () -> mock(ListDailyMarketSummaries.class))

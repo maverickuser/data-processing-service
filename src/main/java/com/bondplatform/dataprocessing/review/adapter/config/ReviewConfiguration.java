@@ -6,6 +6,7 @@ import com.bondplatform.dataprocessing.review.application.GetSecurity;
 import com.bondplatform.dataprocessing.review.application.JobReviewRepository;
 import com.bondplatform.dataprocessing.review.application.ListDailyMarketSummaries;
 import com.bondplatform.dataprocessing.review.application.ListJobErrors;
+import com.bondplatform.dataprocessing.review.application.ListSecurities;
 import com.bondplatform.dataprocessing.review.application.SecurityReviewRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -26,13 +27,19 @@ public class ReviewConfiguration {
     return new ListJobErrors(jobs);
   }
 
+  /** Answers ISIN list requests. */
+  @Bean
+  public ListSecurities listSecurities(SecurityReviewRepository securities) {
+    return new ListSecurities(securities);
+  }
+
   /** Answers security view requests. */
   @Bean
   public GetSecurity getSecurity(SecurityReviewRepository securities) {
     return new GetSecurity(securities);
   }
 
-  /** Answers both daily-market-summary requests. */
+  /** Answers per-security daily-market-summary requests. */
   @Bean
   public ListDailyMarketSummaries listDailyMarketSummaries(DailyMarketSummaryRepository summaries) {
     return new ListDailyMarketSummaries(summaries);

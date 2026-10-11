@@ -5,9 +5,13 @@ import com.bondplatform.dataprocessing.review.domain.SecurityView;
 import com.bondplatform.dataprocessing.shared.domain.Isin;
 import java.util.List;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 /** Reads a security and its recorded collections, each in a stable order. */
 public interface SecurityReviewRepository {
+
+  /** Returns up to {@code limit} ISINs in ascending order, after {@code after} when given. */
+  List<String> isins(@Nullable String after, int limit);
 
   /** Returns the security's own fields, if it is known. */
   Optional<SecurityView.Scalars> find(Isin isin);

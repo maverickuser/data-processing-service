@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: >-
     Design contract, not evidence of deployment. Public, unauthenticated, read-only
-    endpoints for job status, error review, securities and daily market summaries.
+    endpoints for job status, error review, the ISIN list, securities and daily market summaries.
     Responses never expose S3 buckets, keys, version IDs, presigned URLs or upstream
     source URLs. The upstream submission endpoint is defined separately in
     data-processing-service-openapi.yaml.
@@ -46,6 +46,20 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/ServerError' }
+  /v1/securities:
+    get:
+      operationId: listSecurities
+      summary: Every known ISIN in ascending order, 50 per page
+      parameters:
+        - $ref: '#/components/parameters/PageToken'
+      responses:
+        '200':
+          description: One page of ISINs; empty items when there are none
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IsinPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/ServerError' }
   /v1/securities/{isin}:
     get:
       operationId: getSecurity
@@ -83,27 +97,6 @@ paths:
               schema: { $ref: '#/components/schemas/DailyMarketSummaryPage' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '500': { $ref: '#/components/responses/ServerError' }
-  /v1/daily-market-summaries:
-    get:
-      operationId: listDailyMarketSummaries
-      summary: All summaries for one trade date, ordered by ISIN
-      parameters:
-        - name: tradeDate
-          in: query
-          required: true
-          schema: { type: string, format: date }
-        - name: exchangeName
-          in: query
-          schema: { type: string, maxLength: 64 }
-        - $ref: '#/components/parameters/PageToken'
-      responses:
-        '200':
-          description: One page of summaries; empty items when none match
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/DailyMarketSummaryPage' }
-        '400': { $ref: '#/components/responses/BadRequest' }
         '500': { $ref: '#/components/responses/ServerError' }
 components:
   parameters:
@@ -321,6 +314,15 @@ components:
         faceValue: { type: [number, 'null'], description: Face value reported by the exchange for that trade date. }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    IsinPage:
+      type: object
+      required: [items, nextToken]
+      properties:
+        items:
+          type: array
+          maxItems: 50
+          items: { type: string }
+        nextToken: { type: [string, 'null'] }
     DailyMarketSummaryPage:
       type: object
       required: [items, nextToken]

@@ -7,7 +7,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.bondplatform.dataprocessing.review.application.DailyMarketSummaryRepository.SecurityPosition;
-import com.bondplatform.dataprocessing.review.application.DailyMarketSummaryRepository.TradeDatePosition;
 import com.bondplatform.dataprocessing.review.domain.DailyMarketSummaryView;
 import com.bondplatform.dataprocessing.shared.domain.Isin;
 import java.math.BigDecimal;
@@ -77,29 +76,6 @@ class JdbcDailyMarketSummaryReviewRepositoryTest {
   }
 
   @Test
-  void tradeDateQueryBindsFilterAndPosition() {
-    ArgumentCaptor<MapSqlParameterSource> parameters =
-        queried(JdbcDailyMarketSummaryReviewRepository.FOR_TRADE_DATE);
-
-    repository.forTradeDate(DAY, "BSE", new TradeDatePosition("INE0KH208019", "BSE"), 51);
-    repository.forTradeDate(DAY, null, null, 51);
-
-    MapSqlParameterSource after = parameters.getAllValues().get(0);
-    assertThat(after.getValue("tradeDate")).isEqualTo(DAY);
-    assertThat(after.getValue("exchangeName")).isEqualTo("BSE");
-    assertThat(after.getValue("afterIsin")).isEqualTo("INE0KH208019");
-    assertThat(after.getValue("afterExchange")).isEqualTo("BSE");
-    MapSqlParameterSource first = parameters.getAllValues().get(1);
-    assertThat(first.getValue("exchangeName")).isNull();
-    assertThat(first.getSqlType("exchangeName")).isEqualTo(Types.VARCHAR);
-    assertThat(first.getValue("afterIsin")).isNull();
-    assertThat(first.getValue("afterExchange")).isNull();
-    assertThat(JdbcDailyMarketSummaryReviewRepository.FOR_TRADE_DATE)
-        .contains("ORDER BY isin, exchange_name")
-        .doesNotContain("source_");
-  }
-
-  @Test
   void rowMapsEveryShownColumnAndWholeCountsKeepNoFraction() throws SQLException {
     ResultSet row = mock(ResultSet.class);
     when(row.getString("isin")).thenReturn("INE0KH208019");
@@ -120,12 +96,12 @@ class JdbcDailyMarketSummaryReviewRepositoryTest {
     ArgumentCaptor<RowMapper<DailyMarketSummaryView>> mapper =
         ArgumentCaptor.forClass(RowMapper.class);
     when(jdbc.query(
-            eq(JdbcDailyMarketSummaryReviewRepository.FOR_TRADE_DATE),
+            eq(JdbcDailyMarketSummaryReviewRepository.FOR_SECURITY),
             any(SqlParameterSource.class),
             mapper.capture()))
         .thenReturn(List.of());
 
-    repository.forTradeDate(DAY, null, null, 51);
+    repository.forSecurity(ISIN, null, null, null, 51);
     DailyMarketSummaryView summary = Objects.requireNonNull(mapper.getValue().mapRow(row, 0));
 
     assertThat(summary)

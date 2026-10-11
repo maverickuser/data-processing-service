@@ -234,6 +234,7 @@ LLD sections 16, 20; read OpenAPI.
 | 37 | `g/37-job-errors` | `GET /v1/processing-jobs/{jobId}/errors`, `PageToken`, `isin` filter | U-REV-03, I-READ-02 | 120 errors page as 50, 50, 20 |
 | 38 | `g/38-security-view` | `GET /v1/securities/{isin}`, `CurrentRatingSelector`, collateral presentation | U-REV-04..05, I-READ-03 | — |
 | 39 | `g/39a-market-summaries`, `g/39b-read-contract` (split 2026-10-05) | 39a: both daily-market-summary endpoints. 39b: OpenAPI response validation for all read endpoints; no-S3-location test | U-REV-06, I-READ-04..08 | Every documented response validates against the read OpenAPI file |
+| — | `feat/list-securities` (off-plan, 2026-10-11, decision 0003) | Remove `GET /v1/daily-market-summaries`; add `GET /v1/securities`, every known ISIN in ascending order, 50 per page | U-REV-09, I-READ-10; I-READ-05 retired | The read OpenAPI documents list `/v1/securities` and not `/v1/daily-market-summaries`; API Gateway routes match |
 
 ## Stack H — Operations
 

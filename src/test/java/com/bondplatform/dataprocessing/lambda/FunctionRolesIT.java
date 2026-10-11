@@ -17,13 +17,13 @@ import com.bondplatform.dataprocessing.review.application.GetJobStatus;
 import com.bondplatform.dataprocessing.review.application.GetSecurity;
 import com.bondplatform.dataprocessing.review.application.ListDailyMarketSummaries;
 import com.bondplatform.dataprocessing.review.application.ListJobErrors;
+import com.bondplatform.dataprocessing.review.application.ListSecurities;
 import com.bondplatform.dataprocessing.shared.domain.Isin;
 import com.bondplatform.dataprocessing.shared.domain.JobId;
 import com.bondplatform.dataprocessing.source.adapter.aws.S3Mock;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
@@ -193,12 +193,8 @@ class FunctionRolesIT extends PostgresIntegrationTest {
 
     ConfigurableApplicationContext reader = function("processing_reader");
     assertThat(reader.getBean(GetSecurity.class).find(Isin.of(NsdlProcessingIT.ISIN))).isPresent();
-    assertThat(
-            reader
-                .getBean(ListDailyMarketSummaries.class)
-                .forTradeDate(LocalDate.parse("2026-01-01"), null, null)
-                .items())
-        .isNotEmpty();
+    assertThat(reader.getBean(ListSecurities.class).list(null).items())
+        .contains(NsdlProcessingIT.ISIN);
     assertThat(
             reader
                 .getBean(ListDailyMarketSummaries.class)

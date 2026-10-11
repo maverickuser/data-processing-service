@@ -4,8 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 import com.bondplatform.dataprocessing.persistence.PostgresIntegrationTest;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,7 +18,7 @@ import org.springframework.web.context.WebApplicationContext;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** I-READ-03: the security view over HTTP, read from PostgreSQL. */
+/** I-READ-03 and I-READ-10: the security view and the ISIN list over HTTP, from PostgreSQL. */
 class SecurityIT extends PostgresIntegrationTest {
 
   private static final String ISIN = "INE831R08076";
@@ -151,6 +153,49 @@ class SecurityIT extends PostgresIntegrationTest {
     assertThat(response.getContentType()).startsWith("application/problem+json");
   }
 
+  // I-READ-10
+  @Test
+  void isinListIsAscendingAndPaged() throws Exception {
+    List<String> isins = new ArrayList<>();
+    for (int n = 59; n >= 0; n--) {
+      isins.addFirst("INE%09d".formatted(n));
+      isinOnly(isins.getFirst());
+    }
+
+    JsonNode first = ok("/v1/securities", null);
+    JsonNode second = ok("/v1/securities", first.get("nextToken").asString());
+
+    assertThat(first.get("items")).hasSize(50);
+    assertThat(first.at("/items/0").asString()).isEqualTo(isins.getFirst());
+    assertThat(first.at("/items/49").asString()).isEqualTo(isins.get(49));
+    assertThat(second.get("items")).hasSize(10);
+    assertThat(second.at("/items/0").asString()).isEqualTo(isins.get(50));
+    assertThat(second.get("nextToken").isNull()).isTrue();
+  }
+
+  // I-READ-10: no securities is an empty page; a changed token is 400
+  @Test
+  void isinListWithoutSecuritiesIsEmptyAndBadTokenIsBadRequest() throws Exception {
+    JsonNode none = ok("/v1/securities", null);
+    assertThat(none.get("items")).isEmpty();
+    assertThat(none.get("nextToken").isNull()).isTrue();
+
+    MockHttpServletResponse response =
+        http.perform(get("/v1/securities").param("pageToken", "changed")).andReturn().getResponse();
+    assertThat(response.getStatus()).isEqualTo(400);
+    assertThat(response.getContentType()).startsWith("application/problem+json");
+  }
+
+  private JsonNode ok(String path, @Nullable String pageToken) throws Exception {
+    var request = get(path);
+    if (pageToken != null) {
+      request.param("pageToken", pageToken);
+    }
+    MockHttpServletResponse response = http.perform(request).andReturn().getResponse();
+    assertThat(response.getStatus()).isEqualTo(200);
+    return json.readTree(response.getContentAsString());
+  }
+
   private JsonNode security(String isin) throws Exception {
     MockHttpServletResponse response =
         http.perform(get("/v1/securities/{isin}", isin)).andReturn().getResponse();
@@ -159,10 +204,14 @@ class SecurityIT extends PostgresIntegrationTest {
   }
 
   private void isinOnly() {
+    isinOnly(ISIN);
+  }
+
+  private void isinOnly(String isin) {
     jdbc.sql(
             "INSERT INTO securities_data.securities (isin, created_at, updated_at)"
                 + " VALUES (:isin, now(), now())")
-        .param("isin", ISIN)
+        .param("isin", isin)
         .update();
   }
 
