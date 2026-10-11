@@ -35,6 +35,7 @@
     <json-schema-validator.version>3.0.8</json-schema-validator.version>
     <aws-sdk.version>2.55.11</aws-sdk.version>
     <aws-lambda-java-events.version>3.16.1</aws-lambda-java-events.version>
+    <aws-lambda-java-serialization.version>1.4.1</aws-lambda-java-serialization.version>
     <commons-csv.version>1.14.1</commons-csv.version>
     <spotless.version>3.10.3</spotless.version>
     <!-- Newest release that Spotless 3.10.3 can drive; 1.37.0 fails inside the plugin. -->
@@ -136,18 +137,13 @@
       <groupId>software.amazon.awssdk</groupId>
       <artifactId>url-connection-client</artifactId>
     </dependency>
-    <!-- Typed SQS events and the partial batch response for the worker's entry point. -->
+    <!-- Typed SQS events and the partial batch response for the worker's entry point. Its
+         joda-time dependency stays: the Lambda Java runtime loads org.joda.time.DateTime whenever
+         it deserializes an event type from this package, and fails the invocation without it. -->
     <dependency>
       <groupId>com.amazonaws</groupId>
       <artifactId>aws-lambda-java-events</artifactId>
       <version>${aws-lambda-java-events.version}</version>
-      <exclusions>
-        <!-- Only the date-carrying event types use it; the SQS types this service reads do not. -->
-        <exclusion>
-          <groupId>joda-time</groupId>
-          <artifactId>joda-time</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
     <dependency>
       <groupId>com.amazonaws.serverless</groupId>
@@ -197,6 +193,14 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- The Lambda Java runtime's event deserializer, to test the worker's event type as Lambda
+         reads it. The runtime brings its own copy, so it is never packaged. -->
+    <dependency>
+      <groupId>com.amazonaws</groupId>
+      <artifactId>aws-lambda-java-serialization</artifactId>
+      <version>${aws-lambda-java-serialization.version}</version>
       <scope>test</scope>
     </dependency>
     <dependency>
