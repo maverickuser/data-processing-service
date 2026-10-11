@@ -13,7 +13,7 @@ trap 'rm -f "$body_file"' EXIT
 # Prints "<status> <content type>" and leaves the body in $body_file. A connection failure or a 5xx
 # is retried: right after a release, a cold function's first database connection can be slow.
 request() {
-  local attempt result
+  local attempt result=""
   for attempt in $(seq 1 "$attempts"); do
     if result="$(curl --silent --show-error --max-time 30 --output "$body_file" \
       --write-out '%{http_code} %{content_type}' "$@")" && [ "${result%% *}" -lt 500 ]; then
