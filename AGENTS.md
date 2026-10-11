@@ -123,7 +123,7 @@ Work is about 48 small PRs in nine stacks (the exact number moves as PRs are spl
 
 ## CI and CD
 
-GitHub Actions only. `ci.yml` runs on every pull request, whatever its base branch, without AWS credentials, as staged jobs: compile, then static analysis, unit tests and coverage, and contracts and documentation; integration tests after unit tests; package last. The `ci passed` job succeeds only when every stage did and is the check required on `main`. Deployment (`deploy.yml`), smoke tests (`smoke.yml`), and application teardown (`destroy-application.yml`) run from `main` and assume an AWS role through OIDC using the `AWS_ROLE_TO_ASSUME` secret. No PR before plan PR 47 applies Terraform or touches real AWS.
+GitHub Actions only. `ci.yml` runs on every pull request, whatever its base branch, without AWS credentials, as staged jobs: compile, then static analysis, unit tests and coverage, and contracts and documentation; integration tests after unit tests; package last. The `ci passed` job succeeds only when every stage did and is the check required on `main`. Deployment (`deploy.yml`) and application teardown (`destroy-application.yml`) run from `main` and assume an AWS role through OIDC using the `AWS_ROLE_TO_ASSUME` secret. Smoke tests (`smoke.yml`) run after each successful deployment, send only unsigned requests, and need no AWS credentials. No PR before plan PR 47 applies Terraform or touches real AWS.
 
 ## Context management
 
