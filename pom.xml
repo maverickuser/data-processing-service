@@ -27,6 +27,7 @@
     <skipUnitTests>false</skipUnitTests>
 
     <jspecify.version>1.0.1</jspecify.version>
+    <swagger-ui.version>5.33.1</swagger-ui.version>
     <aws-serverless-java-container.version>3.0.2</aws-serverless-java-container.version>
     <error-prone.version>2.50.0</error-prone.version>
     <nullaway.version>0.14.2</nullaway.version>
@@ -185,6 +186,13 @@
       <artifactId>jspecify</artifactId>
       <version>${jspecify.version}</version>
     </dependency>
+    <!-- Swagger UI's script and style sheet for the read API's /docs page, served from the package. -->
+    <dependency>
+      <groupId>org.webjars</groupId>
+      <artifactId>swagger-ui</artifactId>
+      <version>${swagger-ui.version}</version>
+      <scope>runtime</scope>
+    </dependency>
 
     <dependency>
       <groupId>org.springframework.boot</groupId>
@@ -232,6 +240,14 @@
         <targetPath>contracts</targetPath>
         <includes>
           <include>*.yaml</include>
+        </includes>
+      </resource>
+      <!-- The read OpenAPI document, served at /docs/openapi.yaml exactly as committed. -->
+      <resource>
+        <directory>docs/specs</directory>
+        <targetPath>api-docs</targetPath>
+        <includes>
+          <include>data-processing-service-read-openapi.yaml</include>
         </includes>
       </resource>
     </resources>
