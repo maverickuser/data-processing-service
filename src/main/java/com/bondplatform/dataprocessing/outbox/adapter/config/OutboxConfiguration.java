@@ -23,8 +23,8 @@ public class OutboxConfiguration {
 
   /**
    * Gives up on one send, retries included, after this long. It stays far below SQS's five-minute
-   * deduplication window, so a late retry of a send cannot slip past deduplication, and below the
-   * sweeper's one-minute run.
+   * deduplication window, so a late retry of a send cannot slip past deduplication, and far below
+   * the gap between daily sweeps.
    */
   static final Duration API_CALL_TIMEOUT = Duration.ofSeconds(10);
 
