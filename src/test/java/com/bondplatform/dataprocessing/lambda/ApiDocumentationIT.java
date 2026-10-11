@@ -15,14 +15,15 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * I-READ-09: the documentation routes, sent as API Gateway events through the Lambda entry point,
- * serve Swagger UI and the read OpenAPI document under the documentation pages' own policy.
+ * serve Swagger UI and the read OpenAPI document under the documentation pages' own policy, and
+ * nothing else from the package.
  */
 class ApiDocumentationIT {
 
   private static final JsonMapper JSON = JsonMapper.builder().build();
   private static final String DOCUMENTATION_POLICY =
-      "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline';"
-          + " img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'";
+      "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:;"
+          + " connect-src 'self'; frame-ancestors 'none'";
 
   private static ApiGatewayHandler handler;
 
@@ -72,9 +73,38 @@ class ApiDocumentationIT {
     assertThat(header(response, "Content-Type")).startsWith("application/problem+json");
   }
 
+  @Test
+  void unchangedFileIsNotSentAgain() throws IOException {
+    String entityTag = header(send("/docs/swagger-ui-bundle.js"), "ETag");
+
+    JsonNode response =
+        send(HttpApiEvent.get("/docs/swagger-ui-bundle.js").header("if-none-match", entityTag));
+
+    assertThat(response.get("statusCode").asInt()).isEqualTo(304);
+    assertThat(response.path("body").asString()).isEmpty();
+  }
+
+  @Test
+  void packagedLibraryFilesAreNotServed() throws IOException {
+    for (String path :
+        new String[] {
+          "/webjars/swagger-ui/5.33.1/index.html",
+          "/webjars/swagger-ui/5.33.1/swagger-initializer.js",
+          "/META-INF/resources/webjars/swagger-ui/5.33.1/index.html"
+        }) {
+      JsonNode response = send(path);
+      assertThat(response.get("statusCode").asInt()).as(path).isEqualTo(404);
+      assertThat(header(response, "Content-Type")).as(path).startsWith("application/problem+json");
+    }
+  }
+
   private static JsonNode send(String path) throws IOException {
+    return send(HttpApiEvent.get(path));
+  }
+
+  private static JsonNode send(HttpApiEvent event) throws IOException {
     ByteArrayOutputStream output = new ByteArrayOutputStream();
-    handler.handleRequest(HttpApiEvent.get(path).toStream(), output, new FixedLambdaContext());
+    handler.handleRequest(event.toStream(), output, new FixedLambdaContext());
     return JSON.readTree(output.toString(StandardCharsets.UTF_8));
   }
 

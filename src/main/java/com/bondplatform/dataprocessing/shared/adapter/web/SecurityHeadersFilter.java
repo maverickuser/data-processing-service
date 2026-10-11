@@ -27,10 +27,9 @@ public class SecurityHeadersFilter extends OncePerRequestFilter {
 
   static final String NO_SNIFF = "nosniff";
   static final String NOTHING_LOADED = "default-src 'none'; frame-ancestors 'none'";
-  // Swagger UI sets style attributes from its script, so inline styles are allowed; scripts are not
   static final String DOCUMENTATION_PAGE =
-      "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline';"
-          + " img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'";
+      "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:;"
+          + " connect-src 'self'; frame-ancestors 'none'";
   private static final String DOCUMENTATION = "/docs";
 
   @Override

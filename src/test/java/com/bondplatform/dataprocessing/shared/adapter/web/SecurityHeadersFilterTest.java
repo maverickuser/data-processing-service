@@ -36,7 +36,7 @@ class SecurityHeadersFilterTest {
     }
     assertThat(SecurityHeadersFilter.DOCUMENTATION_PAGE)
         .contains("default-src 'none'", "script-src 'self';", "frame-ancestors 'none'")
-        .doesNotContain("unsafe-eval", "*", "http");
+        .doesNotContain("unsafe", "*", "http");
   }
 
   private static String policyFor(String path) throws Exception {

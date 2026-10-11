@@ -19,6 +19,11 @@ spring:
         connectTimeout: 10
         socketTimeout: 60
         # Do not add reWriteBatchedInserts: repositories rely on a row count per batched insert.
+  web:
+    resources:
+      # No default static file handlers: the routes are only those the controllers declare, so a
+      # packaged library's files (such as Swagger UI's stock pages) are never served.
+      add-mappings: false
   servlet:
     encoding:
       # RequestCharsetFilter decides the request character set: UTF-8, or 415. Spring's own filter

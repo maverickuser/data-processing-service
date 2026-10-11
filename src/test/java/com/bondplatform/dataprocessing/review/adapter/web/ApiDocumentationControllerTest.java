@@ -56,8 +56,12 @@ class ApiDocumentationControllerTest {
   }
 
   @Test
-  void filesAreRevalidatedSoEachDeploymentShowsItsOwnDocument() {
+  void filesAreRevalidatedByContentSoEachDeploymentShowsItsOwnDocument() {
     assertThat(controller.document().getHeaders().getCacheControl()).isEqualTo("no-cache");
+    assertThat(controller.document().getHeaders().getETag())
+        .matches("\"[0-9a-f]{32}\"")
+        .isEqualTo(new ApiDocumentationController().document().getHeaders().getETag())
+        .isNotEqualTo(controller.bundle().getHeaders().getETag());
   }
 
   @Test
