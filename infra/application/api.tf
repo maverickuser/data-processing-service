@@ -9,6 +9,12 @@ locals {
     "GET /v1/securities/{isin}",
     "GET /v1/securities/{isin}/daily-market-summaries",
     "GET /v1/daily-market-summaries",
+    # The read API's documentation: Swagger UI and the read OpenAPI document, fixed files only
+    "GET /docs",
+    "GET /docs/openapi.yaml",
+    "GET /docs/initializer.js",
+    "GET /docs/swagger-ui.css",
+    "GET /docs/swagger-ui-bundle.js",
   ])
   submission_route = "POST /v1/event-ingestions"
   api_functions    = toset(["read-api", "submission-api"])
@@ -104,6 +110,17 @@ resource "aws_lambda_permission" "api" {
   function_name = aws_lambda_function.function[each.key].function_name
   qualifier     = aws_lambda_alias.live[each.key].name
   source_arn    = local.api_source_arns[each.key]
+}
+
+# The read function also serves its documentation pages, which live outside /v1.
+resource "aws_lambda_permission" "api_docs" {
+  count         = var.enable_live_triggers ? 1 : 0
+  statement_id  = "AllowApiGatewayInvokeDocs"
+  action        = "lambda:InvokeFunction"
+  principal     = "apigateway.amazonaws.com"
+  function_name = aws_lambda_function.function["read-api"].function_name
+  qualifier     = aws_lambda_alias.live["read-api"].name
+  source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*/GET/docs*"
 }
 
 resource "aws_acm_certificate" "api" {
