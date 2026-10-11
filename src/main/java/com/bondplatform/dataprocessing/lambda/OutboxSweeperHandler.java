@@ -22,7 +22,7 @@ import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
 
 /**
- * Lambda entry point for the every-minute sweeper schedule (LLD sections 21, 23.3 and 23.4): fails
+ * Lambda entry point for the daily sweeper schedule (LLD sections 21, 23.3 and 23.4): fails
  * stuck jobs, then delivers outbox events still pending, group by group in order. The event's
  * contents are not used. A failure to fail stuck jobs is logged and does not stop the sweep, so one
  * bad job cannot hold every pending event back. Each run records {@code StuckJobsFailed} and, after
@@ -32,7 +32,7 @@ import org.springframework.context.ConfigurableApplicationContext;
  * <p>The sweep starts no send once its budget is spent. The budget is the invocation's remaining
  * time less room for one send's call timeout and the recording of its outcome, and never more than
  * {@link OutboxDispatcher#DEFAULT_SWEEP_BUDGET}, so every send made is recorded before Lambda stops
- * the invocation. What is left waits for the next minute's run.
+ * the invocation. What is left waits for the next day's run.
  */
 public class OutboxSweeperHandler implements RequestHandler<ScheduledEvent, String> {
 

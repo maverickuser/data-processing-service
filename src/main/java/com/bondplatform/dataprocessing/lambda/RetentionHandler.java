@@ -13,9 +13,9 @@ import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 
 /**
- * Lambda entry point for the daily retention schedule (LLD section 21.1): deletes data past its
+ * Lambda entry point for the weekly retention schedule (LLD section 21.1): deletes data past its
  * retention period. The event's contents are not used. A failure is left to propagate, so the
- * invocation fails and the next day's run deletes what this one did not.
+ * invocation fails and the next week's run deletes what this one did not.
  */
 public class RetentionHandler implements RequestHandler<ScheduledEvent, String> {
 

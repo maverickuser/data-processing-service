@@ -3,9 +3,10 @@
 
 locals {
   schedules = {
-    outbox-sweeper = { expression = "rate(1 minute)", retries = 0 }
-    # 03:00 in India.
-    retention = { expression = "cron(30 21 * * ? *)", retries = 2 }
+    # 22:00 in India.
+    outbox-sweeper = { expression = "cron(30 16 * * ? *)", retries = 2 }
+    # Sundays at 03:00 in India.
+    retention = { expression = "cron(30 21 ? * SAT *)", retries = 2 }
   }
 }
 

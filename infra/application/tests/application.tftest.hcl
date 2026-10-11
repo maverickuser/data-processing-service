@@ -371,17 +371,17 @@ run "schedules_and_alarms" {
 
   assert {
     condition = (
-      aws_cloudwatch_event_rule.schedule["outbox-sweeper"].schedule_expression == "rate(1 minute)" &&
-      aws_cloudwatch_event_rule.schedule["retention"].schedule_expression == "cron(30 21 * * ? *)" &&
+      aws_cloudwatch_event_rule.schedule["outbox-sweeper"].schedule_expression == "cron(30 16 * * ? *)" &&
+      aws_cloudwatch_event_rule.schedule["retention"].schedule_expression == "cron(30 21 ? * SAT *)" &&
       alltrue([for p in aws_lambda_permission.schedule : p.principal == "events.amazonaws.com" && p.qualifier == "live"])
     )
-    error_message = "The sweeper runs every minute and retention daily, each invoked only by its rule."
+    error_message = "The sweeper runs daily and retention weekly, each invoked only by its rule."
   }
 
   assert {
     condition = (
       length(aws_cloudwatch_metric_alarm.function_errors) == 6 &&
-      aws_cloudwatch_metric_alarm.outbox_backlog.threshold == 600 && aws_cloudwatch_metric_alarm.outbox_backlog.treat_missing_data == "breaching" &&
+      aws_cloudwatch_metric_alarm.outbox_backlog.threshold == 600 && aws_cloudwatch_metric_alarm.outbox_backlog.period == 86400 && aws_cloudwatch_metric_alarm.outbox_backlog.treat_missing_data == "breaching" &&
       aws_cloudwatch_metric_alarm.failed_jobs.dimensions["Outcome"] == "FAILED" && length(aws_cloudwatch_metric_alarm.failed_jobs.dimensions) == 1 &&
       aws_cloudwatch_metric_alarm.stuck_jobs.metric_name == "StuckJobsFailed" &&
       aws_cloudwatch_metric_alarm.dead_letters.threshold == 0
