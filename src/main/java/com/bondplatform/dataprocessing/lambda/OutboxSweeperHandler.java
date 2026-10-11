@@ -22,11 +22,11 @@ import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
 
 /**
- * Lambda entry point for the daily sweeper schedule (LLD sections 21, 23.3 and 23.4): fails
- * stuck jobs, then delivers outbox events still pending, group by group in order. The event's
- * contents are not used. A failure to fail stuck jobs is logged and does not stop the sweep, so one
- * bad job cannot hold every pending event back. Each run records {@code StuckJobsFailed} and, after
- * the sweep, {@code OldestPendingOutboxAge} (LLD section 23.8); a metric that cannot be measured or
+ * Lambda entry point for the daily sweeper schedule (LLD sections 21, 23.3 and 23.4): fails stuck
+ * jobs, then delivers outbox events still pending, group by group in order. The event's contents
+ * are not used. A failure to fail stuck jobs is logged and does not stop the sweep, so one bad job
+ * cannot hold every pending event back. Each run records {@code StuckJobsFailed} and, after the
+ * sweep, {@code OldestPendingOutboxAge} (LLD section 23.8); a metric that cannot be measured or
  * recorded is logged and skipped.
  *
  * <p>The sweep starts no send once its budget is spent. The budget is the invocation's remaining
