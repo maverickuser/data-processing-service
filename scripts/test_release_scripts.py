@@ -36,6 +36,9 @@ elif args[:2] == ["ec2", "describe-vpc-endpoints"]:
         "PrivateDnsEnabled": not bool(os.environ.get("NO_PRIVATE_DNS")),
         "State": os.environ.get("ENDPOINT_STATE", "available"),
     }]}))
+elif args[:3] == ["lambda", "wait", "published-version-active"]:
+    if os.environ.get("WAIT_FAIL_FOR") == args[args.index("--function-name") + 1]:
+        raise SystemExit(255)
 elif args[:2] == ["lambda", "invoke"]:
     if os.environ.get("INVOKE_EXIT"):
         raise SystemExit(255)
@@ -159,6 +162,24 @@ class ReleaseScriptsTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertIn("migration already points to version 2.", result.stdout)
         self.assertEqual(self.calls.read_text(encoding="utf-8").count("update-alias"), 2)
+
+    def test_every_version_is_active_before_the_migration_runs(self):
+        outputs = self.write_outputs({"migration": "2", "worker": "3"})
+        self.assertEqual(self.run_script("migrate_and_promote.sh", outputs).returncode, 0)
+        calls = self.calls.read_text(encoding="utf-8").splitlines()
+        invoke = next(i for i, line in enumerate(calls) if line.startswith("lambda invoke"))
+        waits = [line for line in calls[:invoke] if line.startswith("lambda wait published-version-active")]
+        self.assertEqual(len(waits), 2)
+        self.assertIn("--function-name processor-migration --qualifier 2", waits[0])
+        self.assertIn("--function-name processor-worker --qualifier 3", waits[1])
+
+    def test_a_version_that_never_activates_stops_the_release(self):
+        outputs = self.write_outputs({"migration": "2", "worker": "3"})
+        self.environment["WAIT_FAIL_FOR"] = "processor-worker"
+        self.assertNotEqual(self.run_script("migrate_and_promote.sh", outputs).returncode, 0)
+        calls = self.calls.read_text(encoding="utf-8")
+        self.assertNotIn("lambda invoke", calls)
+        self.assertNotIn("update-alias", calls)
 
     def test_migration_waits_past_the_function_timeout_without_retrying(self):
         outputs = self.write_outputs({"migration": "2"})
