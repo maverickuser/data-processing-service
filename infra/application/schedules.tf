@@ -3,10 +3,11 @@
 
 locals {
   schedules = {
-    # 22:00 in India.
-    outbox-sweeper = { expression = "cron(30 16 * * ? *)", retries = 2 }
+    # 22:00 in India. A failed sweep would otherwise wait a day, so Lambda retries it; a repeated
+    # sweep is safe, as FIFO deduplication uses the outbox event ID.
+    outbox-sweeper = { expression = "cron(30 16 * * ? *)", retries = 2, function_retries = 2 }
     # Sundays at 03:00 in India.
-    retention = { expression = "cron(30 21 ? * SAT *)", retries = 2 }
+    retention = { expression = "cron(30 21 ? * SAT *)", retries = 2, function_retries = 0 }
   }
 }
 
@@ -27,13 +28,13 @@ resource "aws_cloudwatch_event_target" "schedule" {
   }
 }
 
-# EventBridge retries are set above; Lambda's own asynchronous retries are off, so a failed
-# run is retried only as each schedule says.
+# `retries` covers EventBridge failing to invoke the function; `function_retries` covers the
+# function itself failing, which Lambda retries asynchronously.
 resource "aws_lambda_function_event_invoke_config" "schedule" {
   for_each                     = local.schedules
   function_name                = aws_lambda_function.function[each.key].function_name
   qualifier                    = aws_lambda_alias.live[each.key].name
-  maximum_retry_attempts       = 0
+  maximum_retry_attempts       = each.value.function_retries
   maximum_event_age_in_seconds = 3600
 }
 

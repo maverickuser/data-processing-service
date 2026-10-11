@@ -400,8 +400,12 @@ run "schedules_and_alarms" {
   }
 
   assert {
-    condition     = alltrue([for c in aws_lambda_function_event_invoke_config.schedule : c.maximum_retry_attempts == 0 && c.qualifier == "live"])
-    error_message = "Lambda adds no retries of its own to scheduled runs."
+    condition = (
+      alltrue([for c in aws_lambda_function_event_invoke_config.schedule : c.qualifier == "live"]) &&
+      aws_lambda_function_event_invoke_config.schedule["outbox-sweeper"].maximum_retry_attempts == 2 &&
+      aws_lambda_function_event_invoke_config.schedule["retention"].maximum_retry_attempts == 0
+    )
+    error_message = "Lambda retries a failed sweep twice and adds no retries to retention."
   }
 
   assert {

@@ -1484,7 +1484,7 @@ The artifact is one zip with the compiled classes at its root and the dependenci
 
 ### 23.4 Outbox without a polling loop
 
-A Lambda cannot run a background loop. After a transaction that created outbox events commits, the same invocation sends them to SQS before returning, provided no older pending event exists for the same ordering group; otherwise it leaves them for the sweeper. A failed send never fails the request: the `202` (or the job result) stands and the sweeper delivers the event at its next daily run, at 22:00 IST; until then later events in the same ordering group wait behind it. FIFO deduplication uses the outbox event ID, so a send repeated by both paths is delivered once.
+A Lambda cannot run a background loop. After a transaction that created outbox events commits, the same invocation sends them to SQS before returning, provided no older pending event exists for the same ordering group; otherwise it leaves them for the sweeper. A failed send never fails the request: the `202` (or the job result) stands and the sweeper delivers the event at its next daily run, at 22:00 IST; until then later events in the same ordering group wait behind it. A failed sweep is retried twice by Lambda. One sweep makes at most 500 sends within a 30-second budget; anything it cannot send waits for the next day's run and keeps the `OldestPendingOutboxAge` alarm raised. FIFO deduplication uses the outbox event ID, so a send repeated by both paths is delivered once.
 
 ### 23.5 Database connections
 
