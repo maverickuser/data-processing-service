@@ -69,7 +69,7 @@ class ReadOpenApiTest {
   @Test
   void everyOperationListsItsResponses() {
     assertThat(ReadOpenApi.documentedResponses())
-        .contains("/v1/daily-market-summaries 400", "/v1/processing-jobs/{jobId} 404")
-        .doesNotContain("/v1/daily-market-summaries 404");
+        .contains("/v1/securities 400", "/v1/processing-jobs/{jobId} 404")
+        .doesNotContain("/v1/securities 404", "/v1/daily-market-summaries 400");
   }
 }

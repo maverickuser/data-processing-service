@@ -19,7 +19,7 @@ import org.springframework.web.context.WebApplicationContext;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** I-READ-04 and I-READ-05: both daily-market-summary endpoints, read from PostgreSQL. */
+/** I-READ-04: one security's daily market summaries, read from PostgreSQL. */
 class DailyMarketSummaryIT extends PostgresIntegrationTest {
 
   private static final String ISIN = "INE0KH208019";
@@ -131,76 +131,6 @@ class DailyMarketSummaryIT extends PostgresIntegrationTest {
         400);
     problem(
         get("/v1/securities/{isin}/daily-market-summaries", ISIN).param("pageToken", "changed"),
-        400);
-  }
-
-  // I-READ-05
-  @Test
-  void tradeDateSummariesAreByIsinFilteredAndPaged() throws Exception {
-    List<String> isins = new ArrayList<>();
-    for (int n = 0; n < 20; n++) {
-      String isin = "INE%09d".formatted(n);
-      isins.add(isin);
-      security(isin);
-      for (String exchange : EXCHANGES.reversed()) {
-        summary(isin, FIRST, exchange);
-      }
-      summary(isin, FIRST.plusDays(1), "BSE");
-    }
-
-    JsonNode first = ok(get("/v1/daily-market-summaries").param("tradeDate", "2026-01-01"));
-    JsonNode second =
-        ok(
-            get("/v1/daily-market-summaries")
-                .param("tradeDate", "2026-01-01")
-                .param("pageToken", first.get("nextToken").asString()));
-    JsonNode bse =
-        ok(
-            get("/v1/daily-market-summaries")
-                .param("tradeDate", "2026-01-01")
-                .param("exchangeName", " BSE "));
-    JsonNode none = ok(get("/v1/daily-market-summaries").param("tradeDate", "2025-01-01"));
-
-    assertThat(first.get("items")).hasSize(50);
-    assertThat(first.at("/items/0/isin").asString()).isEqualTo(isins.getFirst());
-    assertThat(first.at("/items/0/exchangeName").asString()).isEqualTo("BSE");
-    assertThat(first.at("/items/1/exchangeName").asString()).isEqualTo("MSE");
-    assertThat(first.at("/items/49/isin").asString()).isEqualTo(isins.get(16));
-    assertThat(first.at("/items/49/exchangeName").asString()).isEqualTo("MSE");
-    assertThat(second.get("items")).hasSize(10);
-    assertThat(second.at("/items/0/isin").asString()).isEqualTo(isins.get(16));
-    assertThat(second.at("/items/0/exchangeName").asString()).isEqualTo("NSE");
-    assertThat(second.at("/items/9/isin").asString()).isEqualTo(isins.getLast());
-    assertThat(second.get("nextToken").isNull()).isTrue();
-    assertThat(keys(first, second, "isin")).doesNotHaveDuplicates().hasSize(60);
-    assertThat(bse.get("items")).hasSize(20);
-    assertThat(bse.get("items"))
-        .extracting(item -> item.get("exchangeName").asString())
-        .containsOnly("BSE");
-    assertThat(none.get("items")).isEmpty();
-  }
-
-  // I-READ-05: tradeDate is required and must be a date; a token is bound to its filter
-  @Test
-  void tradeDateProblemsAreBadRequest() throws Exception {
-    security(ISIN);
-    for (int n = 0; n < 51; n++) {
-      summary(ISIN, FIRST.minusDays(n), "BSE");
-    }
-
-    problem(get("/v1/daily-market-summaries"), 400);
-    problem(get("/v1/daily-market-summaries").param("tradeDate", "01-01-2026"), 400);
-    problem(
-        get("/v1/daily-market-summaries")
-            .param("tradeDate", "2026-01-01")
-            .param("exchangeName", ""),
-        400);
-    String token =
-        ok(get("/v1/securities/{isin}/daily-market-summaries", ISIN)).get("nextToken").asString();
-    problem(
-        get("/v1/daily-market-summaries")
-            .param("tradeDate", "2026-01-01")
-            .param("pageToken", token),
         400);
   }
 

@@ -44,21 +44,6 @@ public class JdbcDailyMarketSummaryReviewRepository implements DailyMarketSummar
       LIMIT :limit
       """;
 
-  static final String FOR_TRADE_DATE =
-      """
-      SELECT isin, trade_date, exchange_name, security_code, open_price, high_price, low_price,
-             close_price, traded_volume, number_of_trades, turnover, face_value, created_at,
-             updated_at
-      FROM securities_data.security_daily_market_summaries
-      WHERE trade_date = :tradeDate
-        AND (CAST(:exchangeName AS TEXT) IS NULL OR exchange_name = CAST(:exchangeName AS TEXT))
-        AND (CAST(:afterIsin AS TEXT) IS NULL
-             OR (isin, exchange_name)
-                > (CAST(:afterIsin AS TEXT), CAST(:afterExchange AS TEXT)))
-      ORDER BY isin, exchange_name
-      LIMIT :limit
-      """;
-
   private final NamedParameterJdbcOperations jdbc;
 
   /** Creates the repository. */
@@ -88,22 +73,6 @@ public class JdbcDailyMarketSummaryReviewRepository implements DailyMarketSummar
             .addValue("afterExchange", after == null ? null : after.exchangeName(), Types.VARCHAR)
             .addValue("limit", limit);
     return jdbc.query(FOR_SECURITY, parameters, JdbcDailyMarketSummaryReviewRepository::summary);
-  }
-
-  @Override
-  public List<DailyMarketSummaryView> forTradeDate(
-      LocalDate tradeDate,
-      @Nullable String exchangeName,
-      @Nullable TradeDatePosition after,
-      int limit) {
-    MapSqlParameterSource parameters =
-        new MapSqlParameterSource()
-            .addValue("tradeDate", tradeDate, Types.DATE)
-            .addValue("exchangeName", exchangeName, Types.VARCHAR)
-            .addValue("afterIsin", after == null ? null : after.isin(), Types.VARCHAR)
-            .addValue("afterExchange", after == null ? null : after.exchangeName(), Types.VARCHAR)
-            .addValue("limit", limit);
-    return jdbc.query(FOR_TRADE_DATE, parameters, JdbcDailyMarketSummaryReviewRepository::summary);
   }
 
   private static DailyMarketSummaryView summary(ResultSet row, int rowNumber) throws SQLException {

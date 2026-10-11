@@ -1,17 +1,21 @@
 package com.bondplatform.dataprocessing.review.adapter.web;
 
 import com.bondplatform.dataprocessing.review.application.GetSecurity;
+import com.bondplatform.dataprocessing.review.application.InvalidQueryException;
+import com.bondplatform.dataprocessing.review.application.ListSecurities;
 import com.bondplatform.dataprocessing.shared.adapter.web.ApiProblemException;
 import com.bondplatform.dataprocessing.shared.adapter.web.ProblemType;
 import com.bondplatform.dataprocessing.shared.domain.Isin;
 import java.util.Locale;
+import org.jspecify.annotations.Nullable;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Serves the combined view of one security (LLD section 20.1). */
+/** Serves the list of known ISINs and the combined view of one security (LLD section 20). */
 @RestController
 @ConditionalOnBooleanProperty("data-processing.api.read-routes")
 public class SecurityController {
@@ -21,11 +25,27 @@ public class SecurityController {
   /** Longer than any stored ISIN; a longer path segment is not looked up. */
   static final int MAX_ISIN_LENGTH = 64;
 
+  private final ListSecurities listSecurities;
   private final GetSecurity getSecurity;
 
   /** Creates the controller. */
-  public SecurityController(GetSecurity getSecurity) {
+  public SecurityController(ListSecurities listSecurities, GetSecurity getSecurity) {
+    this.listSecurities = listSecurities;
     this.getSecurity = getSecurity;
+  }
+
+  /**
+   * Returns one page of known ISINs in ascending order.
+   *
+   * @throws ApiProblemException {@code 400} if the token is not valid
+   */
+  @GetMapping(path = "/v1/securities", produces = MediaType.APPLICATION_JSON_VALUE)
+  public IsinPageResponse list(@RequestParam(required = false) @Nullable String pageToken) {
+    try {
+      return IsinPageResponse.of(listSecurities.list(pageToken));
+    } catch (InvalidQueryException e) {
+      throw new ApiProblemException(ProblemType.INVALID_REQUEST, e.detail());
+    }
   }
 
   /**

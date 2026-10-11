@@ -12,6 +12,7 @@ import com.bondplatform.dataprocessing.shared.domain.Isin;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Types;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -22,6 +23,7 @@ import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcOperations;
 import org.springframework.jdbc.core.namedparam.SqlParameterSource;
 
@@ -36,6 +38,26 @@ class JdbcSecurityReviewRepositoryTest {
   private final NamedParameterJdbcOperations jdbc = mock(NamedParameterJdbcOperations.class);
   private final JdbcSecurityReviewRepository repository = new JdbcSecurityReviewRepository(jdbc);
   private final ResultSet row = mock(ResultSet.class);
+
+  @Test
+  void isinQueryBindsTypedPositionAndOrdersByIsin() {
+    ArgumentCaptor<MapSqlParameterSource> parameters =
+        ArgumentCaptor.forClass(MapSqlParameterSource.class);
+    when(jdbc.queryForList(
+            eq(JdbcSecurityReviewRepository.ISINS), parameters.capture(), eq(String.class)))
+        .thenReturn(List.of("INE831R08076"));
+
+    assertThat(repository.isins("INE0KH208019", 51)).containsExactly("INE831R08076");
+    repository.isins(null, 51);
+
+    MapSqlParameterSource after = parameters.getAllValues().get(0);
+    assertThat(after.getValue("after")).isEqualTo("INE0KH208019");
+    assertThat(after.getValue("limit")).isEqualTo(51);
+    MapSqlParameterSource first = parameters.getAllValues().get(1);
+    assertThat(first.getValue("after")).isNull();
+    assertThat(first.getSqlType("after")).isEqualTo(Types.VARCHAR);
+    assertThat(JdbcSecurityReviewRepository.ISINS).contains("ORDER BY isin");
+  }
 
   @Test
   void securityRowMapsEveryShownColumn() throws SQLException {

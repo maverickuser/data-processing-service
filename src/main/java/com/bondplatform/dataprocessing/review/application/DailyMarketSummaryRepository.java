@@ -23,19 +23,6 @@ public interface DailyMarketSummaryRepository {
       @Nullable SecurityPosition after,
       int limit);
 
-  /**
-   * Returns up to {@code limit} summaries for the trade date, on the exchange when given, by ISIN
-   * then exchange name, after {@code after} when given.
-   */
-  List<DailyMarketSummaryView> forTradeDate(
-      LocalDate tradeDate,
-      @Nullable String exchangeName,
-      @Nullable TradeDatePosition after,
-      int limit);
-
   /** Where a page of one security's summaries ended. */
   record SecurityPosition(LocalDate tradeDate, String exchangeName) {}
-
-  /** Where a page of one trade date's summaries ended. */
-  record TradeDatePosition(String isin, String exchangeName) {}
 }

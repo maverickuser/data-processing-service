@@ -5,7 +5,7 @@ import com.bondplatform.dataprocessing.review.domain.SummaryPage;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 
-/** The body of both daily-market-summary endpoints, as the read OpenAPI defines it. */
+/** The body of the daily-market-summary endpoint, as the read OpenAPI defines it. */
 record SummaryPageResponse(List<DailyMarketSummaryView> items, @Nullable String nextToken) {
 
   static SummaryPageResponse of(SummaryPage page) {

@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Serves daily market summaries by security and by trade date (LLD section 20.2). */
+/** Serves one security's daily market summaries (LLD section 20.2). */
 @RestController
 @ConditionalOnBooleanProperty("data-processing.api.read-routes")
 public class DailyMarketSummaryController {
@@ -57,24 +57,6 @@ public class DailyMarketSummaryController {
           .forSecurity(Isin.of(normalized), fromDate, toDate, pageToken)
           .map(SummaryPageResponse::of)
           .orElseThrow(DailyMarketSummaryController::notFound);
-    } catch (InvalidQueryException e) {
-      throw new ApiProblemException(ProblemType.INVALID_REQUEST, e.detail());
-    }
-  }
-
-  /**
-   * Returns one page of the trade date's summaries, by ISIN.
-   *
-   * @throws ApiProblemException {@code 400} if the exchange filter is blank or the token is not
-   *     valid
-   */
-  @GetMapping(path = "/v1/daily-market-summaries", produces = MediaType.APPLICATION_JSON_VALUE)
-  public SummaryPageResponse forTradeDate(
-      @RequestParam @DateTimeFormat(iso = ISO.DATE) LocalDate tradeDate,
-      @RequestParam(required = false) @Nullable String exchangeName,
-      @RequestParam(required = false) @Nullable String pageToken) {
-    try {
-      return SummaryPageResponse.of(listSummaries.forTradeDate(tradeDate, exchangeName, pageToken));
     } catch (InvalidQueryException e) {
       throw new ApiProblemException(ProblemType.INVALID_REQUEST, e.detail());
     }

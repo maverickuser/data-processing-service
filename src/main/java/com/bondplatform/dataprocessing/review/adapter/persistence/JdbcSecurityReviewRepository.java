@@ -6,6 +6,7 @@ import com.bondplatform.dataprocessing.review.domain.SecurityView;
 import com.bondplatform.dataprocessing.shared.domain.Isin;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Types;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -22,6 +23,15 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public class JdbcSecurityReviewRepository implements SecurityReviewRepository {
+
+  static final String ISINS =
+      """
+      SELECT isin
+      FROM securities_data.securities
+      WHERE CAST(:after AS TEXT) IS NULL OR isin > CAST(:after AS TEXT)
+      ORDER BY isin
+      LIMIT :limit
+      """;
 
   static final String FIND =
       """
@@ -71,6 +81,15 @@ public class JdbcSecurityReviewRepository implements SecurityReviewRepository {
   /** Creates the repository. */
   public JdbcSecurityReviewRepository(NamedParameterJdbcOperations jdbc) {
     this.jdbc = jdbc;
+  }
+
+  @Override
+  public List<String> isins(@Nullable String after, int limit) {
+    MapSqlParameterSource parameters =
+        new MapSqlParameterSource()
+            .addValue("after", after, Types.VARCHAR)
+            .addValue("limit", limit);
+    return jdbc.queryForList(ISINS, parameters, String.class);
   }
 
   @Override

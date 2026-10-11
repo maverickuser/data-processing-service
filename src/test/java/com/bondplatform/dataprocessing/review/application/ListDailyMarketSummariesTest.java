@@ -4,8 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -13,7 +11,6 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.bondplatform.dataprocessing.review.application.DailyMarketSummaryRepository.SecurityPosition;
-import com.bondplatform.dataprocessing.review.application.DailyMarketSummaryRepository.TradeDatePosition;
 import com.bondplatform.dataprocessing.review.domain.DailyMarketSummaryView;
 import com.bondplatform.dataprocessing.review.domain.PageToken;
 import com.bondplatform.dataprocessing.review.domain.SummaryPage;
@@ -31,7 +28,6 @@ class ListDailyMarketSummariesTest {
   private static final LocalDate DAY = LocalDate.of(2026, 1, 1);
   private static final LocalDate LATER = LocalDate.of(2026, 1, 31);
   private static final String SECURITY_SCOPE = "security-summaries\nINE0KH208019\n\n";
-  private static final String DATE_SCOPE = "trade-date-summaries\n2026-01-01\n";
 
   private final DailyMarketSummaryRepository summaries = mock(DailyMarketSummaryRepository.class);
   private final ListDailyMarketSummaries list = new ListDailyMarketSummaries(summaries);
@@ -103,86 +99,20 @@ class ListDailyMarketSummariesTest {
   }
 
   @Test
-  void tradeDatePageIsFilteredByTrimmedExchangeAndPointsAtTheLastShown() {
-    when(summaries.forTradeDate(DAY, "BSE", null, 51)).thenReturn(byIsin(51));
-
-    SummaryPage page = list.forTradeDate(DAY, "  BSE ", null);
-
-    assertThat(page.items()).hasSize(50);
-    assertThat(PageToken.decode(Objects.requireNonNull(page.nextToken()), DATE_SCOPE + "BSE"))
-        .contains("12\nINE000000049BSE");
-  }
-
-  @Test
-  void tradeDateNextPageStartsAfterTheToken() {
-    TradeDatePosition after = new TradeDatePosition("INE000000049", "BSE");
-    when(summaries.forTradeDate(eq(DAY), isNull(), eq(after), eq(51))).thenReturn(byIsin(2));
-
-    SummaryPage page =
-        list.forTradeDate(DAY, null, new PageToken(DATE_SCOPE, "12\nINE000000049BSE").encode());
-
-    assertThat(page.items()).hasSize(2);
-    assertThat(page.nextToken()).isNull();
-  }
-
-  @Test
-  void badFilterOrTokenForTradeDateIsRejectedBeforeReading() {
-    assertThatThrownBy(() -> list.forTradeDate(DAY, " ", null))
-        .isInstanceOf(InvalidQueryException.class)
-        .hasMessage("The exchangeName filter must not be blank.");
-    assertThatThrownBy(() -> list.forTradeDate(DAY, "BSE" + (char) 0, null))
-        .isInstanceOf(InvalidQueryException.class)
-        .hasMessage("The exchangeName filter must not hold control characters.");
-    assertThatThrownBy(() -> list.forTradeDate(DAY, "B".repeat(65), null))
-        .isInstanceOf(InvalidQueryException.class)
-        .hasMessage("The exchangeName filter is too long.");
-    assertThatThrownBy(() -> list.forTradeDate(LocalDate.of(-999_999, 1, 1), null, null))
-        .isInstanceOf(InvalidQueryException.class)
-        .hasMessage("The tradeDate must be between 1900 and 9999.");
-    assertThatThrownBy(
-            () -> list.forSecurity(Isin.of("INE0KH208019"), null, LocalDate.of(99_999, 1, 1), null))
+  void unsupportedDatesAreRejectedBeforeReading() {
+    assertThatThrownBy(() -> list.forSecurity(ISIN, null, LocalDate.of(99_999, 1, 1), null))
         .isInstanceOf(InvalidQueryException.class)
         .hasMessage("The toDate must be between 1900 and 9999.");
-    assertThatThrownBy(
-            () -> list.forSecurity(Isin.of("INE0KH208019"), LocalDate.of(1899, 12, 31), null, null))
+    assertThatThrownBy(() -> list.forSecurity(ISIN, LocalDate.of(1899, 12, 31), null, null))
         .isInstanceOf(InvalidQueryException.class)
         .hasMessage("The fromDate must be between 1900 and 9999.");
-    String unfiltered = new PageToken(DATE_SCOPE, "12\nINE000000049BSE").encode();
-    List<String> badPositions =
-        List.of("INE000000049", "x\nINE", "-1\nINE", "99\nINE", Integer.MAX_VALUE + "\nINE");
-    List<String> tokens = new java.util.ArrayList<>(List.of(unfiltered));
-    badPositions.forEach(position -> tokens.add(new PageToken(DATE_SCOPE, position).encode()));
-    for (String token : tokens) {
-      String filter = token.equals(unfiltered) ? "BSE" : null;
-      assertThatThrownBy(() -> list.forTradeDate(DAY, filter, token))
-          .isInstanceOf(InvalidQueryException.class)
-          .hasMessage("The pageToken is not valid.");
-    }
     verifyNoInteractions(summaries);
-  }
-
-  // AP-1: an ISIN holding a line break still pages from exactly where it ended
-  @Test
-  void isinWithLineBreakRoundTripsThroughTheToken() {
-    List<DailyMarketSummaryView> listed = new java.util.ArrayList<>(byIsin(49));
-    listed.add(summary("INE\n1", DAY));
-    listed.add(summary("INE\n2", DAY));
-    when(summaries.forTradeDate(DAY, null, null, 51)).thenReturn(listed);
-    String token = Objects.requireNonNull(list.forTradeDate(DAY, null, null).nextToken());
-    TradeDatePosition after = new TradeDatePosition("INE\n1", "BSE");
-    when(summaries.forTradeDate(DAY, null, after, 51)).thenReturn(List.of());
-
-    assertThat(list.forTradeDate(DAY, null, token).items()).isEmpty();
   }
 
   private static List<DailyMarketSummaryView> byDate(int count) {
     return IntStream.range(0, count)
         .mapToObj(n -> summary(ISIN.value(), LATER.minusDays(n)))
         .toList();
-  }
-
-  private static List<DailyMarketSummaryView> byIsin(int count) {
-    return IntStream.range(0, count).mapToObj(n -> summary("INE%09d".formatted(n), DAY)).toList();
   }
 
   static DailyMarketSummaryView summary(String isin, LocalDate tradeDate) {
