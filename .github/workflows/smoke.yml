@@ -1,0 +1,33 @@
+name: Smoke
+# S-01 and S-02 against the deployed service, after every successful deployment and on demand.
+# The requests are unsigned, so this workflow needs no AWS role and no secrets.
+on:
+  workflow_run:
+    workflows: [Deploy]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: data-processing-service-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Smoke cases S-01 and S-02
+    if: >-
+      github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' ||
+      github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The deployed commit's script, not whatever main has moved to since.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
+      - name: Run the smoke cases
+        run: scripts/smoke.sh https://processing.kagent.app

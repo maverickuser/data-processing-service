@@ -138,7 +138,7 @@ jobs:
       - name: Processing contracts, OpenAPI documents, and documentation links
         run: |
           make check-contracts check-docs
-          python3 -m unittest scripts/test_release_scripts.py
+          python3 -m unittest scripts/test_release_scripts.py scripts/test_smoke.py
 
   package:
     name: 6 · package
