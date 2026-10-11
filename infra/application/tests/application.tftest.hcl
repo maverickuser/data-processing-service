@@ -101,6 +101,25 @@ variables {
   package_sha256    = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 }
 
+run "migration_stage_has_no_live_triggers" {
+  command = plan
+  variables {
+    enable_live_triggers = false
+  }
+
+  assert {
+    condition = (
+      length(aws_apigatewayv2_route.read) == 0 &&
+      length(aws_apigatewayv2_route.submission) == 0 &&
+      length(aws_lambda_permission.api) == 0 &&
+      length(aws_lambda_event_source_mapping.worker) == 0 &&
+      length(aws_cloudwatch_event_target.schedule) == 0 &&
+      length(aws_lambda_permission.schedule) == 0
+    )
+    error_message = "No API route, queue consumer, or scheduled target can invoke a runtime function before migration."
+  }
+}
+
 run "six_snapstart_functions_in_the_shared_private_subnets" {
   command = plan
 
@@ -270,9 +289,9 @@ run "processing_queue_orders_retries_and_admits_only_its_senders" {
 
   assert {
     condition = (
-      aws_lambda_event_source_mapping.worker.batch_size == 1 &&
-      one(aws_lambda_event_source_mapping.worker.scaling_config).maximum_concurrency == 10 &&
-      aws_lambda_event_source_mapping.worker.function_response_types == toset(["ReportBatchItemFailures"])
+      aws_lambda_event_source_mapping.worker[0].batch_size == 1 &&
+      one(aws_lambda_event_source_mapping.worker[0].scaling_config).maximum_concurrency == 10 &&
+      aws_lambda_event_source_mapping.worker[0].function_response_types == toset(["ReportBatchItemFailures"])
     )
     error_message = "The worker takes one message at a time, at most ten at once, and reports failures per message."
   }
@@ -314,7 +333,7 @@ run "public_reads_and_signed_submission_at_the_custom_domain" {
   }
 
   assert {
-    condition     = aws_apigatewayv2_route.submission.route_key == "POST /v1/event-ingestions" && aws_apigatewayv2_route.submission.authorization_type == "AWS_IAM"
+    condition     = aws_apigatewayv2_route.submission[0].route_key == "POST /v1/event-ingestions" && aws_apigatewayv2_route.submission[0].authorization_type == "AWS_IAM"
     error_message = "The submission route requires SigV4."
   }
 

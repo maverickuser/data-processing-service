@@ -68,6 +68,7 @@ resource "aws_sqs_queue_policy" "processing" {
 }
 
 resource "aws_lambda_event_source_mapping" "worker" {
+  count                   = var.enable_live_triggers ? 1 : 0
   event_source_arn        = aws_sqs_queue.processing.arn
   function_name           = aws_lambda_alias.live["worker"].arn
   batch_size              = 1

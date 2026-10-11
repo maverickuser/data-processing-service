@@ -31,6 +31,12 @@ variable "package_bucket" {
   default = "data-processing-service-artifacts"
 }
 
+variable "enable_live_triggers" {
+  type        = bool
+  default     = true
+  description = "Enable API routes, queue consumption, and schedule targets only after a successful migration and alias promotion."
+}
+
 variable "persistent_state_bucket" {
   type    = string
   default = "data-processing-service-terraform-state"

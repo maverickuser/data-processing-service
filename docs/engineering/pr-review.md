@@ -77,7 +77,7 @@ Every finding has a file and line, a concrete failure scenario or the rule it vi
 
 ### Persistence and operations
 
-- Migrations are new files, forward-only, and match LLD 22. No edit to a merged migration.
+- Migrations are new files, forward-only, additive (no drop, rename, or narrowing of anything the previous release uses; decision 0001), and match LLD 22. No edit to a merged migration.
 - SQL is schema-qualified; every query that filters or orders has a supporting index.
 - Timeouts on every outbound call; resources closed; no unbounded in-memory collection of file contents.
 - Logs carry `jobId`; no secrets or payloads logged.

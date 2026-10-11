@@ -16,7 +16,7 @@ resource "aws_cloudwatch_event_rule" "schedule" {
 }
 
 resource "aws_cloudwatch_event_target" "schedule" {
-  for_each = local.schedules
+  for_each = var.enable_live_triggers ? local.schedules : {}
   rule     = aws_cloudwatch_event_rule.schedule[each.key].name
   arn      = aws_lambda_alias.live[each.key].arn
 
@@ -37,7 +37,7 @@ resource "aws_lambda_function_event_invoke_config" "schedule" {
 }
 
 resource "aws_lambda_permission" "schedule" {
-  for_each      = local.schedules
+  for_each      = var.enable_live_triggers ? local.schedules : {}
   statement_id  = "AllowScheduleInvoke"
   action        = "lambda:InvokeFunction"
   principal     = "events.amazonaws.com"

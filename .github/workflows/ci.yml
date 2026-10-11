@@ -3,6 +3,7 @@ name: ci
 # Continuous integration only: nothing here deploys or uses AWS credentials.
 # Runs on every pull request whatever its base branch, so stacked PRs are checked too.
 on:
+  workflow_call:
   pull_request:
     # `edited` reruns the checks when a stacked PR is retargeted after its parent merges.
     types: [opened, synchronize, reopened, edited]
@@ -18,7 +19,7 @@ permissions:
 # so a retarget restarts the checks; a stale retarget arriving after a push can still cancel the newer
 # commit's run, which then needs a rerun.
 concurrency:
-  group: ci-${{ github.ref }}${{ github.event.action == 'edited' && !github.event.changes.base && '-edited' || '' }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}${{ github.event.action == 'edited' && !github.event.changes.base && '-edited' || '' }}
   cancel-in-progress: true
 
 env:
@@ -135,7 +136,9 @@ jobs:
         with:
           persist-credentials: false
       - name: Processing contracts, OpenAPI documents, and documentation links
-        run: make check-contracts check-docs
+        run: |
+          make check-contracts check-docs
+          python3 -m unittest scripts/test_release_scripts.py
 
   package:
     name: 6 · package
