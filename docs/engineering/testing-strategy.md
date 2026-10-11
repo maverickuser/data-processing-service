@@ -233,5 +233,6 @@ Following Google's small/medium/large split:
 | S-01 | Deployed read API answers over HTTPS at `processing.kagent.app`; an unknown ISIN returns `404` problem+json |
 | S-02 | An unsigned `POST /v1/event-ingestions` is rejected with `403` by API Gateway |
 | S-03 | A real BSE manifest submitted by the fetch service with a signed request is accepted and reaches a terminal status |
-| S-04 | A new ISIN from S-03 produces a security-details event; the fetch service's NSDL manifest for it is processed and the security view shows enriched fields |
-| S-05 | Canonical file for the run exists in the canonical bucket |
+| S-04 | Canonical file for the run exists in the canonical bucket |
+
+The smoke suite needs no SQS queue beyond what `infra/application` already owns. The new-security event path (an ISIN-only security emitting a security-details event to the fetch service's queue, then NSDL enrichment) is covered by I-EVT-01 to I-EVT-05 against ElasticMQ, not by smoke (the former S-04, removed 2026-10-11).
