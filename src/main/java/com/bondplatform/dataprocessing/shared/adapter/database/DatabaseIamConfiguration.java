@@ -6,6 +6,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProp
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.rds.RdsUtilities;
 
@@ -30,6 +31,9 @@ public class DatabaseIamConfiguration {
         if (bean instanceof HikariDataSource pool) {
           RdsUtilities rds =
               RdsUtilities.builder()
+                  // Unlike a service client, RdsUtilities has no default credentials and cannot
+                  // sign a token without them: use the function's role, as the SDK clients do.
+                  .credentialsProvider(DefaultCredentialsProvider.builder().build())
                   .region(
                       Region.of(environment.getRequiredProperty("data-processing.database.region")))
                   .build();
