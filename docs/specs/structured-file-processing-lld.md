@@ -1227,7 +1227,7 @@ Agreed 2026-10-02.
 | Attempt time limit | 15 minutes (the worker Lambda timeout); the queue visibility timeout is 16 minutes so a crashed invocation's message becomes visible again |
 | Exhausted attempts | Job `FAILED`; message moves to a dead-letter queue with 14-day retention; later jobs in the same ordering group are released |
 | Internal file-processing queue and DLQ | SQS FIFO, created and owned by this service's Terraform. The external security-details queue remains supplied (section 14.2) |
-| Outbox dispatch | Attempted immediately after the creating transaction commits, when no older pending event exists in the same ordering group; a sweeper Lambda runs every minute and delivers anything still pending, in order. Failed sends retry indefinitely with exponential backoff, starting at 10 seconds and doubling to a cap of 5 minutes (start fixed 2026-10-03), preserving the original event |
+| Outbox dispatch | Attempted immediately after the creating transaction commits, when no older pending event exists in the same ordering group; a sweeper Lambda runs once a day at 22:00 IST and delivers anything still pending, in order (changed from every minute 2026-10-11). Failed sends retry indefinitely, preserving the original event. Each failure sets an exponential backoff, starting at 10 seconds and doubling to a cap of 5 minutes (start fixed 2026-10-03), before the event may be sent again; since the sweeper became daily (decision 0002), the next attempt is in practice the next 22:00 run |
 | Expired or missing upstream object | Job `FAILED` with `SOURCE_NOT_FOUND`, no automatic retry; the fetch-service artifact bucket expires objects after 30 days, so replay beyond that window requires a new fetch run |
 
 ### 21.1 Retention and backups
@@ -1238,7 +1238,7 @@ Agreed 2026-10-02. Accepted business data in `securities_data` is retained indef
 |---|---|---|
 | Canonical run files | Processing-service S3 bucket | Indefinite |
 | `ingestion_requests`, `processing_runs`, `source_files` | PostgreSQL | Indefinite (business rows reference the job ID) |
-| `rejected_records`, `validation_issues` | PostgreSQL | 1 year, then deleted by a scheduled cleanup |
+| `rejected_records`, `validation_issues` | PostgreSQL | 1 year, then deleted by a weekly scheduled cleanup |
 | Delivered `outbox_events` | PostgreSQL | Deleted 30 days after successful delivery; undelivered events are never purged |
 
 After the one-year cleanup a job still reports its stored `errorCount` and counts, while the error preview and error list return no entries; the rejected records remain in the run's canonical file. RDS automated daily backups are retained for 7 days with deletion protection enabled.
@@ -1453,8 +1453,8 @@ One build artifact (a single Java application) is deployed as six Lambda functio
 | Read API | API Gateway HTTP API, `GET` routes | The five public read endpoints and the read API's documentation at `/docs` only (`API_READ_ROUTES=true`) | 29 seconds | Reserved 10 |
 | Submission API | API Gateway HTTP API, `POST` route | `POST /v1/event-ingestions` only (`API_SUBMISSION_ROUTES=true`) | 29 seconds | Reserved 5 |
 | Worker | SQS FIFO processing queue, batch size 1 | Runs one job: source reading, stage 1, stage 2, publication | 15 minutes | Maximum 10 through the event source mapping |
-| Outbox sweeper | EventBridge schedule, every minute | Delivers pending outbox events in order; fails jobs stuck beyond their attempt limit | 1 minute | 1 |
-| Retention | EventBridge schedule, daily | The cleanup in section 21.1 | 5 minutes | 1 |
+| Outbox sweeper | EventBridge schedule, daily at 22:00 IST | Delivers pending outbox events in order; fails jobs stuck beyond their attempt limit | 1 minute | 1 |
+| Retention | EventBridge schedule, weekly on Sunday at 03:00 IST | The cleanup in section 21.1 | 5 minutes | 1 |
 | Migration | Invoked by the deployment workflow | Runs Flyway | 5 minutes | 1 |
 
 The artifact is one zip with the compiled classes at its root and the dependencies under `lib/`; CI loads each handler class from it before uploading it. Initialization is SnapStart-safe. A function starts its application context while it initializes, and SnapStart runs that once, when a version is published, then restores every execution environment from the snapshot. So nothing made during initialization may be reused after a restore as if it were new:
@@ -1479,13 +1479,13 @@ The artifact is one zip with the compiled classes at its root and the dependenci
 - The processing queue stays SQS FIFO with the message group set to the ordering group (`trade-date:{date}` or `isin:{isin}`). SQS delivers one message per group at a time, so jobs within a group run in order while different groups run in parallel.
 - On a temporary failure the worker records the failed run, sets the message's visibility timeout to the agreed delay (1 minute, then 5 minutes), and reports failure. The group stays blocked until that message is processed, which preserves ordering through retries.
 - On the third failed attempt the worker marks the job `FAILED` and reports failure; the queue's redrive policy (`maxReceiveCount` 3) moves the message to the dead-letter queue and the group continues.
-- If an invocation dies without recording anything (crash or timeout), the message reappears after the visibility timeout and the next invocation starts a new run. The sweeper marks a job `FAILED` when it is still non-terminal after its third run has exceeded the attempt time limit.
+- If an invocation dies without recording anything (crash or timeout), the message reappears after the visibility timeout and the next invocation starts a new run. The sweeper marks a job `FAILED` when it is still non-terminal after its third run has exceeded the attempt time limit. Since 2026-10-11 the sweeper runs once a day at 22:00 IST (decision 0002), so a job past either limit in this section is failed at the next run, up to about 25 hours after it stopped progressing.
 - Agreed 2026-10-03: the processing queue and its dead-letter queue belong to this service and keep `maxReceiveCount` 3. A receive can end before an attempt is recorded (the database unreachable at the claim, or an invocation dying before it commits), so a message can reach the dead-letter queue while its job still waits to retry. The sweeper therefore also fails any job that has stayed `QUEUED`, `PROCESSING`, or `RETRY_PENDING` past a time limit, whatever its attempt count, so no job waits forever. Decided 2026-10-05: the limit is one hour without progress, where progress is the job's submission or any run's start or end. The final-attempt rule waits the 16-minute visibility timeout after the final run's start, not the 15-minute Lambda timeout, so a live run is never failed. A run still recorded as running ends as a temporary failure with `ATTEMPT_ABANDONED`, which the job's error list shows; a job failed before any attempt has no run and so reports no error. Accepted trade-off: a job queued behind slow jobs of its own ordering group makes no progress while it waits, so a group whose earlier jobs together take over an hour can have a waiting job failed.
 - Content failures are terminal on first occurrence: the worker records the outcome and acknowledges the message.
 
 ### 23.4 Outbox without a polling loop
 
-A Lambda cannot run a background loop. After a transaction that created outbox events commits, the same invocation sends them to SQS before returning, provided no older pending event exists for the same ordering group; otherwise it leaves them for the sweeper. A failed send never fails the request: the `202` (or the job result) stands and the sweeper delivers the event within about a minute. FIFO deduplication uses the outbox event ID, so a send repeated by both paths is delivered once.
+A Lambda cannot run a background loop. After a transaction that created outbox events commits, the same invocation sends them to SQS before returning, provided no older pending event exists for the same ordering group; otherwise it leaves them for the sweeper. A failed send never fails the request: the `202` (or the job result) stands and the sweeper delivers the event at its next daily run, at 22:00 IST; until then later events in the same ordering group wait behind it. A failed sweep is retried twice by Lambda. One sweep makes at most 500 sends within a 30-second budget; anything it cannot send waits for the next day's run and keeps the `OldestPendingOutboxAge` alarm raised. FIFO deduplication uses the outbox event ID, so a send repeated by both paths is delivered once.
 
 ### 23.5 Database connections
 
@@ -1521,7 +1521,7 @@ Metrics are written to standard output as CloudWatch embedded metric format line
 |---|---|---|---|
 | `JobOutcome` | Count | `Dataset` and `Outcome` (the job's status: `COMPLETED`, `COMPLETED_WITH_ERRORS`, `RETRY_PENDING` or `FAILED`); `Outcome` alone | By the worker when an attempt it saw end ends, including a job of a dataset no handler processes, and when it fails a job whose attempts were used. An attempt cut short by a timeout or an `Error` records nothing; the sweeper later fails that job and counts it in `StuckJobsFailed` |
 | `RunDuration` | Milliseconds | `Dataset`; none | By the worker when an attempt ends, from its start to its end |
-| `StuckJobsFailed` | Count | none | By the sweeper every minute (section 23.3) |
-| `OldestPendingOutboxAge` | Seconds | none | By the sweeper every minute, after its sweep; zero when nothing is pending |
+| `StuckJobsFailed` | Count | none | By the sweeper once a day (section 23.3) |
+| `OldestPendingOutboxAge` | Seconds | none | By the sweeper once a day, after its sweep; zero when nothing is pending |
 
-Alarms on these metrics are part of the deployment (plan stack I): `JobOutcome` with `Outcome` = `FAILED`, any `StuckJobsFailed`, and `OldestPendingOutboxAge` above ten minutes.
+Alarms on these metrics are part of the deployment (plan stack I): `JobOutcome` with `Outcome` = `FAILED`, any `StuckJobsFailed`, and `OldestPendingOutboxAge` above ten minutes after the daily sweep, or missing for a day.

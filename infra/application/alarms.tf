@@ -77,14 +77,16 @@ resource "aws_cloudwatch_metric_alarm" "stuck_jobs" {
   alarm_actions       = [aws_sns_topic.alarms.arn]
 }
 
-# The sweeper records this every minute, so missing data means the sweeper is not running.
+# The sweeper records this once a day after its sweep, so a day without data means it did not run.
+# A daily alarm is evaluated about hourly, so it reports up to an hour late, and it starts in
+# alarm after a first deploy until the first 22:00 run.
 resource "aws_cloudwatch_metric_alarm" "outbox_backlog" {
   alarm_name          = "${local.name}-outbox-backlog"
-  alarm_description   = "An outbox event has waited over ten minutes, or the sweeper stopped reporting."
+  alarm_description   = "The daily sweep left an event pending over ten minutes, or the sweeper did not report."
   namespace           = local.metric_namespace
   metric_name         = "OldestPendingOutboxAge"
   statistic           = "Maximum"
-  period              = 300
+  period              = 86400
   evaluation_periods  = 1
   comparison_operator = "GreaterThanThreshold"
   threshold           = 600

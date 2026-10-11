@@ -241,8 +241,8 @@ LLD sections 18, 21, 23.
 
 | PR | Branch | Scope | Test cases | Exit evidence |
 |---|---|---|---|---|
-| 40 | `h/40-retention` | `RetentionCleaner` and `RetentionHandler` (daily schedule) | I-OPS-01..02 | — |
-| 41 | `h/41a-outbox-sweeper`, `h/41b-stuck-jobs` (split 2026-10-05) | 41a: `OutboxSweeperHandler` (every minute): ordered delivery of pending outbox events and a sweep time budget (17b review S-2). 41b: `StuckJobFailer` for jobs past their final attempt limit, and for any job left `QUEUED`, `PROCESSING`, or `RETRY_PENDING` past a time limit whatever its attempts (decided 2026-10-03, LLD 23.3) | I-OPS-04, I-EVT-05 | Pending work left by a failed invocation is delivered once, in order |
+| 40 | `h/40-retention` | `RetentionCleaner` and `RetentionHandler` (daily schedule; weekly on Sunday 03:00 IST from 2026-10-11) | I-OPS-01..02 | — |
+| 41 | `h/41a-outbox-sweeper`, `h/41b-stuck-jobs` (split 2026-10-05) | 41a: `OutboxSweeperHandler` (every minute; daily at 22:00 IST from 2026-10-11): ordered delivery of pending outbox events and a sweep time budget (17b review S-2). 41b: `StuckJobFailer` for jobs past their final attempt limit, and for any job left `QUEUED`, `PROCESSING`, or `RETRY_PENDING` past a time limit whatever its attempts (decided 2026-10-03, LLD 23.3) | I-OPS-04, I-EVT-05 | Pending work left by a failed invocation is delivered once, in order |
 | 42 | `h/42a-worker-metrics`, `h/42b-sweeper-metrics` (split 2026-10-05) | 42a: structured JSON logs (MDC `jobId` and `attemptNumber` as fields); a `Metrics` port with a CloudWatch embedded-metric-format adapter; the worker's `JobOutcome` and `RunDuration`; LLD 23.8. 42b: the sweeper's `StuckJobsFailed` and `OldestPendingOutboxAge`; each handler's fixture event checked for its log fields and metrics | I-OPS-05 (42b) | — |
 
 ## Stack I — Infrastructure and release
