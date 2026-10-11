@@ -125,6 +125,17 @@ Work is about 48 small PRs in nine stacks (the exact number moves as PRs are spl
 
 GitHub Actions only. `ci.yml` runs on every pull request, whatever its base branch, without AWS credentials, as staged jobs: compile, then static analysis, unit tests and coverage, and contracts and documentation; integration tests after unit tests; package last. The `ci passed` job succeeds only when every stage did and is the check required on `main`. Deployment (`deploy.yml`), smoke tests (`smoke.yml`), and application teardown (`destroy-application.yml`) run from `main` and assume an AWS role through OIDC using the `AWS_ROLE_TO_ASSUME` secret. No PR before plan PR 47 applies Terraform or touches real AWS.
 
+## Context management
+
+The repository, not the conversation, holds durable state: the implementation plan, `docs/plans/implementation-status.md`, the branch, and the PR. Shrinking the context is therefore always safe once that state is written down.
+
+- **Compact** (`/compact` in Claude Code or Codex) when the context is roughly two-thirds full, after a PR merges, or after a review pass ends. Do it between steps, never in the middle of an edit or while chasing a failing check.
+- **Keep** in the summary: the plan PR number, branch, parent branch, and PR link; files changed and why; checks run with their result and the exact failing test or error; open review findings; and user decisions or open questions not yet recorded in the repository.
+- **Drop**: full file contents, passing test output, old command logs, superseded attempts, and documents that can simply be re-read.
+- **Purge** (`/clear` or a new session) instead of compacting when switching to an unrelated PR or stack, or when the context is mostly a dead end. Before purging, record progress in `implementation-status.md` or the PR description.
+- If a summary would lose an unrecorded decision, write it to the spec, a decision record, or the status file first.
+- After any compact or purge, re-read this file and the status file, and check the branch and `git status` before editing.
+
 ## Keeping guidance current
 
 When behaviour changes, update the LLD, the affected contract or OpenAPI file, the test-case list, and the status file in the same PR. Record substantial new decisions in `docs/decisions/`. Keep this file short.
