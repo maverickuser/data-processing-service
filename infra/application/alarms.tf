@@ -78,6 +78,8 @@ resource "aws_cloudwatch_metric_alarm" "stuck_jobs" {
 }
 
 # The sweeper records this once a day after its sweep, so a day without data means it did not run.
+# A daily alarm is evaluated about hourly, so it reports up to an hour late, and it starts in
+# alarm after a first deploy until the first 22:00 run.
 resource "aws_cloudwatch_metric_alarm" "outbox_backlog" {
   alarm_name          = "${local.name}-outbox-backlog"
   alarm_description   = "The daily sweep left an event pending over ten minutes, or the sweeper did not report."
