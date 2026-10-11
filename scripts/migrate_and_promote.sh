@@ -17,6 +17,14 @@ jq -e '
   all($versions[]; type == "string" and test("^[0-9]+$"))
 ' "$outputs_file" >/dev/null
 
+# A version in the VPC stays Pending until its network interfaces exist, and invoking it then
+# fails. Wait for every published version, so neither the migration nor any alias meets one.
+jq -r '.function_names.value | keys[]' "$outputs_file" | while IFS= read -r name; do
+  function_name="$(jq -er --arg name "$name" '.function_names.value[$name]' "$outputs_file")"
+  version="$(jq -er --arg name "$name" '.published_versions.value[$name]' "$outputs_file")"
+  aws lambda wait published-version-active --function-name "$function_name" --qualifier "$version"
+done
+
 migration_name="$(jq -er '.function_names.value.migration' "$outputs_file")"
 migration_version="$(jq -er '.published_versions.value.migration' "$outputs_file")"
 # The CLI's default 60 s read timeout is shorter than the migration function's 300 s timeout,
