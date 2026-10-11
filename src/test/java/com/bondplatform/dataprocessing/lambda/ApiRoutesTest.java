@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import com.bondplatform.dataprocessing.admission.adapter.web.EventIngestionController;
 import com.bondplatform.dataprocessing.admission.application.AdmitSubmission;
 import com.bondplatform.dataprocessing.admission.domain.SubmissionValidator;
+import com.bondplatform.dataprocessing.review.adapter.web.ApiDocumentationController;
 import com.bondplatform.dataprocessing.review.adapter.web.DailyMarketSummaryController;
 import com.bondplatform.dataprocessing.review.adapter.web.JobStatusController;
 import com.bondplatform.dataprocessing.review.adapter.web.SecurityController;
@@ -39,7 +40,8 @@ class ApiRoutesTest {
               EventIngestionController.class,
               SecurityController.class,
               DailyMarketSummaryController.class,
-              JobStatusController.class);
+              JobStatusController.class,
+              ApiDocumentationController.class);
 
   @Test
   void readFunctionServesOnlyTheReadRoutes() {
@@ -51,7 +53,8 @@ class ApiRoutesTest {
               assertThat(context)
                   .hasSingleBean(SecurityController.class)
                   .hasSingleBean(DailyMarketSummaryController.class)
-                  .hasSingleBean(JobStatusController.class);
+                  .hasSingleBean(JobStatusController.class)
+                  .hasSingleBean(ApiDocumentationController.class);
             });
   }
 
@@ -65,7 +68,8 @@ class ApiRoutesTest {
               assertThat(context)
                   .doesNotHaveBean(SecurityController.class)
                   .doesNotHaveBean(DailyMarketSummaryController.class)
-                  .doesNotHaveBean(JobStatusController.class);
+                  .doesNotHaveBean(JobStatusController.class)
+                  .doesNotHaveBean(ApiDocumentationController.class);
             });
   }
 
@@ -77,7 +81,8 @@ class ApiRoutesTest {
                 .doesNotHaveBean(EventIngestionController.class)
                 .doesNotHaveBean(SecurityController.class)
                 .doesNotHaveBean(DailyMarketSummaryController.class)
-                .doesNotHaveBean(JobStatusController.class));
+                .doesNotHaveBean(JobStatusController.class)
+                .doesNotHaveBean(ApiDocumentationController.class));
   }
 
   @Test

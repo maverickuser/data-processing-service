@@ -112,6 +112,7 @@ run "migration_stage_has_no_live_triggers" {
       length(aws_apigatewayv2_route.read) == 0 &&
       length(aws_apigatewayv2_route.submission) == 0 &&
       length(aws_lambda_permission.api) == 0 &&
+      length(aws_lambda_permission.api_docs) == 0 &&
       length(aws_lambda_event_source_mapping.worker) == 0 &&
       length(aws_cloudwatch_event_target.schedule) == 0 &&
       length(aws_lambda_permission.schedule) == 0
@@ -326,10 +327,11 @@ run "public_reads_and_signed_submission_at_the_custom_domain" {
 
   assert {
     condition = (
-      length(aws_apigatewayv2_route.read) == 5 &&
-      alltrue([for key, route in aws_apigatewayv2_route.read : startswith(key, "GET /v1/") && route.authorization_type == "NONE"])
+      length(aws_apigatewayv2_route.read) == 10 &&
+      length([for key in keys(aws_apigatewayv2_route.read) : key if startswith(key, "GET /docs")]) == 5 &&
+      alltrue([for key, route in aws_apigatewayv2_route.read : (startswith(key, "GET /v1/") || key == "GET /docs" || startswith(key, "GET /docs/")) && route.authorization_type == "NONE"])
     )
-    error_message = "The five read routes are GET and have no authorizer."
+    error_message = "The five read routes and the five documentation routes are GET and have no authorizer."
   }
 
   assert {
@@ -350,7 +352,9 @@ run "public_reads_and_signed_submission_at_the_custom_domain" {
     condition = (
       aws_lambda_permission.api["read-api"].source_arn == "arn:aws:execute-api:ap-south-1:123456789012:abc123/*/GET/v1/*" &&
       aws_lambda_permission.api["submission-api"].source_arn == "arn:aws:execute-api:ap-south-1:123456789012:abc123/*/POST/v1/event-ingestions" &&
-      alltrue([for p in aws_lambda_permission.api : p.qualifier == "live"])
+      alltrue([for p in aws_lambda_permission.api : p.qualifier == "live"]) &&
+      aws_lambda_permission.api_docs[0].source_arn == "arn:aws:execute-api:ap-south-1:123456789012:abc123/*/GET/docs*" &&
+      aws_lambda_permission.api_docs[0].qualifier == "live"
     )
     error_message = "Each API function admits only its own method and paths, on the live alias."
   }
