@@ -230,7 +230,7 @@ Following Google's small/medium/large split:
 
 | ID | Case |
 |---|---|
-| S-01 | Deployed read API answers over HTTPS at `processing.kagent.app`; `GET /v1/securities/{isin}` for a valid but unknown ISIN returns `404` problem+json. The lookup runs against PostgreSQL, so this proves the read function connects to the database; a connection failure returns `5xx` |
+| S-01 | Deployed read API answers over HTTPS at `processing.kagent.app` without request signing (the `GET` routes are public); an unsigned `GET /v1/securities/{isin}` for a valid but unknown ISIN returns `404` problem+json. The lookup runs against PostgreSQL, so this proves the read function connects to the database; a connection failure returns `5xx` |
 | S-02 | An unsigned `POST /v1/event-ingestions` is rejected with `403` by API Gateway |
 
 Smoke checks only that the deployed API answers and reaches the database. It does not depend on the fetch service, create or read SQS queues, submit manifests, or assert on stored data. Processing, the new-security event, and canonical files are covered by integration tests (I-EVT-01 to I-EVT-05 and the pipeline cases). Former cases S-03 to S-05 were removed on 2026-10-11.
