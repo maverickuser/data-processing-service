@@ -2,6 +2,7 @@ package com.bondplatform.dataprocessing.pipeline.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
@@ -36,6 +37,7 @@ import com.bondplatform.dataprocessing.job.domain.OrderingGroup;
 import com.bondplatform.dataprocessing.job.domain.StoredJob;
 import com.bondplatform.dataprocessing.publication.application.PublishDailyMarketSummaries;
 import com.bondplatform.dataprocessing.publication.domain.DailyMarketSummary;
+import com.bondplatform.dataprocessing.publication.domain.ExchangeCoupon;
 import com.bondplatform.dataprocessing.shared.domain.Isin;
 import com.bondplatform.dataprocessing.shared.domain.JobId;
 import com.bondplatform.dataprocessing.source.application.LoadManifest;
@@ -127,8 +129,8 @@ class BhavcopyHandlerTest {
                 LocalDate.of(2026, 1, 1),
                 FILE.bucket(),
                 FILE.key(),
-                "bse-debt-bhavcopy-csv-v1",
-                "bse-debt-bhavcopy-mapping-v1"));
+                "bse-debt-bhavcopy-csv-v2",
+                "bse-debt-bhavcopy-mapping-v2"));
     verify(canonicalFile, times(8)).append(any(CanonicalRow.class));
     @SuppressWarnings("unchecked")
     ArgumentCaptor<List<RejectedRow>> rejected = ArgumentCaptor.forClass(List.class);
@@ -141,7 +143,7 @@ class BhavcopyHandlerTest {
     order.verify(rejectedRecords).saveAll(any(), any(), anyList());
     order.verify(canonicalFile).commit();
     order.verify(completion).recordCanonicalFile(job, CANONICAL_KEY);
-    order.verify(publication).publish(eq(job), accepted.capture(), outcome.capture());
+    order.verify(publication).publish(eq(job), accepted.capture(), anyList(), outcome.capture());
     order.verify(canonicalFile).close();
     assertThat(accepted.getValue())
         .extracting(DailyMarketSummary::isin)
@@ -155,7 +157,7 @@ class BhavcopyHandlerTest {
   @Test
   void fileWithOnlyAcceptedRowsStoresNoRejectedRows() {
     ClaimedJob job = claimed(pinnedVersions());
-    givenSource(job, csv("973812,INE001A07AB1,100,101,99,100,1,1,100,100"));
+    givenSource(job, csv("973812,INE001A07AB1,100,101,99,100,1,1,100,100,8.50"));
     when(canonicalFile.commit()).thenReturn(CANONICAL_KEY);
 
     handler.process(job);
@@ -164,6 +166,7 @@ class BhavcopyHandlerTest {
     verify(publication)
         .publish(
             eq(job),
+            anyList(),
             anyList(),
             eq(
                 new JobOutcome(
@@ -226,7 +229,7 @@ class BhavcopyHandlerTest {
         .isInstanceOf(IllegalStateException.class)
         .hasMessage(
             "The job is pinned to bse-debt-bhavcopy-csv-v0,"
-                + " but this deployment holds bse-debt-bhavcopy-csv-v1");
+                + " but this deployment holds bse-debt-bhavcopy-csv-v2");
     assertThatThrownBy(() -> handler.process(mappingDiffers))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("bse-debt-bhavcopy-mapping-v0");
@@ -254,12 +257,12 @@ class BhavcopyHandlerTest {
     assertThatThrownBy(() -> handler.process(sourceChanged))
         .isInstanceOf(IllegalStateException.class)
         .hasMessage(
-            "The job is pinned to bse-debt-bhavcopy-csv-v1 with hash sha256:old,"
+            "The job is pinned to bse-debt-bhavcopy-csv-v2 with hash sha256:old,"
                 + " but this deployment's copy has hash "
                 + deployed.sourceHash());
     assertThatThrownBy(() -> handler.process(mappingChanged))
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("bse-debt-bhavcopy-mapping-v1 with hash sha256:old");
+        .hasMessageContaining("bse-debt-bhavcopy-mapping-v2 with hash sha256:old");
     verifyNoInteractions(manifests);
   }
 
@@ -342,10 +345,53 @@ class BhavcopyHandlerTest {
     return new ClaimedJob(job, RUN, 2);
   }
 
-  /** A bhavcopy with the ten selected headers and the given rows. */
+  // U-CSV-13, U-MAP-05
+  @Test
+  void couponRatesArePublishedAndAnInvalidOneIsAnErrorThatKeepsItsRow() {
+    ClaimedJob job = claimed(pinnedVersions());
+    givenSource(
+        job,
+        csv(
+            "973812,INE001A07AB1,100,101,99,100,1,1,100,100,8.50",
+            "973813,INE002B08CD2,100,101,99,100,1,1,100,100,9 % p.a.",
+            "973814,INE003C07EF3,100,101,99,100,1,1,100,100,0"));
+    when(canonicalFile.commit()).thenReturn(CANONICAL_KEY);
+
+    handler.process(job);
+
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<List<RejectedRow>> rejected = ArgumentCaptor.forClass(List.class);
+    verify(rejectedRecords).saveAll(any(), eq(RUN), rejected.capture());
+    assertThat(rejected.getValue())
+        .singleElement()
+        .satisfies(
+            row -> {
+              assertThat(row.quarantined()).isFalse();
+              assertThat(row.isin()).isEqualTo("INE002B08CD2");
+            });
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<List<DailyMarketSummary>> accepted = ArgumentCaptor.forClass(List.class);
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<List<ExchangeCoupon>> coupons = ArgumentCaptor.forClass(List.class);
+    ArgumentCaptor<JobOutcome> outcome = ArgumentCaptor.forClass(JobOutcome.class);
+    verify(publication).publish(eq(job), accepted.capture(), coupons.capture(), outcome.capture());
+    assertThat(accepted.getValue()).hasSize(3);
+    assertThat(coupons.getValue())
+        .extracting(ExchangeCoupon::isin, coupon -> coupon.rate().value().toPlainString())
+        .containsExactly(tuple(Isin.of("INE001A07AB1"), "8.50"));
+    assertThat(outcome.getValue())
+        .isEqualTo(
+            new JobOutcome(
+                JobStatus.COMPLETED_WITH_ERRORS,
+                "{\"sourceRecords\":3,\"acceptedRows\":3,\"invalidRows\":0,"
+                    + "\"supersededRows\":0}",
+                1));
+  }
+
+  /** A bhavcopy with the eleven selected headers and the given rows. */
   private static byte[] csv(String... rows) {
     return ("Security_cd,ISIN No.,Open Price,High Price,Low Price,Close Price,"
-            + "Total Traded Volume,Number of Trades,Total Turnover,FACE VALUE\n"
+            + "Total Traded Volume,Number of Trades,Total Turnover,FACE VALUE,COUP0N (%)\n"
             + String.join("\n", rows)
             + "\n")
         .getBytes(StandardCharsets.UTF_8);

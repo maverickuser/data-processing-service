@@ -4,14 +4,21 @@ import com.bondplatform.dataprocessing.job.application.JobCompletion;
 import com.bondplatform.dataprocessing.job.domain.ClaimedJob;
 import com.bondplatform.dataprocessing.job.domain.JobOutcome;
 import com.bondplatform.dataprocessing.job.domain.JobStatus;
+import com.bondplatform.dataprocessing.publication.domain.CouponPrecedence;
+import com.bondplatform.dataprocessing.publication.domain.CouponSource;
 import com.bondplatform.dataprocessing.publication.domain.JsonFileCounts;
 import com.bondplatform.dataprocessing.publication.domain.SecurityCollections;
 import com.bondplatform.dataprocessing.publication.domain.SecurityDetails;
 import com.bondplatform.dataprocessing.publication.domain.SecurityScalars;
+import com.bondplatform.dataprocessing.publication.domain.SecurityValue;
+import com.bondplatform.dataprocessing.publication.domain.StoredCoupon;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -22,8 +29,15 @@ import org.springframework.transaction.annotation.Transactional;
  * fields whose value differs from the stored one, appends the entries it does not already have, and
  * finishes the job. A request with identical data changes no row and no timestamp (I-JSON-02). A
  * security created here requests no details: the request being published is those details.
+ *
+ * <p>The request's coupon rate is the backup to the bhavcopy's (decision 0004): it is stored only
+ * while no bhavcopy has supplied one. A rate that differs from a stored bhavcopy rate is logged as
+ * a warning and not stored.
  */
 public class PublishSecurityDetails {
+
+  private static final Logger LOG = LoggerFactory.getLogger(PublishSecurityDetails.class);
+  private static final String COUPON_RATE = "couponRate";
 
   private final SecurityRepository securities;
   private final SecurityCollectionRepository collections;
@@ -66,8 +80,8 @@ public class PublishSecurityDetails {
       // PostgreSQL keeps microseconds, so a stored time reads back equal to this one.
       Instant now = Instant.now(clock).truncatedTo(ChronoUnit.MICROS);
       securities.insertMissing(List.of(details.isin()), now);
-      SecurityScalars changes =
-          details.scalars().changesFrom(securities.lockValues(details.isin()));
+      Map<String, SecurityValue> stored = securities.lockValues(details.isin());
+      SecurityScalars changes = withoutOverriddenCoupon(job, details).changesFrom(stored);
       securities.applyChanges(details.isin(), changes, now);
       fieldsChanged = changes.fields().size() + changes.cleared().size();
       entriesAppended = append(details.collections(), now);
@@ -75,6 +89,29 @@ public class PublishSecurityDetails {
     JobOutcome outcome = files.outcome(status, fieldsChanged, entriesAppended, errorCount);
     completion.complete(job, outcome);
     return outcome;
+  }
+
+  /** Returns the request's scalars without its coupon rate if a bhavcopy rate takes precedence. */
+  private SecurityScalars withoutOverriddenCoupon(ClaimedJob job, SecurityDetails details) {
+    SecurityScalars scalars = details.scalars();
+    SecurityScalars.Field coupon = scalars.fields().get(COUPON_RATE);
+    if (coupon == null || !(coupon.value() instanceof SecurityValue.Percentage rate)) {
+      return scalars;
+    }
+    StoredCoupon stored =
+        securities
+            .lockCoupons(List.of(details.isin()))
+            .getOrDefault(details.isin(), StoredCoupon.NONE);
+    if (CouponPrecedence.disagrees(stored, CouponSource.NSDL, rate.value())) {
+      LOG.warn(
+          "Coupon rates differ, jobId={}, isin={}, nsdl={}, stored {}={}",
+          job.job().id().value(),
+          details.isin().value(),
+          rate.value().value().toPlainString(),
+          stored.source(),
+          stored.rate() == null ? null : stored.rate().value().toPlainString());
+    }
+    return CouponPrecedence.securityDetailsMaySet(stored) ? scalars : scalars.without(COUPON_RATE);
   }
 
   private int append(SecurityCollections entries, Instant now) {

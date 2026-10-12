@@ -5,5 +5,10 @@ public enum ValidationStatus {
   /** Every applicable rule holds; a blank optional field also passes. */
   PASSED,
   /** At least one rule fails. */
-  FAILED
+  FAILED,
+  /**
+   * A field's rule fails, but its contract says to ignore the invalid value rather than reject the
+   * row: the field has no value and its errors are still reported. Only fields have this status.
+   */
+  IGNORED
 }

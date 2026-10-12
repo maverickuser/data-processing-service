@@ -16,8 +16,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 class CsvFileReaderTest {
 
   private static final String ROW_1 =
-      "1001,INE121A07QY9,100.50,101.00,99.50,100.75,\"1,14,200\",12,\"1,14,200.00\",1000,x";
-  private static final String ROW_2 = "1002,INE002A08534,99,99,99,99,10,1,990,100,y";
+      "1001,INE121A07QY9,100.50,101.00,99.50,100.75,\"1,14,200\",12,\"1,14,200.00\",1000,8.50,x";
+  private static final String ROW_2 = "1002,INE002A08534,99,99,99,99,10,1,990,100,,y";
 
   private final List<CsvRow> rows = new ArrayList<>();
 
@@ -29,7 +29,7 @@ class CsvFileReaderTest {
     assertThat(outcome).isEqualTo(new CsvFileReader.Outcome.Completed(2));
     assertThat(rows).extracting(CsvRow::recordNumber).containsExactly(2L, 3L);
     CsvRow first = rows.get(0);
-    assertThat(first.cells()).hasSize(10);
+    assertThat(first.cells()).hasSize(11);
     assertThat(first.cell("isin")).contains("INE121A07QY9");
     assertThat(first.cell("security_code")).contains("1001");
     assertThat(first.cell("face_value")).contains("1000");
@@ -106,13 +106,13 @@ class CsvFileReaderTest {
 
     assertThat(outcome)
         .isEqualTo(
-            rejected(ErrorCode.MALFORMED_CSV, "Record 4 has 4 cells, but the header has 11"));
+            rejected(ErrorCode.MALFORMED_CSV, "Record 4 has 4 cells, but the header has 12"));
   }
 
   // U-CSV-11
   @Test
   void recordSpanningTwoLinesHasOneNumber() {
-    String spanning = "1001,INE121A07QY9,1,1,1,1,1,1,1,1,\"two\nlines\"";
+    String spanning = "1001,INE121A07QY9,1,1,1,1,1,1,1,1,1,\"two\nlines\"";
 
     read(BhavcopyContract.HEADER + "\n" + spanning + "\n" + ROW_2 + "\n");
 

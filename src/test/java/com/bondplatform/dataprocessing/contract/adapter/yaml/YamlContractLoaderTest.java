@@ -18,6 +18,7 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import org.junit.jupiter.api.Test;
 
@@ -43,9 +44,9 @@ class YamlContractLoaderTest {
   @Test
   void loadsTheCommittedBseSourceContract() {
     SourceContract.Csv contract =
-        (SourceContract.Csv) loader.loadSourceContract(committed("bse-debt-bhavcopy-csv-v1"));
+        (SourceContract.Csv) loader.loadSourceContract(committed("bse-debt-bhavcopy-csv-v2"));
 
-    assertThat(contract.id().name()).isEqualTo("bse-debt-bhavcopy-csv-v1");
+    assertThat(contract.id().name()).isEqualTo("bse-debt-bhavcopy-csv-v2");
     assertThat(contract.dataset().value()).isEqualTo("urn:bond-platform:dataset:bse-debt-trades");
     assertThat(contract.maxBytes()).isEqualTo(10_485_760L);
     assertThat(contract.duplicateKey()).isEqualTo("isin");
@@ -61,7 +62,8 @@ class YamlContractLoaderTest {
             "number_of_trades",
             "turnover",
             "face_value",
-            "isin");
+            "isin",
+            "coupon_rate");
     assertThat(contract.fields())
         .filteredOn(CsvField::requiredValue)
         .extracting(CsvField::name)
@@ -74,7 +76,8 @@ class YamlContractLoaderTest {
                 FieldType.DECIMAL,
                 false,
                 List.of("trim", "blankToNull", "normalizeGroupedNumber"),
-                List.of("nonNegative")));
+                List.of("nonNegative"),
+                false));
     assertThat(field(contract, "traded_volume").type()).isEqualTo(FieldType.INTEGER);
     assertThat(field(contract, "isin").normalize())
         .containsExactly("trim", "blankToNull", "uppercase");
@@ -128,10 +131,10 @@ class YamlContractLoaderTest {
   @Test
   void loadsTheCommittedBseMappingContract() {
     MappingContract contract =
-        loader.loadMappingContract(committed("bse-debt-bhavcopy-mapping-v1"));
+        loader.loadMappingContract(committed("bse-debt-bhavcopy-mapping-v2"));
 
-    assertThat(contract.id().name()).isEqualTo("bse-debt-bhavcopy-mapping-v1");
-    assertThat(contract.sourceContract()).isEqualTo("bse-debt-bhavcopy-csv-v1");
+    assertThat(contract.id().name()).isEqualTo("bse-debt-bhavcopy-mapping-v2");
+    assertThat(contract.sourceContract()).isEqualTo("bse-debt-bhavcopy-csv-v2");
     assertThat(contract.primary().target())
         .isEqualTo("securities_data.security_daily_market_summaries");
     assertThat(contract.primary().fields())
@@ -139,6 +142,7 @@ class YamlContractLoaderTest {
         .containsEntry("face_value", "faceValue")
         .containsEntry("number_of_trades", "numberOfTrades");
     assertThat(contract.collections()).isEmpty();
+    assertThat(contract.securityFields()).containsExactly(Map.entry("coupon_rate", "couponRate"));
   }
 
   @Test
@@ -221,6 +225,25 @@ class YamlContractLoaderTest {
   }
 
   @Test
+  void onInvalidChoosesBetweenRejectingTheRowAndIgnoringTheValue() {
+    SourceContract.Csv bse =
+        (SourceContract.Csv) loader.loadSourceContract(committed("bse-debt-bhavcopy-csv-v2"));
+    assertThat(field(bse, "coupon_rate").ignoreInvalid()).isTrue();
+    assertThat(field(bse, "coupon_rate").type()).isEqualTo(FieldType.PERCENT);
+    assertThat(field(bse, "close_price").ignoreInvalid()).isFalse();
+    SourceContract.Csv rejecting =
+        (SourceContract.Csv)
+            loader.loadSourceContract(
+                MINIMAL_CSV.replace(
+                    "normalize: [trim]", "normalize: [trim], onInvalid: rejectRow"));
+    assertThat(rejecting.fields().getFirst().ignoreInvalid()).isFalse();
+
+    assertRejected(
+        MINIMAL_CSV.replace("normalize: [trim]", "normalize: [trim], onInvalid: dropRow"),
+        "fields.isin.onInvalid");
+  }
+
+  @Test
   void unsupportedKeyInJsonContractIsRejected() {
     String json = committed("nsdl-security-json-v1");
 
@@ -242,7 +265,7 @@ class YamlContractLoaderTest {
 
   @Test
   void unsupportedKeyInMappingContractIsRejected() {
-    String csvMapping = committed("bse-debt-bhavcopy-mapping-v1");
+    String csvMapping = committed("bse-debt-bhavcopy-mapping-v2");
     String jsonMapping = committed("nsdl-security-mapping-v1");
 
     assertMappingRejected(csvMapping + "eligibleDisposition: FAILED\n", "eligibleDisposition");
@@ -262,7 +285,7 @@ class YamlContractLoaderTest {
   @Test
   void mappingWithBothShapesIsRejected() {
     String both =
-        committed("bse-debt-bhavcopy-mapping-v1")
+        committed("bse-debt-bhavcopy-mapping-v2")
             + "security:\n  target: securities_data.securities\n  fields: { isin: isin }\n"
             + "collections: {}\n";
 

@@ -4,14 +4,15 @@ import com.bondplatform.dataprocessing.canonical.domain.CanonicalRow;
 import com.bondplatform.dataprocessing.canonical.domain.CanonicalRun;
 import com.bondplatform.dataprocessing.canonical.domain.Disposition;
 import com.bondplatform.dataprocessing.canonical.domain.RejectedRow;
+import com.bondplatform.dataprocessing.canonical.domain.ValidationStatus;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 /**
- * Collects a run's quarantined rows and stores them in bounded batches, so memory does not grow
- * with the file (LLD section 10). Accepted rows are ignored. Issues are numbered from 1 in the
- * order rows are added.
+ * Collects a run's quarantined rows, and the issues of accepted rows whose invalid values were
+ * ignored, and stores them in bounded batches, so memory does not grow with the file (LLD section
+ * 10). Other accepted rows are skipped. Issues are numbered from 1 in the order rows are added.
  *
  * <p>Rows still held are stored by {@link #flush()}, which the caller must call once every row was
  * added.
@@ -41,9 +42,9 @@ public final class RejectedRecordBuffer {
     this.isinField = isinField;
   }
 
-  /** Adds a row; a quarantined row is stored at the latest when the batch fills. */
+  /** Adds a row; a row with issues is stored at the latest when the batch fills. */
   public void add(CanonicalRow row) {
-    if (row.disposition() == Disposition.ACCEPTED) {
+    if (row.disposition() == Disposition.ACCEPTED && !hasIgnoredField(row)) {
       return;
     }
     RejectedRow rejected = RejectedRow.of(row, isinField, issueCount + 1);
@@ -61,6 +62,11 @@ public final class RejectedRecordBuffer {
     }
     store.saveAll(run, processingRunId, List.copyOf(pending));
     pending.clear();
+  }
+
+  private static boolean hasIgnoredField(CanonicalRow row) {
+    return row.record().fields().values().stream()
+        .anyMatch(field -> field.validationStatus() == ValidationStatus.IGNORED);
   }
 
   /** Returns how many issues the added rows have. */

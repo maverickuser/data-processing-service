@@ -65,9 +65,10 @@ public final class YamlContractLoader {
           new RecordMapping(security.text("target"), security.textMap("fields"));
       return new MappingContract(id, sourceContract, primary, collectionMappings(root));
     }
-    root.allowingOnly("id", "version", "sourceContract", "target", "fields");
+    root.allowingOnly("id", "version", "sourceContract", "target", "fields", "securityFields");
     RecordMapping primary = new RecordMapping(root.text("target"), root.textMap("fields"));
-    return new MappingContract(id, sourceContract, primary, List.of());
+    return new MappingContract(
+        id, sourceContract, primary, List.of(), root.textMap("securityFields"));
   }
 
   private static SourceContract.Csv csvContract(
@@ -89,14 +90,29 @@ public final class YamlContractLoader {
   }
 
   private static CsvField csvField(String name, YamlMapping field) {
-    field.allowingOnly("header", "type", "requiredValue", "normalize", "validate");
+    field.allowingOnly("header", "type", "requiredValue", "normalize", "validate", "onInvalid");
     return new CsvField(
         name,
         field.text("header"),
         fieldType(field),
         field.flag("requiredValue"),
         field.textList("normalize"),
-        field.textList("validate"));
+        field.textList("validate"),
+        ignoresInvalid(field));
+  }
+
+  /** Reads {@code onInvalid}: {@code rejectRow}, the default, or {@code ignoreValue}. */
+  private static boolean ignoresInvalid(YamlMapping field) {
+    if (!field.has("onInvalid")) {
+      return false;
+    }
+    return switch (field.text("onInvalid")) {
+      case "rejectRow" -> false;
+      case "ignoreValue" -> true;
+      default ->
+          throw new ContractFormatException(
+              field.location() + ".onInvalid", "expected rejectRow or ignoreValue");
+    };
   }
 
   private static RowRule rowRule(YamlMapping rule) {

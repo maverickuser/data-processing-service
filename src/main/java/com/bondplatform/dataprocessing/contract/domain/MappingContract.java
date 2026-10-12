@@ -11,16 +11,29 @@ import java.util.Map;
  * @param sourceContract the name of the stage-1 contract whose canonical records it consumes
  * @param primary the single-record mapping: a daily market summary row, or the security itself
  * @param collections mappings of repeated entries; empty for CSV
+ * @param securityFields for CSV, canonical field name to the security field of the row's ISIN it
+ *     fills, such as {@code couponRate}; empty for JSON, whose primary mapping is the security
  */
 public record MappingContract(
     ContractId id,
     String sourceContract,
     RecordMapping primary,
-    List<CollectionMapping> collections) {
+    List<CollectionMapping> collections,
+    Map<String, String> securityFields) {
 
-  /** Copies the list so the contract is immutable. */
+  /** Copies the list and map so the contract is immutable. */
   public MappingContract {
     collections = List.copyOf(collections);
+    securityFields = Map.copyOf(securityFields);
+  }
+
+  /** Creates a contract that fills no security fields from CSV rows. */
+  public MappingContract(
+      ContractId id,
+      String sourceContract,
+      RecordMapping primary,
+      List<CollectionMapping> collections) {
+    this(id, sourceContract, primary, collections, Map.of());
   }
 
   /**

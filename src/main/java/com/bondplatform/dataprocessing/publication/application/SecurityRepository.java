@@ -1,10 +1,14 @@
 package com.bondplatform.dataprocessing.publication.application;
 
+import com.bondplatform.dataprocessing.publication.domain.CouponSource;
+import com.bondplatform.dataprocessing.publication.domain.ExchangeCoupon;
 import com.bondplatform.dataprocessing.publication.domain.SecurityScalars;
 import com.bondplatform.dataprocessing.publication.domain.SecurityValue;
+import com.bondplatform.dataprocessing.publication.domain.StoredCoupon;
 import com.bondplatform.dataprocessing.shared.domain.Isin;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -38,10 +42,27 @@ public interface SecurityRepository {
   /**
    * Stores changed security fields: each set field gets its value and source, each cleared field
    * loses both, and the update time becomes {@code changedAt}. Nothing is written when there are no
-   * changes.
+   * changes. A set {@code couponRate} is recorded as coming from {@link CouponSource#NSDL}.
    *
    * @param changes only fields that differ from the stored values (LLD section 13.5)
    * @throws IllegalStateException if the security does not exist
    */
   void applyChanges(Isin isin, SecurityScalars changes, Instant changedAt);
+
+  /**
+   * Locks the securities' rows until the transaction ends, in ISIN order so that two transactions
+   * locking overlapping sets cannot deadlock, and returns their stored coupons.
+   *
+   * @return the stored coupon of every given ISIN that has a security
+   */
+  Map<Isin, StoredCoupon> lockCoupons(Collection<Isin> isins);
+
+  /**
+   * Stores bhavcopy coupon rates on securities whose rows the caller has locked.
+   *
+   * @param replaced rates stored with their source, trade date, and update time {@code changedAt}
+   * @param advanced rates equal to the stored ones, whose trade date alone is moved forward
+   */
+  void storeBhavcopyCoupons(
+      List<ExchangeCoupon> replaced, List<ExchangeCoupon> advanced, Instant changedAt);
 }

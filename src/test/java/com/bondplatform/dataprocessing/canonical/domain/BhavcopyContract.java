@@ -21,7 +21,7 @@ public final class BhavcopyContract {
       new ClasspathContractCatalog(
               new YamlContractLoader(), new ContractValidator(RuleRegistry.standard()))
           .load(
-              List.of(new ContractPair("bse-debt-bhavcopy-csv-v1", "bse-debt-bhavcopy-mapping-v1")))
+              List.of(new ContractPair("bse-debt-bhavcopy-csv-v2", "bse-debt-bhavcopy-mapping-v2")))
           .contractsFor(new DatasetUrn("urn:bond-platform:dataset:bse-debt-trades"));
 
   static final SourceContract.Csv CONTRACT = (SourceContract.Csv) PINNED.source();
@@ -29,10 +29,10 @@ public final class BhavcopyContract {
   /** The real bhavcopy mapping contract. */
   public static final MappingContract MAPPING = PINNED.mapping();
 
-  /** The ten selected headers, in the order a real bhavcopy has them, with one extra column. */
+  /** The eleven selected headers, in the order a real bhavcopy has them, with one extra column. */
   static final String HEADER =
       "Security_cd,ISIN No.,Open Price,High Price,Low Price,Close Price,Total Traded Volume,"
-          + "Number of Trades,Total Turnover,FACE VALUE,Extra";
+          + "Number of Trades,Total Turnover,FACE VALUE,COUP0N (%),Extra";
 
   /** The selected fields in the column order of {@link BhavcopyContract#HEADER}. */
   static final List<String> COLUMNS =
@@ -46,7 +46,8 @@ public final class BhavcopyContract {
           "traded_volume",
           "number_of_trades",
           "turnover",
-          "face_value");
+          "face_value",
+          "coupon_rate");
 
   private BhavcopyContract() {}
 
@@ -54,17 +55,18 @@ public final class BhavcopyContract {
   static CsvRow row(long recordNumber, Map<String, String> overrides) {
     Map<String, String> values =
         new HashMap<>(
-            Map.of(
-                "security_code", "1001",
-                "isin", "INE121A07QY9",
-                "open_price", "100",
-                "high_price", "101",
-                "low_price", "99",
-                "close_price", "100.5",
-                "traded_volume", "10",
-                "number_of_trades", "2",
-                "turnover", "1,000.00",
-                "face_value", "100"));
+            Map.ofEntries(
+                Map.entry("coupon_rate", "8.50"),
+                Map.entry("security_code", "1001"),
+                Map.entry("isin", "INE121A07QY9"),
+                Map.entry("open_price", "100"),
+                Map.entry("high_price", "101"),
+                Map.entry("low_price", "99"),
+                Map.entry("close_price", "100.5"),
+                Map.entry("traded_volume", "10"),
+                Map.entry("number_of_trades", "2"),
+                Map.entry("turnover", "1,000.00"),
+                Map.entry("face_value", "100")));
     values.putAll(overrides);
     Map<String, CsvCell> cells = new HashMap<>();
     values.forEach((name, raw) -> cells.put(name, new CsvCell(COLUMNS.indexOf(name) + 1, raw)));

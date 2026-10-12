@@ -1,6 +1,7 @@
 package com.bondplatform.dataprocessing.canonical.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -11,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import com.bondplatform.dataprocessing.canonical.domain.CanonicalRow;
 import com.bondplatform.dataprocessing.canonical.domain.GoldenBhavcopy;
 import com.bondplatform.dataprocessing.canonical.domain.RejectedRow;
+import com.bondplatform.dataprocessing.shared.domain.ErrorCode;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -68,6 +70,22 @@ class RejectedRecordBufferTest {
 
     verify(store, never()).saveAll(any(), any(), any());
     assertThat(buffer.issueCount()).isZero();
+  }
+
+  // U-CSV-13
+  @Test
+  void storesAnAcceptedRowWhoseInvalidValueWasIgnoredWithOnlyThatIssue() {
+    buffer.add(GoldenBhavcopy.acceptedWithIgnoredCoupon());
+    buffer.add(SUPERSEDED);
+
+    buffer.flush();
+
+    List<RejectedRow> stored = storedBatches(1).get(0);
+    assertThat(stored).extracting(RejectedRow::quarantined).containsExactly(false, true);
+    assertThat(stored.get(0).issues())
+        .extracting(issue -> issue.issue().code(), issue -> issue.sequenceNumber())
+        .containsExactly(tuple(ErrorCode.INVALID_DECIMAL, 1L));
+    assertThat(buffer.issueCount()).isEqualTo(2);
   }
 
   @SuppressWarnings("unchecked")

@@ -48,7 +48,7 @@ class LoadManifestTest {
               new YamlContractLoader(), new ContractValidator(RuleRegistry.standard()))
           .load(
               List.of(
-                  new ContractPair("bse-debt-bhavcopy-csv-v1", "bse-debt-bhavcopy-mapping-v1"),
+                  new ContractPair("bse-debt-bhavcopy-csv-v2", "bse-debt-bhavcopy-mapping-v2"),
                   new ContractPair("nsdl-security-json-v1", "nsdl-security-mapping-v1")));
 
   private final List<Long> requestedLimits = new ArrayList<>();

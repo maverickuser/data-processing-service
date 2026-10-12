@@ -40,6 +40,8 @@ Following Google's small/medium/large split:
 | U-NUM-03 | High-precision decimals keep every digit; no rounding; scale is preserved in the canonical string | 5.2 |
 | U-NUM-04 | Whole-number fields: `14.00` becomes `14`; `14.50` fails with `NOT_WHOLE_NUMBER` | 5.2 |
 | U-NUM-05 | Negative price, volume, trade count, turnover, and face value fail with `NEGATIVE_VALUE` and keep the parsed number; zero passes | 4.2, 5.2 |
+| U-NUM-06 | `keepBeforeFirstPercent` keeps the text before the first `%`: `8.1% (cat I & II …)` is `8.1`; text without `%` is unchanged | 13.4 |
+| U-NUM-07 | `zeroToNull` makes `0`, `00`, `0.0`, `0.00` no value and keeps every other number | 5.2 |
 | U-DATE-01 | Dates accept `DD-MM-YYYY` and `YYYY-MM-DD`, normalise to ISO; `32-13-2026`, `2026-02-30`, `10/06/2019` are rejected | 13.4 |
 | U-PRES-01 | Missing, JSON `null`, `""`, `"  "`, `"-"`, `"N.A."` are all classified as no-value and are not errors | 13.4 |
 | U-TEXT-01 | JSON text fields accept strings only; number, boolean, object, and array are field errors; case is preserved | 13.4 |
@@ -52,6 +54,7 @@ Following Google's small/medium/large split:
 | U-CON-02 | Unknown rule name, unknown type, duplicate field, mapping of an undeclared canonical field, and a mapping contract naming a missing source contract each fail startup with a clear message | 6 |
 | U-CON-03 | Dataset URN resolves to its source and mapping contracts; unknown URN is rejected | 2.1 |
 | U-CON-04 | Contract content hash is stable for identical content and changes when content changes | 6.2 |
+| U-CON-05 | A CSV `percent` field may fill the row's security through `securityFields`; an unmapped, doubly mapped, undeclared or wrongly typed security field, an `onInvalid: ignoreValue` field that is required or a row-rule operand, and a percent normalizer in CSV are each reported | 5.2, 15.3 |
 
 ### CSV stage 1 (`canonical.csv`)
 
@@ -72,6 +75,7 @@ Following Google's small/medium/large split:
 | U-DUP-02 | Only invalid rows for an ISIN produce no accepted row | 5.4 |
 | U-DUP-03 | ISINs differing only by case or surrounding spaces are the same ISIN | 5.4 |
 | U-CSV-12 | Counts: accepted + invalid + superseded equals source records | 20.3 |
+| U-CSV-13 | Coupon: `8.50` is a percent, `0` and blank are no value; text, a negative, malformed grouping or an oversized coupon is `IGNORED` with its error while the row passes; its issue is stored without a rejected record and with the action taken; a file of accepted rows with such an error is `COMPLETED_WITH_ERRORS` | 5.2, 17.5 |
 
 ### JSON stage 1 (`canonical.json`)
 
@@ -90,6 +94,7 @@ Following Google's small/medium/large split:
 | U-JSON-11 | `issuePrice` is canonicalised as `original_face_value` from a number and from a grouped string | 13.2 |
 | U-JSON-13 | Cash flows from the `INE0O7U07046` sample: `Partial Redemption` entries carry `new_face_value` (8750, 7500, …); `Interest` and `Full Redemption` entries have none | 15.4 |
 | U-JSON-12 | Numbers are read as `BigDecimal`; `89400` and `"89,400.00"` normalise to equal values | 13.6 |
+| U-JSON-14 | A percent string is read up to its first `%` (`8.76% p.a. FOR CATEGORY IV` is `8.76`); `RESET RATE (REFER REMARKS)` and `Nifty Midcap 150` fail with `INVALID_DECIMAL` | 13.4 |
 
 ### Stage 2 and publication decisions (`mapping`, `publication`)
 
@@ -99,6 +104,13 @@ Following Google's small/medium/large split:
 | U-MAP-02 | Only `ACCEPTED` rows are mapped | 6.2 |
 | U-MAP-03 | JSON canonical scalars map to the security fields in LLD 15.3, including `originalFaceValue` | 15.3 |
 | U-MAP-04 | Current and earlier ratings map to the same target with `sourceCategory` `CURRENT` and `EARLIER` | 15.6 |
+| U-MAP-05 | An accepted bhavcopy row gives its coupon rate with the run's trade date and its source; quarantined rows, zero, blank and ignored rates give none; a contract filling another security field is refused | 2.2 |
+| U-COUPON-01 | Bhavcopy rate: replaces none, NSDL's, and an older or same-day different rate; keeps a newer trade date's rate; the same rate from a later date only advances the trade date | 15.3 |
+| U-COUPON-02 | NSDL rate is stored only while no bhavcopy rate exists | 15.3 |
+| U-COUPON-03 | Rates disagree only when both sources have numerically different rates | 15.3 |
+| U-COUPON-04 | CSV publication locks the reported securities and stores replaced and advanced rates before the summaries | 15.3 |
+| U-COUPON-05 | JSON publication leaves out its coupon rate when a bhavcopy rate is stored | 15.3 |
+| U-COUPON-06 | The repository locks coupons in ISIN order, writes rate, source, trade date and reference for a replacement, only the trade date for an advance, and clears source and date with the rate | 15.3, 22.1 |
 | U-SCAL-01 | A scalar changes only when the normalised value differs; an identical value produces no update | 13.5 |
 | U-SCAL-02 | No-value inputs never erase an existing value | 13.5 |
 | U-SCAL-03 | Two files supply different valid values: later S3 `LastModified` wins; object key breaks ties; precedence is per field | 13.5 |
@@ -181,6 +193,7 @@ Following Google's small/medium/large split:
 | I-CSV-06 | Two jobs for one trade date run in acceptance order even when the first is retried | 8.2 |
 | I-CSV-07 | Temporary S3 failure then success: one request, two runs, counts and errors from the final run only | 8.3, 16 |
 | I-CSV-08 | Three temporary failures: job `FAILED`, message in the dead-letter queue, next job for the date proceeds | 8.3, 21 |
+| I-CSV-09 | An ignored coupon value is one `validation_issues` row without a rejected record, with its raw value and action taken | 17.5 |
 
 ### New-security event
 
@@ -204,6 +217,8 @@ Following Google's small/medium/large split:
 | I-JSON-06 | Two requests for one ISIN run in acceptance order; requests for different ISINs are independent | 13.5 |
 | I-JSON-07 | `Unsecured` after `Secured` clears coverage on the security and keeps historical asset rows | 15.2 |
 | I-JSON-08 | JSON for an ISIN with existing daily summaries leaves those summaries untouched | 14.1 |
+| I-COUPON-01 | Bhavcopy rate replaces an NSDL rate with source `BSE_BHAVCOPY`, trade date and reference; an older trade date changes nothing; the same rate later advances only the trade date, not `updated_at`; the end-to-end bhavcopy stores `8.50` for its first ISIN | 15.3 |
+| I-COUPON-02 | An NSDL rate is stored with source `NSDL` and is not stored over a bhavcopy rate | 15.3 |
 
 ### Read APIs
 

@@ -2,8 +2,11 @@ package com.bondplatform.dataprocessing.publication.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -13,6 +16,7 @@ import com.bondplatform.dataprocessing.job.domain.ClaimedJob;
 import com.bondplatform.dataprocessing.job.domain.JobOutcome;
 import com.bondplatform.dataprocessing.job.domain.JobStatus;
 import com.bondplatform.dataprocessing.publication.domain.CashFlow;
+import com.bondplatform.dataprocessing.publication.domain.CouponSource;
 import com.bondplatform.dataprocessing.publication.domain.JsonFileCounts;
 import com.bondplatform.dataprocessing.publication.domain.Listing;
 import com.bondplatform.dataprocessing.publication.domain.SecurityCollections;
@@ -21,10 +25,13 @@ import com.bondplatform.dataprocessing.publication.domain.SecurityEntry;
 import com.bondplatform.dataprocessing.publication.domain.SecurityScalars;
 import com.bondplatform.dataprocessing.publication.domain.SecurityValue;
 import com.bondplatform.dataprocessing.publication.domain.SourceReference;
+import com.bondplatform.dataprocessing.publication.domain.StoredCoupon;
 import com.bondplatform.dataprocessing.shared.domain.Isin;
 import com.bondplatform.dataprocessing.shared.domain.JobId;
+import com.bondplatform.dataprocessing.shared.domain.Percent;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
@@ -47,7 +54,7 @@ class PublishSecurityDetailsTest {
   private final SecurityRepository securities = mock(SecurityRepository.class);
   private final SecurityCollectionRepository collections = mock(SecurityCollectionRepository.class);
   private final JobCompletion completion = mock(JobCompletion.class);
-  private final ClaimedJob job = mock(ClaimedJob.class);
+  private final ClaimedJob job = mock(ClaimedJob.class, RETURNS_DEEP_STUBS);
   private final PublishSecurityDetails publish =
       new PublishSecurityDetails(
           securities, collections, completion, Clock.fixed(NOW, ZoneOffset.UTC));
@@ -104,6 +111,56 @@ class PublishSecurityDetailsTest {
     verify(completion).complete(job, outcome);
   }
 
+  // U-COUPON-05
+  @Test
+  void couponRateIsNotStoredOverBhavcopyRate() {
+    SecurityDetails details =
+        details(
+            new SecurityScalars(Map.of("couponRate", rate("8.76"), "couponType", field("Simple"))),
+            new SecurityCollections(List.of(), List.of(), List.of(), List.of()));
+    when(securities.lockCoupons(List.of(ISIN)))
+        .thenReturn(
+            Map.of(
+                ISIN,
+                new StoredCoupon(
+                    Percent.parse("8.8"), CouponSource.BSE_BHAVCOPY, LocalDate.of(2026, 10, 1))));
+
+    publish.publish(job, details, FILES, JobStatus.COMPLETED, 0);
+
+    verify(securities)
+        .applyChanges(ISIN, new SecurityScalars(Map.of("couponType", field("Simple"))), STORED_NOW);
+  }
+
+  // U-COUPON-05
+  @Test
+  void couponRateIsStoredOverAnNsdlRateOrNone() {
+    SecurityDetails details =
+        details(
+            new SecurityScalars(Map.of("couponRate", rate("8.76"))),
+            new SecurityCollections(List.of(), List.of(), List.of(), List.of()));
+    when(securities.lockCoupons(List.of(ISIN)))
+        .thenReturn(Map.of(ISIN, new StoredCoupon(Percent.parse("8"), CouponSource.NSDL, null)));
+
+    publish.publish(job, details, FILES, JobStatus.COMPLETED, 0);
+    when(securities.lockCoupons(List.of(ISIN))).thenReturn(Map.of());
+    publish.publish(job, details, FILES, JobStatus.COMPLETED, 0);
+
+    verify(securities, times(2))
+        .applyChanges(ISIN, new SecurityScalars(Map.of("couponRate", rate("8.76"))), STORED_NOW);
+  }
+
+  @Test
+  void requestWithoutCouponRateDoesNotReadTheStoredCoupon() {
+    SecurityDetails details =
+        details(
+            new SecurityScalars(Map.of("couponType", field("Simple"))),
+            new SecurityCollections(List.of(), List.of(), List.of(), List.of()));
+
+    publish.publish(job, details, FILES, JobStatus.COMPLETED, 0);
+
+    verify(securities, never()).lockCoupons(any());
+  }
+
   @Test
   void failedRequestPublishesNothingAndFinishesJob() {
     SecurityDetails details =
@@ -125,5 +182,11 @@ class PublishSecurityDetailsTest {
 
   private static SecurityScalars.Field field(String text) {
     return new SecurityScalars.Field(new SecurityValue.Text(text), SOURCE);
+  }
+
+  private static SecurityScalars.Field rate(String value) {
+    return new SecurityScalars.Field(
+        new SecurityValue.Percentage(Percent.parse(value)),
+        new SourceReference(SOURCE.jobId(), "INE831R08076_coupon-details.json", "$.coupensVo"));
   }
 }

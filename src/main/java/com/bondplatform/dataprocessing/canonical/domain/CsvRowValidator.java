@@ -9,6 +9,7 @@ import com.bondplatform.dataprocessing.contract.domain.RuleRegistry;
 import com.bondplatform.dataprocessing.contract.domain.SourceContract;
 import com.bondplatform.dataprocessing.contract.domain.SourceContract.CsvField;
 import com.bondplatform.dataprocessing.shared.domain.ErrorCode;
+import com.bondplatform.dataprocessing.shared.domain.Percent;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.LinkedHashMap;
@@ -23,7 +24,8 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>Every field is normalized, parsed, and validated on its own, and every price comparison whose
  * fields are both valid is then checked, so a row reports all of its applicable problems, not only
- * the first.
+ * the first. A field whose contract ignores invalid values is {@link ValidationStatus#IGNORED}
+ * instead of failed, which keeps its errors without failing the row.
  */
 public final class CsvRowValidator {
 
@@ -74,7 +76,7 @@ public final class CsvRowValidator {
 
     FieldRules {
       switch (field.type()) {
-        case TEXT, DECIMAL, INTEGER -> {}
+        case TEXT, DECIMAL, INTEGER, PERCENT -> {}
         default ->
             throw new IllegalArgumentException(
                 "CSV field " + field.name() + " has unsupported type " + field.type());
@@ -113,6 +115,18 @@ public final class CsvRowValidator {
       Object value = ((FieldResult.Valid<?>) parsed).value();
       BigDecimal number =
           value instanceof BigInteger whole ? new BigDecimal(whole) : (BigDecimal) value;
+      // Stage 2 builds a Percent from this value, so its bound is checked here.
+      if (field.type() == FieldType.PERCENT && !Percent.hasAllowedDigits(number)) {
+        return result(
+            cell,
+            normalized,
+            null,
+            List.of(
+                new ValidationIssue(
+                    ErrorCode.INVALID_DECIMAL,
+                    "Expected a percent of at most 30 digits before and 30 after the decimal"
+                        + " point.")));
+      }
       List<ValidationIssue> errors =
           validator.validate(number).stream()
               .map(violation -> new ValidationIssue(violation.code(), violation.message()))
@@ -137,8 +151,15 @@ public final class CsvRowValidator {
           normalized,
           parsed,
           field.type(),
-          errors.isEmpty() ? ValidationStatus.PASSED : ValidationStatus.FAILED,
+          status(errors),
           errors);
+    }
+
+    private ValidationStatus status(List<ValidationIssue> errors) {
+      if (errors.isEmpty()) {
+        return ValidationStatus.PASSED;
+      }
+      return field.ignoreInvalid() ? ValidationStatus.IGNORED : ValidationStatus.FAILED;
     }
   }
 }

@@ -93,6 +93,17 @@ class ContractPairValidationTest {
           fields: { rating: rating, rating_date: ratingDate }
       """;
 
+  private static final String COUPON_FIELD =
+      "  coupon_rate: { header: Coupon, type: percent, requiredValue: false,"
+          + " normalize: [trim, blankToNull, zeroToNull, normalizeGroupedNumber],"
+          + " validate: [nonNegative], onInvalid: ignoreValue }";
+
+  private static final String COUPON_MAPPING =
+      """
+      securityFields:
+        coupon_rate: couponRate
+      """;
+
   private final YamlContractLoader loader = new YamlContractLoader();
   private final ContractValidator validator = new ContractValidator(RuleRegistry.standard());
 
@@ -424,6 +435,64 @@ class ContractPairValidationTest {
         loader.loadSourceContract(CSV_SOURCE), loader.loadMappingContract(CSV_MAPPING));
     validator.requireValid(
         loader.loadSourceContract(JSON_SOURCE), loader.loadMappingContract(JSON_MAPPING));
+  }
+
+  // U-CON-05
+  @Test
+  void csvPercentFieldMayFillTheRowsSecurity() {
+    String source = CSV_SOURCE.replace("rowRules:", COUPON_FIELD + "\nrowRules:");
+
+    assertThat(sourceProblems(source)).isEmpty();
+    assertThat(mappingProblems(CSV_MAPPING + COUPON_MAPPING, source)).isEmpty();
+  }
+
+  // U-CON-05
+  @Test
+  void securityFieldsMustMapDeclaredFieldsToSecurityFieldsOfTheSameTypeAndOnlyOnce() {
+    String source = CSV_SOURCE.replace("rowRules:", COUPON_FIELD + "\nrowRules:");
+
+    assertThat(mappingProblems(CSV_MAPPING, source))
+        .containsExactly("fields does not map 'coupon_rate'");
+    assertThat(
+            mappingProblems(
+                CSV_MAPPING + COUPON_MAPPING.replace("couponRate", "couponType"), source))
+        .containsExactly(
+            "securityFields maps 'coupon_rate' of type percent to 'couponType', which holds text");
+    assertThat(mappingProblems(CSV_MAPPING + COUPON_MAPPING.replace("couponRate", "yield"), source))
+        .containsExactly("securityFields maps to unknown internal field 'yield'");
+    assertThat(mappingProblems(CSV_MAPPING + COUPON_MAPPING, CSV_SOURCE))
+        .containsExactly(
+            "securityFields maps 'coupon_rate', which the source contract does not declare");
+    assertThat(mappingProblems(CSV_MAPPING + "  coupon_rate: faceValue\n" + COUPON_MAPPING, source))
+        .contains("'coupon_rate' is mapped by both fields and securityFields");
+  }
+
+  // U-CON-05
+  @Test
+  void csvFieldMayIgnoreInvalidValuesOnlyWhenOptionalAndOutsideRowRules() {
+    String source = CSV_SOURCE.replace("rowRules:", COUPON_FIELD + "\nrowRules:");
+
+    assertThat(
+            sourceProblems(
+                source.replace(
+                    "requiredValue: false, normalize: [trim, blankToNull, zeroToNull",
+                    "requiredValue: true, normalize: [trim, blankToNull, zeroToNull")))
+        .containsExactly(
+            "field 'coupon_rate' requires a value, so it cannot ignore an invalid one");
+    assertThat(
+            sourceProblems(
+                lowPriceWith(
+                    "normalize: [trim, normalizeGroupedNumber], validate: [nonNegative],"
+                        + " onInvalid: ignoreValue")))
+        .containsExactly("row rule operand 'low_price' ignores invalid values");
+    assertThat(
+            sourceProblems(
+                lowPriceWith(
+                    "normalize: [trim, keepBeforeFirstPercent, normalizeGroupedNumber],"
+                        + " validate: [nonNegative]")))
+        .containsExactly(
+            "field 'low_price' is normalized with keepBeforeFirstPercent,"
+                + " which CSV does not support");
   }
 
   /** Returns the CSV contract with the isin field's rules replaced. */

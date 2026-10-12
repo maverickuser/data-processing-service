@@ -87,7 +87,7 @@ Submission request, response and error schemas are defined in the linked OpenAPI
 
 ### 2.2 Selected columns and mapping
 
-All ten selected headers must exist (`FACE VALUE` was added on 2026-10-02; wherever this document still says nine selected columns, read ten). Only ISIN must contain a nonblank value in every row.
+All eleven selected headers must exist (`FACE VALUE` was added on 2026-10-02 and `COUP0N (%)` on 2026-10-12, decision 0004; wherever this document still says nine or ten selected columns, read eleven). Only ISIN must contain a nonblank value in every row.
 
 | Source | Internal field | Java value | PostgreSQL value | Required value |
 |---|---|---|---|---|
@@ -103,10 +103,13 @@ All ten selected headers must exist (`FACE VALUE` was added on 2026-10-02; where
 | `Total Turnover` | `turnover` | `BigDecimal` | `NUMERIC` without declared scale | No |
 | `FACE VALUE` | `faceValue` | `BigDecimal` | `NUMERIC` without declared scale | No |
 | `ISIN No.` | `isin` | `String` | Text | Yes |
+| `COUP0N (%)` | the security's `couponRate` | `Percent` | `NUMERIC` with unit `PERCENT` on `securities` | No |
+
+`COUP0N (%)` (spelled with a zero, as BSE writes it) is the only bhavcopy column that fills the security rather than the summary. The mapping contract names it under `securityFields`. Zero, like a blank, means no update; an invalid value drops only the rate (section 5.2). Which rate the security keeps is decided in section 15.3.
 
 `BigInteger` is proposed to avoid inventing a business range limit for counts. Database numeric types still have finite technical limits; an unrepresentable value must fail explicitly, never round or truncate silently.
 
-The three unselected columns in the sample (`sc_name`, `COUP0N (%)`, `Maturity Date`) and any future additional columns are ignored for field validation and mapping. They remain in the unchanged original file in S3. Canonical field data contains only the ten selected columns.
+The two unselected columns in the sample (`sc_name`, `Maturity Date`) and any future additional columns are ignored for field validation and mapping. They remain in the unchanged original file in S3. Canonical field data contains only the eleven selected columns.
 
 ## 3. Processing flow
 
@@ -237,6 +240,8 @@ Normalization never mutates the stored raw string.
 8. Reject negative prices, volume, number of trades, and turnover; allow zero.
 9. Require mathematical whole numbers for traded volume and number of trades. For example, `14.00` becomes integer `14`; `14.50` fails.
 10. Do not impose a fixed fractional scale on prices or turnover; do not round their values.
+11. Treat a coupon of zero (`0`, `0.00`) as no value: the bhavcopy writes zero where it reports no coupon (`zeroToNull`, decision 0004).
+12. An invalid coupon (text, a negative number, malformed grouping, or more digits than a percent holds) does not quarantine the row. The contract marks the field `onInvalid: ignoreValue`: the field is `IGNORED`, has no value, and keeps its error. The row stays `ACCEPTED` and its summary is published. The error is stored and counted (section 17.5), so the job ends `COMPLETED_WITH_ERRORS` even when every row was accepted. Only an optional field outside the row rules may ignore invalid values.
 
 Examples of accepted grouped numeric text: `1,234.56`, `1,23,456.78`. Decimal-comma interpretation is not enabled. Scientific notation, currency symbols, parentheses for negatives, and other formats have not been agreed; the proposed v1 grammar excludes them.
 
@@ -569,7 +574,7 @@ This section records agreed JSON behavior. Do not apply CSV row quarantine, trad
 - The filename-derived ISIN is authoritative. An ISIN inside a payload is optional; disagreement is logged as a warning and does not block processing or redirect data to another security.
 - The combined size of JSON files must not exceed 10 MB.
 - An empty manifest file list, or a JSON request listing no JSON files, fails without business-data changes.
-- Select the processor-owned YAML contract from the CloudEvent `dataschema` URN. In v1, `urn:bond-platform:dataset:nsdl-security` maps to the single `nsdl-security-json-v1.yaml` contract and `urn:bond-platform:dataset:bse-debt-trades` maps to `bse-debt-bhavcopy-csv-v1.yaml`. `data.event_type` and each file's `job_id` are validated as neutral source metadata and used for routing/traceability; they do not select separate contracts. Filenames identify the ISIN or trade-date context only and never select field mappings. There is no per-file `processing_contract` field. Agreed (2026-10-02): processing is two-stage with two contracts per dataset. The dataset URN selects the stage-1 source-to-canonical contract (`nsdl-security-json-v1.yaml`, `bse-debt-bhavcopy-csv-v1.yaml`), which owns extraction, normalization, and validation into canonical records with snake_case canonical field names. Each has one stage-2 canonical-to-internal-model mapping contract (`nsdl-security-mapping-v1.yaml`, `bse-debt-bhavcopy-mapping-v1.yaml`) that names its `sourceContract`, consumes only validated canonical values, and owns targets, persistence policy, and lineage. Both contract versions are pinned at job admission. The standalone YAML files are authoritative over the illustrative snippets in section 6.
+- Select the processor-owned YAML contract from the CloudEvent `dataschema` URN. In v1, `urn:bond-platform:dataset:nsdl-security` maps to the single `nsdl-security-json-v1.yaml` contract and `urn:bond-platform:dataset:bse-debt-trades` maps to `bse-debt-bhavcopy-csv-v1.yaml` (since 2026-10-12, `bse-debt-bhavcopy-csv-v2.yaml` and `bse-debt-bhavcopy-mapping-v2.yaml`, decision 0004). `data.event_type` and each file's `job_id` are validated as neutral source metadata and used for routing/traceability; they do not select separate contracts. Filenames identify the ISIN or trade-date context only and never select field mappings. There is no per-file `processing_contract` field. Agreed (2026-10-02): processing is two-stage with two contracts per dataset. The dataset URN selects the stage-1 source-to-canonical contract (`nsdl-security-json-v1.yaml`, `bse-debt-bhavcopy-csv-v1.yaml`), which owns extraction, normalization, and validation into canonical records with snake_case canonical field names. Each has one stage-2 canonical-to-internal-model mapping contract (`nsdl-security-mapping-v1.yaml`, `bse-debt-bhavcopy-mapping-v1.yaml`) that names its `sourceContract`, consumes only validated canonical values, and owns targets, persistence policy, and lineage. Both contract versions are pinned at job admission. The standalone YAML files are authoritative over the illustrative snippets in section 6.
 - All selected payload fields are optional. Unselected fields do not contribute mapped data.
 
 Persist the supplied manifest and its source-file references; resolve `LastModified` and available version/checksum metadata from the objects for the previously agreed precedence rules. Reuse stable manifest inputs during retries. Do not add unlisted objects discovered under related prefixes. The manifest may list any number of JSON files, including multiple files that contribute to the same collection such as `security_cash_flows`; process each listed file with the single dataset contract selected by `dataschema`, using `job_id` only to preserve source traceability. Append/deduplicate normalized outputs under the existing ISIN rules. The filename ISIN must also equal the manifest's `inputs.isin_code` after the same normalization; a difference fails the request with `INVALID_SOURCE_FILENAME` (implementation choice 2026-10-03, as no separate code is defined). An empty normalized filename identifier cannot satisfy the mandatory source-identity requirement; agreed outcome: the whole request is `FAILED` with `INVALID_SOURCE_FILENAME` (for example `_ratings.json`) and no business-data changes, consistent with the mixed-ISIN rule.
@@ -618,7 +623,7 @@ Preserve source primitives and JSONPaths in canonical history, distinguishing mi
 - A number, boolean, object, or array supplied for a selected text field is a field validation error; do not silently coerce it to text.
 - Dates accept strings in `DD-MM-YYYY` and `YYYY-MM-DD`. Validate calendar dates strictly, normalize to ISO format, and use database dates.
 - Impossible dates or unrecognized date formats quarantine only that field.
-- Coupon rate accepts JSON numbers or numeric strings, with or without a trailing `%`. Examples `"8.94%"`, `"8.94"`, and numeric `8.94` all represent 8.94 percentage points, not a fraction of 0.0894.
+- Coupon rate accepts JSON numbers or numeric strings, with or without a trailing `%`. Examples `"8.94%"`, `"8.94"`, and numeric `8.94` all represent 8.94 percentage points, not a fraction of 0.0894. Since 2026-10-12 (decision 0004), a percent string is read only up to its first `%` (`keepBeforeFirstPercent`), so `"8.1% (cat I & II and 0.2% additn int for cat III)"` is 8.1. Text without a number before its first `%`, such as `"RESET RATE (REFER REMARKS)"`, is still `INVALID_DECIMAL`. The rule applies to every JSON percent, asset coverage included. An NSDL coupon rate is only the backup to the bhavcopy's (section 15.3).
 - The agreed coupon representation carries an explicit unit: `{ "value": 8.94, "unit": "PERCENT" }`. It is `couponRate` on the security (section 20.1).
 - `amountPayable` accepts JSON numbers and strings using the CSV-agreed Western/Indian comma grouping and dot decimal separator. Validate grouping before removing commas.
 - Parse numbers exactly without intermediate floating-point conversion or rounding.
@@ -895,12 +900,24 @@ Agreed v1 presentation: while `collateral_status` is `Secured`, the read API ret
 | `assetCoverage.unit` | `asset_coverage_unit` | `PERCENT` |
 | `couponRate.value` | `coupon_rate_value` | Exact coupon percentage |
 | `couponRate.unit` | `coupon_rate_unit` | `PERCENT` |
+| — | `coupon_rate_source` | `BSE_BHAVCOPY` or `NSDL`: which dataset supplied the stored rate; internal, not in the read API |
+| — | `coupon_rate_trade_date` | For a bhavcopy rate, the trade date of the bhavcopy that supplied it; internal |
 | `couponType` | `coupon_type` | `couponType` |
 | `listingStatus` | `listing_status` | Root `listingStatus` |
 | `createdAt` | `created_at` | Record creation timestamp |
 | `updatedAt` | `updated_at` | Last actual business-value change |
 
 Only ISIN is mandatory at creation. Field-level canonical lineage is separate from these business attributes; a single source reference cannot describe all scalar fields because they can originate from different files/jobs.
+
+Coupon rate precedence (decision 0004, 2026-10-12):
+
+- The bhavcopy's `COUP0N (%)` is the primary source. Among bhavcopies, the latest trade date wins.
+  - A bhavcopy for an older trade date never replaces a newer one's rate.
+  - A different rate from the same or a later trade date replaces the rate, its source, its `field_sources` reference, and `updated_at`.
+  - The same rate from a later trade date only moves `coupon_rate_trade_date` forward; it is not a change to the security.
+- NSDL's `couponRate` is the backup. It is stored only while no bhavcopy has supplied a rate. A rate with no source, stored before V7 or written by the previous release during a migration, counts as NSDL's.
+- A CSV job locks the securities whose rates it reports in ISIN order, in its publication transaction. A JSON job reads the stored source under the row lock it already holds. So a bhavcopy and an NSDL request for the same security cannot interleave.
+- A rate that differs numerically from the other source's stored rate is logged as a warning (`Coupon rates differ`, with job, ISIN, and both values). It is not an error (section 16).
 
 ### 15.4 Payment schedule field names
 
@@ -1030,6 +1047,7 @@ UUID identity does not replace business duplicate prevention. Append-only collec
 Revised 2026-10-02, superseding the earlier decision to hold all canonical data in PostgreSQL (and any earlier statement in this document that canonical history is stored in PostgreSQL). Original source files remain in S3.
 
 - Rejected canonical records only (CSV rows with disposition `QUARANTINED_INVALID` or `QUARANTINED_SUPERSEDED`; JSON fields, entries, sections, or files that fail validation) are stored in PostgreSQL in `data_processing`, with their raw selected values, location, and errors. They back the error-review API. For CSV (implemented in PR 26b), each quarantined row is one `rejected_records` row holding its full canonical line, and each of its issues is one `validation_issues` row: the field errors in field order, then the row errors, numbered from 1 in file order within the run; a field issue keeps the field's raw value as a JSON string. Both are written in batches of 500 rows. Implementation choice (2026-10-05, PR 35b): for JSON, each rejected part is one `rejected_records` row located by `json_path` (disposition `FILE_SKIPPED`, `SECTION_REJECTED`, `FIELD_REJECTED`, `ENTRY_FIELDS_REJECTED`, `ENTRY_SKIPPED`, or `VALUE_IGNORED` for a valid value a stage-2 rule ignored, such as coverage beside `Unsecured`), holding that part's canonical evidence. Each issue is one `validation_issues` row with field, JSONPath, raw value with its JSON type, and action taken, numbered from 1 in manifest file order, then within a file: sections, scalars, entries, ignored values. A missing value has no `raw_value`; an object or array is kept whole as JSON (review finding AJ-1), and a section of the wrong kind has none, as its error names the expected and actual kinds. An explicit `null` never produces an issue, as it means no update. A request's JSON files are bounded in size, so all its rejections are written in one batch.
+- An accepted CSV row with a field whose invalid value was ignored (section 5.2) has no `rejected_records` row: the row itself is published. Each of its ignored fields' errors is one `validation_issues` row with no `rejected_record_id`, its field and raw value, and the action taken `Ignored the invalid value; the rest of the row was accepted.`, numbered in file order with the other issues (decision 0004).
 - The complete canonical output of each processing run — accepted and rejected records alike — is written to S3 as an immutable file per run. Accepted canonical records are not stored in PostgreSQL.
 - Business rows reference their origin by ingestion request and location (source filename plus CSV record number or JSONPath) rather than by a database foreign key to a canonical record. The security's `field_sources` JSONB (API-internal, not exposed) uses the same reference form per field. Identical incoming values leave the value and its reference unchanged; skipped duplicate collection entries keep their original reference.
 - Duplicate-ISIN winner selection and JSON scalar precedence are computed during the run from the in-flight canonical records, not from persisted database rows.
@@ -1293,6 +1311,8 @@ CREATE TABLE securities_data.securities (
   asset_coverage_unit    TEXT CHECK (asset_coverage_unit = 'PERCENT'),
   coupon_rate_value      NUMERIC,
   coupon_rate_unit       TEXT CHECK (coupon_rate_unit = 'PERCENT'),
+  coupon_rate_source     TEXT CHECK (coupon_rate_source IN ('BSE_BHAVCOPY', 'NSDL')),  -- V7
+  coupon_rate_trade_date DATE,                                                      -- V7
   coupon_type            TEXT,
   listing_status         TEXT,
   field_sources          JSONB NOT NULL DEFAULT '{}',

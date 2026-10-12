@@ -95,6 +95,37 @@ class RejectedRecordStoreIT extends PostgresIntegrationTest {
         .containsEntry("record_number", 9);
   }
 
+  /** I-CSV-09: an ignored value is an issue of an accepted row, with no rejected record. */
+  @Test
+  void ignoredValueIsStoredAsAnIssueWithoutARejectedRecord() {
+    CanonicalRun run = startRun();
+    RejectedRecordBuffer buffer = new RejectedRecordBuffer(store, run, RUN_ID, "isin");
+
+    buffer.add(GoldenBhavcopy.acceptedWithIgnoredCoupon());
+    buffer.flush();
+
+    assertThat(count("rejected_records")).isZero();
+    Map<String, Object> issue =
+        jdbc.sql(
+                """
+                SELECT rejected_record_id, code, field, raw_value #>> '{}' AS raw_value,
+                  action_taken, isin, record_number
+                FROM data_processing.validation_issues WHERE processing_run_id = :run
+                """)
+            .param("run", RUN_ID)
+            .query()
+            .singleRow();
+    assertThat(issue)
+        .containsEntry("rejected_record_id", null)
+        .containsEntry("code", "INVALID_DECIMAL")
+        .containsEntry("field", "coupon_rate")
+        .containsEntry("raw_value", "9 % p.a.")
+        .containsEntry(
+            "action_taken", "Ignored the invalid value; the rest of the row was accepted.")
+        .containsEntry("isin", "INE002B08CD2")
+        .containsEntry("record_number", 6);
+  }
+
   @Test
   void deletingTheRunDeletesItsRecordsAndIssues() {
     CanonicalRun run = startRun();

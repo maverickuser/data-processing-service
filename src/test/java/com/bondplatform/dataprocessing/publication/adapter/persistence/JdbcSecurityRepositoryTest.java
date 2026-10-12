@@ -4,17 +4,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.bondplatform.dataprocessing.publication.domain.CouponSource;
+import com.bondplatform.dataprocessing.publication.domain.ExchangeCoupon;
 import com.bondplatform.dataprocessing.publication.domain.SecurityScalars;
 import com.bondplatform.dataprocessing.publication.domain.SecurityValue;
 import com.bondplatform.dataprocessing.publication.domain.SourceReference;
+import com.bondplatform.dataprocessing.publication.domain.StoredCoupon;
 import com.bondplatform.dataprocessing.shared.domain.Isin;
 import com.bondplatform.dataprocessing.shared.domain.JobId;
 import com.bondplatform.dataprocessing.shared.domain.Percent;
+import com.bondplatform.dataprocessing.shared.domain.TradeDate;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -28,6 +33,7 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.JdbcOperations;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.jdbc.core.RowMapper;
 
 /**
@@ -148,7 +154,8 @@ class JdbcSecurityRepositoryTest {
         .update(
             eq(
                 "UPDATE securities_data.securities SET coupon_rate_value = ?,"
-                    + " coupon_rate_unit = ?, asset_coverage_value = NULL,"
+                    + " coupon_rate_unit = ?, coupon_rate_source = ?,"
+                    + " coupon_rate_trade_date = NULL, asset_coverage_value = NULL,"
                     + " asset_coverage_unit = NULL,"
                     + " field_sources = (field_sources - ?::text[]) || ?::jsonb,"
                     + " updated_at = ? WHERE isin = ?"),
@@ -156,14 +163,121 @@ class JdbcSecurityRepositoryTest {
     Object[] sent = arguments.getValue();
     assertThat(sent[0]).isEqualTo(new BigDecimal("8.94"));
     assertThat(sent[1]).isEqualTo("PERCENT");
-    assertThat((String[]) sent[2]).containsExactly("assetCoverage");
-    assertThat(sent[3])
+    assertThat(sent[2]).isEqualTo("NSDL");
+    assertThat((String[]) sent[3]).containsExactly("assetCoverage");
+    assertThat(sent[4])
         .isEqualTo(
             "{\"couponRate\":{\"sourceFile\":\"INE0KH208019_coupon-details.json\","
                 + "\"sourceLocation\":\"$.coupensVo.couponDetails.couponRate\","
                 + "\"sourceRequestId\":\"0b6f0a52-6b1e-4d0c-9f43-2f3a5d1c7e10\"}}");
-    assertThat(sent[4]).isEqualTo(RECORDED_AT.atOffset(ZoneOffset.UTC));
-    assertThat(sent[5]).isEqualTo("INE0KH208019");
+    assertThat(sent[5]).isEqualTo(RECORDED_AT.atOffset(ZoneOffset.UTC));
+    assertThat(sent[6]).isEqualTo("INE0KH208019");
+  }
+
+  // U-COUPON-06
+  @Test
+  void clearedCouponRateLosesItsSourceAndTradeDate() {
+    when(jdbc.update(any(String.class), any(Object[].class))).thenReturn(1);
+
+    repository.applyChanges(
+        FIRST, new SecurityScalars(Map.of()).clearing(Set.of("couponRate")), RECORDED_AT);
+
+    verify(jdbc)
+        .update(
+            eq(
+                "UPDATE securities_data.securities SET coupon_rate_value = NULL,"
+                    + " coupon_rate_unit = NULL, coupon_rate_source = NULL,"
+                    + " coupon_rate_trade_date = NULL,"
+                    + " field_sources = (field_sources - ?::text[]) || ?::jsonb,"
+                    + " updated_at = ? WHERE isin = ?"),
+            any(Object[].class));
+  }
+
+  // U-COUPON-06
+  @Test
+  void lockCouponsLocksDistinctIsinsInOrderAndReadsTheirCoupons() throws SQLException {
+    ResultSet bhavcopy = mock(ResultSet.class);
+    when(bhavcopy.getString("isin")).thenReturn(FIRST.value());
+    when(bhavcopy.getBigDecimal("coupon_rate_value")).thenReturn(new BigDecimal("8.10"));
+    when(bhavcopy.getString("coupon_rate_source")).thenReturn("BSE_BHAVCOPY");
+    when(bhavcopy.getObject("coupon_rate_trade_date", LocalDate.class))
+        .thenReturn(LocalDate.of(2026, 10, 1));
+    ResultSet none = mock(ResultSet.class);
+    when(none.getString("isin")).thenReturn(SECOND.value());
+    ArgumentCaptor<Object[]> arguments = ArgumentCaptor.forClass(Object[].class);
+    doAnswer(
+            invocation -> {
+              RowCallbackHandler handler = invocation.getArgument(1);
+              handler.processRow(bhavcopy);
+              handler.processRow(none);
+              return null;
+            })
+        .when(jdbc)
+        .query(
+            eq(JdbcSecurityRepository.LOCK_COUPONS),
+            any(RowCallbackHandler.class),
+            arguments.capture());
+
+    Map<Isin, StoredCoupon> coupons = repository.lockCoupons(List.of(FIRST, SECOND, FIRST));
+
+    assertThat((String[]) arguments.getValue()[0]).containsExactly(FIRST.value(), SECOND.value());
+    assertThat(coupons)
+        .containsExactly(
+            Map.entry(
+                FIRST,
+                new StoredCoupon(
+                    Percent.parse("8.1"), CouponSource.BSE_BHAVCOPY, LocalDate.of(2026, 10, 1))),
+            Map.entry(SECOND, StoredCoupon.NONE));
+    assertThat(JdbcSecurityRepository.LOCK_COUPONS)
+        .contains("ORDER BY isin")
+        .contains("FOR UPDATE");
+  }
+
+  @Test
+  void lockCouponsOfNoIsinsTouchesNothing() {
+    assertThat(repository.lockCoupons(List.of())).isEmpty();
+    verifyNoInteractions(jdbc);
+  }
+
+  // U-COUPON-06
+  @Test
+  void storesReplacedRatesWithSourceAndAdvancesOnlyTheTradeDateOfEqualOnes() {
+    ExchangeCoupon replaced = coupon(FIRST, "8.10");
+    ExchangeCoupon advanced = coupon(SECOND, "9");
+
+    repository.storeBhavcopyCoupons(List.of(replaced), List.of(advanced), RECORDED_AT);
+
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<List<Object[]>> replacements = ArgumentCaptor.forClass(List.class);
+    verify(jdbc).batchUpdate(eq(JdbcSecurityRepository.REPLACE_COUPON), replacements.capture());
+    assertThat(replacements.getValue())
+        .singleElement()
+        .satisfies(
+            sent ->
+                assertThat(sent)
+                    .containsExactly(
+                        new BigDecimal("8.10"),
+                        LocalDate.of(2026, 10, 1),
+                        "{\"couponRate\":{\"sourceFile\":\"BSE_fgroup01102026.csv\","
+                            + "\"sourceLocation\":\"7\","
+                            + "\"sourceRequestId\":\"0b6f0a52-6b1e-4d0c-9f43-2f3a5d1c7e10\"}}",
+                        RECORDED_AT.atOffset(ZoneOffset.UTC),
+                        "INE0KH208019"));
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<List<Object[]>> advances = ArgumentCaptor.forClass(List.class);
+    verify(jdbc)
+        .batchUpdate(eq(JdbcSecurityRepository.ADVANCE_COUPON_TRADE_DATE), advances.capture());
+    assertThat(advances.getValue())
+        .singleElement()
+        .satisfies(
+            sent -> assertThat(sent).containsExactly(LocalDate.of(2026, 10, 1), "INE0K0Y08011"));
+  }
+
+  @Test
+  void storingNoCouponsTouchesNothing() {
+    repository.storeBhavcopyCoupons(List.of(), List.of(), RECORDED_AT);
+
+    verifyNoInteractions(jdbc);
   }
 
   @Test
@@ -213,5 +327,13 @@ class JdbcSecurityRepositoryTest {
   @SuppressWarnings("unchecked")
   private static RowMapper<Map<String, SecurityValue>> anyRowMapper() {
     return any(RowMapper.class);
+  }
+
+  private static ExchangeCoupon coupon(Isin isin, String rate) {
+    return new ExchangeCoupon(
+        isin,
+        TradeDate.parseIso("2026-10-01"),
+        Percent.parse(rate),
+        new SourceReference(SOURCE.jobId(), "BSE_fgroup01102026.csv", "7"));
   }
 }

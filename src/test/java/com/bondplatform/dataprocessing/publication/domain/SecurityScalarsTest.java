@@ -76,6 +76,19 @@ class SecurityScalarsTest {
         .containsOnlyKeys("couponType");
   }
 
+  @Test
+  void withoutDropsFieldWhetherSetOrCleared() {
+    SecurityScalars incoming =
+        scalars("couponRate", PERCENT_100, "couponType", new SecurityValue.Text("Simple"))
+            .clearing(Set.of("assetCoverage"));
+
+    assertThat(incoming.without("couponRate").fields()).containsOnlyKeys("couponType");
+    assertThat(incoming.without("couponRate").cleared()).containsExactly("assetCoverage");
+    assertThat(incoming.without("assetCoverage").cleared()).isEmpty();
+    assertThat(incoming.without("assetCoverage").fields())
+        .containsOnlyKeys("couponRate", "couponType");
+  }
+
   // U-UNSEC-01: clearing removes a stored value, and is no change when nothing is stored
   @Test
   void clearedFieldIsChangeOnlyWhenSomethingIsStored() {
