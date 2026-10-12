@@ -18,6 +18,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class JsonFieldReaderTest {
 
@@ -263,5 +264,26 @@ class JsonFieldReaderTest {
   private static SourceValue structured(SourceValue.Structured.Kind kind) {
     return new SourceValue.Structured(
         kind, kind == SourceValue.Structured.Kind.OBJECT ? "{}" : "[]");
+  }
+
+  // U-JSON-14
+  @ParameterizedTest
+  @CsvSource(
+      delimiter = '|',
+      textBlock =
+          """
+          8.1% (cat I & II and 0.2% additn int for cat III)|8.1
+          8.76% p.a. FOR CATEGORY IV i.e. RIIs|8.76
+          9.01% (REFER REMARKS)|9.01
+          """)
+  void percentTextIsReadUpToItsFirstPercentSign(String raw, String expected) {
+    assertThat(read(FieldType.PERCENT, text(raw)).parsedValue()).isEqualTo(expected);
+  }
+
+  // U-JSON-14
+  @ParameterizedTest
+  @ValueSource(strings = {"RESET RATE (REFER REMARKS)", "Nifty Midcap 150", "about 9%"})
+  void percentTextWithoutNumberBeforeFirstPercentSignFails(String raw) {
+    assertThat(error(FieldType.PERCENT, text(raw))).isEqualTo(ErrorCode.INVALID_DECIMAL);
   }
 }

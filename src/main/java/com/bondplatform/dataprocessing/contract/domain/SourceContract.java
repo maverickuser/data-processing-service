@@ -70,6 +70,8 @@ public sealed interface SourceContract {
    * @param requiredValue whether every row must hold a non-blank value
    * @param normalize names of normalizers, applied in order
    * @param validate names of validators applied to the parsed value
+   * @param ignoreInvalid whether an invalid value drops only this field's value, recording its
+   *     error, instead of quarantining the row
    */
   record CsvField(
       String name,
@@ -77,7 +79,8 @@ public sealed interface SourceContract {
       FieldType type,
       boolean requiredValue,
       List<String> normalize,
-      List<String> validate) {
+      List<String> validate,
+      boolean ignoreInvalid) {
 
     /** Copies the lists so the field is immutable. */
     public CsvField {

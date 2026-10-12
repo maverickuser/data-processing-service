@@ -1,6 +1,7 @@
 package com.bondplatform.dataprocessing.lambda;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import com.bondplatform.dataprocessing.admission.SubmissionEvents;
 import com.bondplatform.dataprocessing.admission.application.AdmitSubmission;
@@ -52,7 +53,7 @@ class BhavcopyProcessingIT extends PostgresIntegrationTest {
   private static final String CANONICAL_BUCKET = "data-processing-service-canonical";
   private static final String HEADER =
       "Security_cd,ISIN No.,Open Price,High Price,Low Price,Close Price,"
-          + "Total Traded Volume,Number of Trades,Total Turnover,FACE VALUE";
+          + "Total Traded Volume,Number of Trades,Total Turnover,FACE VALUE,COUP0N (%)";
   private static final S3Client S3 = S3Mock.client();
   private static final SqsClient SQS = ElasticMq.client();
   private static final String JOBS =
@@ -96,8 +97,8 @@ class BhavcopyProcessingIT extends PostgresIntegrationTest {
             "run_e2e_1",
             "2026-01-05",
             csv(
-                "973812,INE001A07AB1,100,101,99,100.5,10,2,1000,1000",
-                "973813,INE002B08CD2,99,99,99,99,1,1,99,100"));
+                "973812,INE001A07AB1,100,101,99,100.5,10,2,1000,1000,8.50",
+                "973813,INE002B08CD2,99,99,99,99,1,1,99,100,"));
 
     assertThat(statusOf(job)).isEqualTo("COMPLETED");
     assertThat(countsOf(job))
@@ -111,6 +112,21 @@ class BhavcopyProcessingIT extends PostgresIntegrationTest {
                 .query(BigDecimal.class)
                 .single())
         .isEqualByComparingTo("1000");
+    assertThat(
+            jdbc.sql(
+                    "SELECT coupon_rate_value, coupon_rate_source,"
+                        + " coupon_rate_trade_date::text AS trade_date"
+                        + " FROM securities_data.securities ORDER BY isin")
+                .query()
+                .listOfRows())
+        .extracting(
+            row ->
+                row.get("coupon_rate_value") == null
+                    ? null
+                    : ((BigDecimal) row.get("coupon_rate_value")).toPlainString(),
+            row -> row.get("coupon_rate_source"),
+            row -> row.get("trade_date"))
+        .containsExactly(tuple("8.50", "BSE_BHAVCOPY", "2026-01-05"), tuple(null, null, null));
     assertThat(isins()).containsExactly("INE001A07AB1", "INE002B08CD2");
     String canonicalKey = canonicalKeyOf(job);
     assertThat(canonicalKey).isEqualTo("canonical/" + job.value() + "/attempt-1/canonical.jsonl");
@@ -166,7 +182,8 @@ class BhavcopyProcessingIT extends PostgresIntegrationTest {
   // I-CSV-03
   @Test
   void malformedLateRecordFailsTheJobAndChangesNoSummary() {
-    process("run_e2e_3", "2026-01-06", csv("973812,INE001A07AB1,100,101,99,100.5,10,2,1000,1000"));
+    process(
+        "run_e2e_3", "2026-01-06", csv("973812,INE001A07AB1,100,101,99,100.5,10,2,1000,1000,8.50"));
     detailRequests(1);
 
     JobId failed =
@@ -174,8 +191,8 @@ class BhavcopyProcessingIT extends PostgresIntegrationTest {
             "run_e2e_4",
             "2026-01-06",
             csv(
-                "973812,INE001A07AB1,200,201,199,200.5,10,2,1000,1000",
-                "973813,INE002B08CD2,99,99,99,99,1,1,99,100",
+                "973812,INE001A07AB1,200,201,199,200.5,10,2,1000,1000,8.50",
+                "973813,INE002B08CD2,99,99,99,99,1,1,99,100,",
                 "973814,INE003C07EF3,99,99"));
 
     assertThat(statusOf(failed)).isEqualTo("FAILED");

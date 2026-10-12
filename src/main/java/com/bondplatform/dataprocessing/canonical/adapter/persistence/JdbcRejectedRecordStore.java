@@ -10,6 +10,7 @@ import com.bondplatform.dataprocessing.canonical.domain.JsonCanonicalRun;
 import com.bondplatform.dataprocessing.canonical.domain.JsonFileEvidence;
 import com.bondplatform.dataprocessing.canonical.domain.JsonRejection;
 import com.bondplatform.dataprocessing.canonical.domain.RejectedRow;
+import com.bondplatform.dataprocessing.canonical.domain.ValidationStatus;
 import com.bondplatform.dataprocessing.shared.supplier.IdSupplier;
 import java.sql.Types;
 import java.time.Clock;
@@ -27,7 +28,9 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Stores quarantined rows in {@code data_processing.rejected_records} and their issues in {@code
- * data_processing.validation_issues}, two round trips per batch.
+ * data_processing.validation_issues}, two round trips per batch. An accepted row's issues, which
+ * only its ignored fields give it, are stored without a rejected record: the row itself is
+ * published.
  *
  * <p>Each rejected record keeps its full canonical line, raw values included; each issue keeps the
  * raw value of its field as a JSON string. A JSON request's rejected parts are stored the same way,
@@ -53,10 +56,10 @@ public class JdbcRejectedRecordStore implements RejectedRecordStore, JsonRejecti
       """
       INSERT INTO data_processing.validation_issues
         (id, processing_run_id, rejected_record_id, sequence_number, code, isin, source_file_name,
-         record_number, field, raw_value, message, created_at)
+         record_number, field, raw_value, message, action_taken, created_at)
       VALUES
         (:id, :processingRunId, :rejectedRecordId, :sequenceNumber, :code, :isin, :sourceFileName,
-         :recordNumber, :field, CAST(:rawValue AS JSONB), :message, :createdAt)
+         :recordNumber, :field, CAST(:rawValue AS JSONB), :message, :actionTaken, :createdAt)
       """;
 
   static final String INSERT_JSON_RECORD =
@@ -79,6 +82,10 @@ public class JdbcRejectedRecordStore implements RejectedRecordStore, JsonRejecti
         (:id, :processingRunId, :rejectedRecordId, :sequenceNumber, :code, :isin, :sourceFileName,
          :field, :jsonPath, CAST(:rawValue AS JSONB), :message, :actionTaken, :createdAt)
       """;
+
+  /** The action recorded for an issue of a field whose invalid value was ignored. */
+  static final String VALUE_IGNORED =
+      "Ignored the invalid value; the rest of the row was accepted.";
 
   private static final JsonMapper JSON = JsonMapper.builder().build();
 
@@ -104,27 +111,29 @@ public class JdbcRejectedRecordStore implements RejectedRecordStore, JsonRejecti
     List<SqlParameterSource> records = new ArrayList<>();
     List<SqlParameterSource> issues = new ArrayList<>();
     for (RejectedRow row : rows) {
-      UUID recordId = idSupplier.nextId();
+      @Nullable UUID recordId = row.quarantined() ? idSupplier.nextId() : null;
       int recordNumber = Math.toIntExact(row.row().record().recordNumber());
-      records.add(
-          new MapSqlParameterSource()
-              .addValue("id", recordId)
-              .addValue("processingRunId", processingRunId)
-              .addValue("jobId", run.jobId().value())
-              .addValue("bucket", run.sourceBucket())
-              .addValue("key", run.sourceKey())
-              .addValue("isin", row.isin(), Types.VARCHAR)
-              .addValue("recordNumber", recordNumber)
-              .addValue("disposition", row.row().disposition().name())
-              .addValue("record", CanonicalLineWriter.line(run, row.row()))
-              .addValue("createdAt", createdAt));
+      if (recordId != null) {
+        records.add(
+            new MapSqlParameterSource()
+                .addValue("id", recordId)
+                .addValue("processingRunId", processingRunId)
+                .addValue("jobId", run.jobId().value())
+                .addValue("bucket", run.sourceBucket())
+                .addValue("key", run.sourceKey())
+                .addValue("isin", row.isin(), Types.VARCHAR)
+                .addValue("recordNumber", recordNumber)
+                .addValue("disposition", row.row().disposition().name())
+                .addValue("record", CanonicalLineWriter.line(run, row.row()))
+                .addValue("createdAt", createdAt));
+      }
       for (RejectedRow.ReviewIssue issue : row.issues()) {
         CanonicalField field = issue.field();
         issues.add(
             new MapSqlParameterSource()
                 .addValue("id", idSupplier.nextId())
                 .addValue("processingRunId", processingRunId)
-                .addValue("rejectedRecordId", recordId)
+                .addValue("rejectedRecordId", recordId, Types.OTHER)
                 .addValue("sequenceNumber", issue.sequenceNumber())
                 .addValue("code", issue.issue().code().name())
                 .addValue("isin", row.isin(), Types.VARCHAR)
@@ -133,6 +142,7 @@ public class JdbcRejectedRecordStore implements RejectedRecordStore, JsonRejecti
                 .addValue("field", field == null ? null : field.name(), Types.VARCHAR)
                 .addValue("rawValue", rawValueOf(field), Types.VARCHAR)
                 .addValue("message", issue.issue().message())
+                .addValue("actionTaken", actionTaken(field), Types.VARCHAR)
                 .addValue("createdAt", createdAt));
       }
     }
@@ -192,6 +202,12 @@ public class JdbcRejectedRecordStore implements RejectedRecordStore, JsonRejecti
       jdbc.batchUpdate(INSERT_JSON_ISSUE, issues.toArray(SqlParameterSource[]::new));
     }
     return sequenceNumber;
+  }
+
+  private static @Nullable String actionTaken(@Nullable CanonicalField field) {
+    return field != null && field.validationStatus() == ValidationStatus.IGNORED
+        ? VALUE_IGNORED
+        : null;
   }
 
   private static @Nullable String rawValueOf(@Nullable CanonicalField field) {

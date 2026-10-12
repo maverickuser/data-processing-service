@@ -13,6 +13,7 @@ final class NumberNormalizers {
       Pattern.compile(SIGN + "[1-9][0-9]{0,2}(,[0-9]{3})+" + FRACTION);
   private static final Pattern INDIAN_GROUPING =
       Pattern.compile(SIGN + "[1-9][0-9]?(,[0-9]{2})*,[0-9]{3}" + FRACTION);
+  private static final Pattern ZERO = Pattern.compile("0+(\\.0+)?");
   private static final Pattern GROUPED_SHAPE = Pattern.compile(SIGN + "[0-9,]+" + FRACTION);
 
   /**
@@ -50,6 +51,27 @@ final class NumberNormalizers {
       text ->
           new FieldResult.Valid<>(
               text.endsWith("%") ? text.substring(0, text.length() - 1).strip() : text);
+
+  /**
+   * {@code keepBeforeFirstPercent}: keeps only the text before the first percent sign, without the
+   * space before it, so {@code "8.1% (cat I & II)"} becomes {@code 8.1}. Text without a percent
+   * sign is unchanged.
+   */
+  static final Normalizer KEEP_BEFORE_FIRST_PERCENT =
+      text -> {
+        int percent = text.indexOf('%');
+        return new FieldResult.Valid<>(percent < 0 ? text : text.substring(0, percent).strip());
+      };
+
+  /**
+   * {@code zeroToNull}: treats a zero written without grouping, such as {@code 0} or {@code 0.00},
+   * as no value. For sources that write zero where they mean "not reported".
+   */
+  static final Normalizer ZERO_TO_NULL =
+      text ->
+          ZERO.matcher(text).matches()
+              ? new FieldResult.NoValue<>(FieldPresence.PLACEHOLDER)
+              : new FieldResult.Valid<>(text);
 
   private NumberNormalizers() {}
 }

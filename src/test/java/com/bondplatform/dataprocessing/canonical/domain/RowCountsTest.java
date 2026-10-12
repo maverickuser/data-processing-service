@@ -68,4 +68,13 @@ class RowCountsTest {
                 new CanonicalRow(record, Disposition.QUARANTINED_SUPERSEDED, OptionalLong.empty()))
         .isInstanceOf(IllegalArgumentException.class);
   }
+
+  // U-CSV-13
+  @Test
+  void fileWithEveryRowAcceptedButAnIgnoredValueCompletesWithErrors() {
+    assertThat(new RowCounts(2, 2, 0, 0).outcome(1).status())
+        .isEqualTo(JobStatus.COMPLETED_WITH_ERRORS);
+    assertThat(new RowCounts(2, 2, 0, 0).outcome(0).status()).isEqualTo(JobStatus.COMPLETED);
+    assertThat(new RowCounts(2, 0, 2, 0).outcome(3).status()).isEqualTo(JobStatus.FAILED);
+  }
 }

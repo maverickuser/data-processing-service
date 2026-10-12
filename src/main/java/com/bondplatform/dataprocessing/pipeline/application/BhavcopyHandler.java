@@ -15,8 +15,10 @@ import com.bondplatform.dataprocessing.job.application.JobCompletion;
 import com.bondplatform.dataprocessing.job.application.PermanentFailureException;
 import com.bondplatform.dataprocessing.job.domain.ClaimedJob;
 import com.bondplatform.dataprocessing.mapping.domain.DailyMarketSummaryMapper;
+import com.bondplatform.dataprocessing.mapping.domain.ExchangeCouponMapper;
 import com.bondplatform.dataprocessing.publication.application.PublishDailyMarketSummaries;
 import com.bondplatform.dataprocessing.publication.domain.DailyMarketSummary;
+import com.bondplatform.dataprocessing.publication.domain.ExchangeCoupon;
 import com.bondplatform.dataprocessing.shared.domain.ExchangeName;
 import com.bondplatform.dataprocessing.shared.domain.TradeDate;
 import com.bondplatform.dataprocessing.source.application.LoadManifest;
@@ -36,10 +38,10 @@ import org.springframework.transaction.support.TransactionOperations;
  *
  * <p>An attempt loads the manifest, reads the one listed CSV, and runs stage 1 over the whole file.
  * While rows are handed over it writes each to the canonical file, stores quarantined rows in
- * bounded batches, each in its own transaction, and maps accepted rows to summaries. Only then is
- * the canonical file stored and its key recorded on the run. Last, the summaries and the job's
- * outcome are published in one transaction. A file rejected as a whole fails the job without a
- * retry and changes no summary.
+ * bounded batches, each in its own transaction, and maps accepted rows to summaries and coupon
+ * rates. Only then is the canonical file stored and its key recorded on the run. Last, the
+ * summaries and the job's outcome are published in one transaction. A file rejected as a whole
+ * fails the job without a retry and changes no summary.
  */
 public class BhavcopyHandler implements DatasetHandler {
 
@@ -47,6 +49,7 @@ public class BhavcopyHandler implements DatasetHandler {
   private final SourceContract.Csv sourceContract;
   private final CsvCanonicalizer canonicalizer;
   private final DailyMarketSummaryMapper mapper;
+  private final ExchangeCouponMapper couponMapper;
   private final LoadManifest manifests;
   private final SourceObjectReader sources;
   private final CanonicalFileStore canonicalFiles;
@@ -80,6 +83,7 @@ public class BhavcopyHandler implements DatasetHandler {
     this.sourceContract = csv;
     this.canonicalizer = new CsvCanonicalizer(csv, rules);
     this.mapper = new DailyMarketSummaryMapper(contracts.mapping());
+    this.couponMapper = new ExchangeCouponMapper(contracts.mapping());
     this.manifests = manifests;
     this.sources = sources;
     this.canonicalFiles = canonicalFiles;
@@ -123,6 +127,7 @@ public class BhavcopyHandler implements DatasetHandler {
             contracts.mapping().id().name());
     ExchangeName exchange = ExchangeName.of(DeployedContracts.input(manifest, "exchangeName"));
     List<DailyMarketSummary> accepted = new ArrayList<>();
+    List<ExchangeCoupon> coupons = new ArrayList<>();
     try (CanonicalFile canonical = canonicalFiles.create(run)) {
       RejectedRecordBuffer rejected =
           new RejectedRecordBuffer(
@@ -139,6 +144,7 @@ public class BhavcopyHandler implements DatasetHandler {
                 canonical.append(row);
                 rejected.add(row);
                 mapper.map(run, exchange, row).ifPresent(accepted::add);
+                couponMapper.map(run, row).ifPresent(coupons::add);
               });
       switch (outcome) {
         case CsvCanonicalizer.Outcome.Rejected rejection ->
@@ -147,7 +153,8 @@ public class BhavcopyHandler implements DatasetHandler {
         case CsvCanonicalizer.Outcome.Completed completed -> {
           rejected.flush();
           completion.recordCanonicalFile(job, canonical.commit());
-          publication.publish(job, accepted, completed.counts().outcome(rejected.issueCount()));
+          publication.publish(
+              job, accepted, coupons, completed.counts().outcome(rejected.issueCount()));
         }
       }
     }

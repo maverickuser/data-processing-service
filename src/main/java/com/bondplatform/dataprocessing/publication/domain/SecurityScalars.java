@@ -86,6 +86,15 @@ public record SecurityScalars(Map<String, Field> fields, Set<String> cleared) {
     return new SecurityScalars(changed, removed);
   }
 
+  /** Returns these scalars without the named field, neither set nor cleared. */
+  public SecurityScalars without(String name) {
+    Map<String, Field> kept = new LinkedHashMap<>(fields);
+    kept.remove(name);
+    Set<String> stillCleared = new LinkedHashSet<>(cleared);
+    stillCleared.remove(name);
+    return new SecurityScalars(kept, stillCleared);
+  }
+
   /** Returns whether nothing is set or cleared. */
   public boolean isEmpty() {
     return fields.isEmpty() && cleared.isEmpty();

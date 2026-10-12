@@ -1,8 +1,10 @@
 package com.bondplatform.dataprocessing.mapping.domain;
 
+import com.bondplatform.dataprocessing.canonical.domain.CanonicalField;
 import com.bondplatform.dataprocessing.canonical.domain.CanonicalRow;
 import com.bondplatform.dataprocessing.canonical.domain.CanonicalRun;
 import com.bondplatform.dataprocessing.canonical.domain.Disposition;
+import com.bondplatform.dataprocessing.canonical.domain.ValidationStatus;
 import com.bondplatform.dataprocessing.contract.domain.InternalModel;
 import com.bondplatform.dataprocessing.contract.domain.MappingContract;
 import com.bondplatform.dataprocessing.publication.domain.DailyMarketSummary;
@@ -23,9 +25,9 @@ import org.jspecify.annotations.Nullable;
  * sections 2.2 and 6.2).
  *
  * <p>The contract only renames: each canonical field's parsed value goes to the internal field the
- * contract names, and an internal field the contract does not map stays {@code null}. The trade
- * date and exchange come from the manifest, never from the row. Rows that are not {@link
- * Disposition#ACCEPTED} are not mapped.
+ * contract names, and an internal field the contract does not map stays {@code null}. A field whose
+ * invalid value was ignored maps to {@code null} too. The trade date and exchange come from the
+ * manifest, never from the row. Rows that are not {@link Disposition#ACCEPTED} are not mapped.
  */
 public final class DailyMarketSummaryMapper {
 
@@ -86,8 +88,9 @@ public final class DailyMarketSummaryMapper {
     Map<String, String> values = new HashMap<>();
     fields.forEach(
         (canonical, internal) -> {
-          String parsed = row.record().field(canonical).parsedValue();
-          if (parsed != null) {
+          CanonicalField field = row.record().field(canonical);
+          String parsed = field.parsedValue();
+          if (field.validationStatus() == ValidationStatus.PASSED && parsed != null) {
             values.put(internal, parsed);
           }
         });

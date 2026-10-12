@@ -46,7 +46,9 @@ public record RowCounts(
 
   /**
    * Returns the job outcome of a completely evaluated file: its {@link #status()}, these counts as
-   * the status API shows them (LLD section 20.3), and the error count.
+   * the status API shows them (LLD section 20.3), and the error count. A file whose rows were all
+   * accepted but which still has errors, from values its contract ignores, is {@link
+   * JobStatus#COMPLETED_WITH_ERRORS}.
    *
    * @param errorCount the issues the attempt recorded, superseded rows included
    * @throws ArithmeticException if the error count does not fit the job record
@@ -64,7 +66,11 @@ public record RowCounts(
             + ",\"supersededRows\":"
             + supersededRows
             + "}";
-    return new JobOutcome(status(), counts, Math.toIntExact(errorCount));
+    JobStatus status = status();
+    if (status == JobStatus.COMPLETED && errorCount > 0) {
+      status = JobStatus.COMPLETED_WITH_ERRORS;
+    }
+    return new JobOutcome(status, counts, Math.toIntExact(errorCount));
   }
 
   /** Returns these counts with one more record of the given disposition. */

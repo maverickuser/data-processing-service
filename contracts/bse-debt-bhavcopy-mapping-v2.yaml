@@ -6,9 +6,12 @@
 # come from the manifest, rows are upserted on (isin, tradeDate, exchangeName) with nulls
 # overwriting (section 7), and a trade for an unknown ISIN creates the security and emits one
 # security-details event (section 14).
+#
+# v2 (decision 0004): securityFields fills the row's security. The bhavcopy coupon rate takes
+# precedence over NSDL's, and the latest trade date wins; the precedence is fixed in code.
 id: bse-debt-bhavcopy-mapping
-version: v1
-sourceContract: bse-debt-bhavcopy-csv-v1
+version: v2
+sourceContract: bse-debt-bhavcopy-csv-v2
 
 target: securities_data.security_daily_market_summaries
 fields:
@@ -22,3 +25,6 @@ fields:
   turnover: turnover
   face_value: faceValue
   isin: isin
+
+securityFields:
+  coupon_rate: couponRate                  # { value, unit: PERCENT }

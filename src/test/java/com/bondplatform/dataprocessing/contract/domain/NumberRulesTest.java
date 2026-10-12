@@ -266,4 +266,46 @@ class NumberRulesTest {
     assertThat(percentNormalizer.normalize("%"))
         .isEqualTo(new FieldResult.NoValue<>(FieldPresence.PLACEHOLDER));
   }
+
+  // U-NUM-06
+  @ParameterizedTest
+  @CsvSource(
+      delimiter = '|',
+      textBlock =
+          """
+          8.94%|8.94
+          8.94 %|8.94
+          8.94|8.94
+          8.1% (cat I & II and 0.2% additn int for cat III)|8.1
+          7.53% (IF ON RECORD DATE BONDS HELD BY RII, ELSE 7.28% p.a)|7.53
+          9.01 % (REFER REMARKS)|9.01
+          RESET RATE (REFER REMARKS)|RESET RATE (REFER REMARKS)
+          %|''
+          """)
+  void keepsTheTextBeforeTheFirstPercentSign(String text, String expected) {
+    Normalizer normalizer = registry.normalizerFor(List.of("trim", "keepBeforeFirstPercent"));
+
+    assertThat(normalizer.normalize(text)).isEqualTo(new FieldResult.Valid<>(expected));
+  }
+
+  // U-NUM-07
+  @ParameterizedTest
+  @ValueSource(strings = {"0", "00", "0.0", "0.00", "  0  "})
+  void zeroIsNoValue(String text) {
+    Normalizer normalizer =
+        registry.normalizerFor(
+            List.of("trim", "blankToNull", "zeroToNull", "normalizeGroupedNumber"));
+
+    assertThat(normalizer.normalize(text))
+        .isEqualTo(new FieldResult.NoValue<>(FieldPresence.PLACEHOLDER));
+  }
+
+  // U-NUM-07
+  @ParameterizedTest
+  @ValueSource(strings = {"0.01", "10", "1,000", "0.", "-0"})
+  void numbersOtherThanZeroAreKept(String text) {
+    Normalizer normalizer = registry.normalizerFor(List.of("zeroToNull"));
+
+    assertThat(normalizer.normalize(text)).isEqualTo(new FieldResult.Valid<>(text));
+  }
 }

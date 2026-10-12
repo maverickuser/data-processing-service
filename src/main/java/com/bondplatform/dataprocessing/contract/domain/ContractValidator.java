@@ -10,6 +10,7 @@ import com.bondplatform.dataprocessing.contract.domain.SourceContract.RowRule;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -35,10 +36,11 @@ public final class ContractValidator {
   private static final String TRIM = "trim";
   private static final String UPPERCASE = "uppercase";
   private static final String GROUPED_NUMBER = "normalizeGroupedNumber";
-  private static final String PERCENT_NORMALIZER = "stripTrailingPercent";
+  private static final Set<String> PERCENT_NORMALIZERS =
+      Set.of("stripTrailingPercent", "keepBeforeFirstPercent");
   private static final String NON_NEGATIVE = "nonNegative";
   private static final Set<FieldType> CSV_TYPES =
-      Set.of(FieldType.TEXT, FieldType.DECIMAL, FieldType.INTEGER);
+      Set.of(FieldType.TEXT, FieldType.DECIMAL, FieldType.INTEGER, FieldType.PERCENT);
   private static final Set<FieldType> JSON_TYPES =
       Set.of(FieldType.TEXT, FieldType.DATE, FieldType.DECIMAL, FieldType.PERCENT);
   private static final Set<FieldType> NUMERIC_TYPES =
@@ -131,15 +133,20 @@ public final class ContractValidator {
         .ifPresent(e -> problems.add(at + ": " + e));
     unknownRule(() -> rules.numberValidatorFor(field.validate()))
         .ifPresent(e -> problems.add(at + ": " + e));
-    boolean numeric = NUMERIC_TYPES.contains(field.type());
     List<String> normalize = field.normalize();
     if (normalize.isEmpty() || !normalize.get(0).equals(TRIM)) {
       problems.add(at + " must be normalized with " + TRIM + " first");
     }
-    if (normalize.contains(PERCENT_NORMALIZER)) {
-      problems.add(
-          at + " is normalized with " + PERCENT_NORMALIZER + ", which CSV does not support");
+    normalize.stream()
+        .filter(PERCENT_NORMALIZERS::contains)
+        .distinct()
+        .forEach(
+            rule ->
+                problems.add(at + " is normalized with " + rule + ", which CSV does not support"));
+    if (field.ignoreInvalid() && field.requiredValue()) {
+      problems.add(at + " requires a value, so it cannot ignore an invalid one");
     }
+    boolean numeric = NUMERIC_TYPES.contains(field.type());
     if (numeric && (normalize.isEmpty() || !normalize.getLast().equals(GROUPED_NUMBER))) {
       problems.add(at + " is a number and must be normalized with " + GROUPED_NUMBER + " last");
     }
@@ -171,6 +178,8 @@ public final class ContractValidator {
                 problems.add("row rule operand '" + operand + "' is not a declared field");
               } else if (!NUMERIC_TYPES.contains(field.type())) {
                 problems.add("row rule operand '" + operand + "' is not a number");
+              } else if (field.ignoreInvalid()) {
+                problems.add("row rule operand '" + operand + "' ignores invalid values");
               }
             });
     return problems;
@@ -227,15 +236,32 @@ public final class ContractValidator {
   private static List<String> csvMappingProblems(
       MappingContract mapping, SourceContract.Csv source) {
     List<String> problems = new ArrayList<>();
+    // Each canonical field goes either to the summary or to the row's security, never both.
+    Map<String, FieldType> canonicalTypes = types(source.fields(), CsvField::name, CsvField::type);
+    Map<String, FieldType> summaryTypes = new LinkedHashMap<>(canonicalTypes);
+    summaryTypes.keySet().removeAll(mapping.securityFields().keySet());
+    Map<String, FieldType> securityTypes = new LinkedHashMap<>(canonicalTypes);
+    securityTypes.keySet().retainAll(mapping.securityFields().keySet());
+    new TreeSet<>(mapping.securityFields().keySet())
+        .stream()
+            .filter(mapping.primary().fields()::containsKey)
+            .forEach(
+                canonical ->
+                    problems.add(
+                        "'" + canonical + "' is mapped by both fields and securityFields"));
     problems.addAll(
-        recordProblems(
-            mapping.primary(),
-            InternalModel.DAILY_MARKET_SUMMARIES,
-            types(source.fields(), CsvField::name, CsvField::type)));
+        recordProblems(mapping.primary(), InternalModel.DAILY_MARKET_SUMMARIES, summaryTypes));
     String keyTarget = mapping.primary().fields().get(source.duplicateKey());
     if (keyTarget != null && !keyTarget.equals("isin")) {
       problems.add("fields must map '" + source.duplicateKey() + "' to 'isin'");
     }
+    problems.addAll(
+        fieldMappingProblems(
+            "securityFields",
+            mapping.securityFields(),
+            Map.of(),
+            securityTypes,
+            InternalModel.target(InternalModel.SECURITIES).orElseThrow()));
     mapping.collections().stream()
         .map(
             collection ->
@@ -252,6 +278,10 @@ public final class ContractValidator {
             mapping.primary(),
             InternalModel.SECURITIES,
             types(source.scalars(), JsonField::name, JsonField::type)));
+    if (!mapping.securityFields().isEmpty()) {
+      problems.add(
+          "securityFields is only for CSV; the fields mapping already targets the security");
+    }
     Map<String, JsonCollection> declared = byName(source.collections(), JsonCollection::name);
     problems.addAll(
         duplicates(

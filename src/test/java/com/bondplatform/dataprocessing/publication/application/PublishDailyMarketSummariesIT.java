@@ -11,10 +11,12 @@ import com.bondplatform.dataprocessing.job.domain.JobOutcome;
 import com.bondplatform.dataprocessing.job.domain.JobStatus;
 import com.bondplatform.dataprocessing.persistence.PostgresIntegrationTest;
 import com.bondplatform.dataprocessing.publication.domain.DailyMarketSummary;
+import com.bondplatform.dataprocessing.publication.domain.ExchangeCoupon;
 import com.bondplatform.dataprocessing.publication.domain.SourceReference;
 import com.bondplatform.dataprocessing.shared.domain.ExchangeName;
 import com.bondplatform.dataprocessing.shared.domain.Isin;
 import com.bondplatform.dataprocessing.shared.domain.JobId;
+import com.bondplatform.dataprocessing.shared.domain.Percent;
 import com.bondplatform.dataprocessing.shared.domain.TradeDate;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -52,6 +54,7 @@ class PublishDailyMarketSummariesIT extends PostgresIntegrationTest {
         publish.publish(
             job,
             List.of(summary(job, ALPHA, "100.5"), summary(job, BETA, "99")),
+            List.of(),
             outcome(JobStatus.COMPLETED));
 
     assertThat(created).containsExactlyInAnyOrder(Isin.of(ALPHA), Isin.of(BETA));
@@ -67,12 +70,13 @@ class PublishDailyMarketSummariesIT extends PostgresIntegrationTest {
     publish.publish(
         first,
         List.of(summary(first, ALPHA, "100.5"), summary(first, BETA, "99")),
+        List.of(),
         outcome(JobStatus.COMPLETED));
 
     ClaimedJob second = start("run_102");
     var created =
         publish.publish(
-            second, List.of(summary(second, ALPHA, null)), outcome(JobStatus.COMPLETED));
+            second, List.of(summary(second, ALPHA, null)), List.of(), outcome(JobStatus.COMPLETED));
 
     assertThat(created).isEmpty();
     assertThat(stored(ALPHA))
@@ -93,9 +97,12 @@ class PublishDailyMarketSummariesIT extends PostgresIntegrationTest {
       List<Future<Set<Isin>>> results =
           pool.invokeAll(
               List.of(
-                  () -> publish.publish(first, List.of(summary(first, ALPHA, "1")), completed()),
                   () ->
-                      publish.publish(second, List.of(summary(second, ALPHA, "2")), completed())));
+                      publish.publish(
+                          first, List.of(summary(first, ALPHA, "1")), List.of(), completed()),
+                  () ->
+                      publish.publish(
+                          second, List.of(summary(second, ALPHA, "2")), List.of(), completed())));
       int created = 0;
       for (Future<Set<Isin>> result : results) {
         created += result.get().size();
@@ -118,6 +125,7 @@ class PublishDailyMarketSummariesIT extends PostgresIntegrationTest {
                 publish.publish(
                     notRunning,
                     List.of(summary(job, ALPHA, "100.5"), summary(job, BETA, "99")),
+                    List.of(),
                     outcome(JobStatus.COMPLETED)))
         .isInstanceOf(IllegalStateException.class);
 
@@ -125,6 +133,61 @@ class PublishDailyMarketSummariesIT extends PostgresIntegrationTest {
     assertThat(count("security_daily_market_summaries")).isZero();
     assertThat(jobStatus(job)).isEqualTo("PROCESSING");
     assertThat(detailRequests()).isEmpty();
+  }
+
+  /** I-COUPON-01: the bhavcopy rate replaces NSDL's, and the latest trade date wins. */
+  @Test
+  void bhavcopyCouponReplacesNsdlAndAnOlderTradeDateNeverReplacesANewerOne() {
+    ClaimedJob first = start("run_101");
+    publish.publish(
+        first, List.of(summary(first, BETA, "99")), List.of(), outcome(JobStatus.COMPLETED));
+    jdbc.sql(
+            """
+            UPDATE securities_data.securities
+            SET coupon_rate_value = 9, coupon_rate_unit = 'PERCENT', coupon_rate_source = 'NSDL'
+            WHERE isin = :isin
+            """)
+        .param("isin", BETA)
+        .update();
+
+    ClaimedJob day5 = start("run_102");
+    publish.publish(
+        day5,
+        List.of(summary(day5, ALPHA, "100"), summary(day5, BETA, "99")),
+        List.of(
+            coupon(day5, ALPHA, "8.10", "2026-01-05"), coupon(day5, BETA, "9.25", "2026-01-05")),
+        outcome(JobStatus.COMPLETED));
+
+    assertThat(coupon(ALPHA))
+        .containsEntry("coupon_rate_source", "BSE_BHAVCOPY")
+        .containsEntry("coupon_rate_unit", "PERCENT")
+        .containsEntry("trade_date", "2026-01-05")
+        .containsEntry("source_request_id", day5.job().id().toString());
+    assertThat((BigDecimal) coupon(BETA).get("coupon_rate_value")).isEqualByComparingTo("9.25");
+    assertThat(coupon(BETA)).containsEntry("coupon_rate_source", "BSE_BHAVCOPY");
+    final Object updatedAfterDay5 = coupon(ALPHA).get("updated_at");
+
+    ClaimedJob day2 = start("run_103");
+    publish.publish(
+        day2,
+        List.of(summary(day2, ALPHA, "100")),
+        List.of(coupon(day2, ALPHA, "7.50", "2026-01-02")),
+        outcome(JobStatus.COMPLETED));
+
+    assertThat((BigDecimal) coupon(ALPHA).get("coupon_rate_value")).isEqualByComparingTo("8.10");
+    assertThat(coupon(ALPHA)).containsEntry("trade_date", "2026-01-05");
+
+    ClaimedJob day9 = start("run_104");
+    publish.publish(
+        day9,
+        List.of(summary(day9, ALPHA, "100")),
+        List.of(coupon(day9, ALPHA, "8.1", "2026-01-09")),
+        outcome(JobStatus.COMPLETED));
+
+    assertThat(coupon(ALPHA))
+        .containsEntry("trade_date", "2026-01-09")
+        .containsEntry("source_request_id", day5.job().id().toString())
+        .containsEntry("updated_at", updatedAfterDay5);
   }
 
   private ClaimedJob start(String fetchRunId) {
@@ -156,6 +219,28 @@ class PublishDailyMarketSummariesIT extends PostgresIntegrationTest {
         null,
         new BigDecimal("1000"),
         new SourceReference(job.job().id(), "BSE_fgroup01012026.csv", "2"));
+  }
+
+  private static ExchangeCoupon coupon(ClaimedJob job, String isin, String rate, String tradeDate) {
+    return new ExchangeCoupon(
+        Isin.of(isin),
+        TradeDate.parseIso(tradeDate),
+        Percent.parse(rate),
+        new SourceReference(job.job().id(), "BSE_fgroup01012026.csv", "2"));
+  }
+
+  private Map<String, Object> coupon(String isin) {
+    return jdbc.sql(
+            """
+            SELECT coupon_rate_value, coupon_rate_unit, coupon_rate_source,
+                   coupon_rate_trade_date::text AS trade_date,
+                   field_sources -> 'couponRate' ->> 'sourceRequestId' AS source_request_id,
+                   updated_at
+            FROM securities_data.securities WHERE isin = :isin
+            """)
+        .param("isin", isin)
+        .query()
+        .singleRow();
   }
 
   private static JobOutcome completed() {

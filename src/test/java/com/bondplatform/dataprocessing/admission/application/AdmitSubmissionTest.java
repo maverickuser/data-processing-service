@@ -39,7 +39,7 @@ class AdmitSubmissionTest {
               new YamlContractLoader(), new ContractValidator(RuleRegistry.standard()))
           .load(
               List.of(
-                  new ContractPair("bse-debt-bhavcopy-csv-v1", "bse-debt-bhavcopy-mapping-v1"),
+                  new ContractPair("bse-debt-bhavcopy-csv-v2", "bse-debt-bhavcopy-mapping-v2"),
                   new ContractPair("nsdl-security-json-v1", "nsdl-security-mapping-v1")));
 
   private final InMemoryRequests requests = new InMemoryRequests();
@@ -98,7 +98,7 @@ class AdmitSubmissionTest {
 
     NewIngestionRequest stored = requests.inserted.get(0);
     assertThat(stored.orderingGroup().value()).isEqualTo("trade-date:2026-09-21");
-    assertThat(stored.contracts().source().name()).isEqualTo("bse-debt-bhavcopy-csv-v1");
+    assertThat(stored.contracts().source().name()).isEqualTo("bse-debt-bhavcopy-csv-v2");
     assertThat(stored.inputsJson())
         .isEqualTo("{\"exchangeName\":\"BSE\",\"tradeDate\":\"2026-09-21\"}");
   }

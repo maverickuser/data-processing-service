@@ -215,7 +215,13 @@ class CsvRowValidatorTest {
             1,
             List.of(
                 new SourceContract.CsvField(
-                    "listed_on", "Listed On", FieldType.DATE, false, List.of("trim"), List.of())),
+                    "listed_on",
+                    "Listed On",
+                    FieldType.DATE,
+                    false,
+                    List.of("trim"),
+                    List.of(),
+                    false)),
             List.of(),
             "listed_on");
 
@@ -245,5 +251,52 @@ class CsvRowValidatorTest {
 
   private static CsvRow row(Map<String, String> overrides) {
     return BhavcopyContract.row(2, overrides);
+  }
+
+  // U-CSV-13
+  @Test
+  void couponIsPercentAndZeroOrBlankIsNoValue() {
+    CanonicalField coupon = field(Map.of("coupon_rate", " 8.50 "), "coupon_rate");
+
+    assertThat(coupon.dataType()).isEqualTo(FieldType.PERCENT);
+    assertThat(coupon.parsedValue()).isEqualTo("8.50");
+    assertThat(coupon.validationStatus()).isEqualTo(ValidationStatus.PASSED);
+    for (String noValue : List.of("0", "0.00", "  ")) {
+      CanonicalField none = field(Map.of("coupon_rate", noValue), "coupon_rate");
+      assertThat(none.validationStatus()).isEqualTo(ValidationStatus.PASSED);
+      assertThat(none.parsedValue()).isNull();
+    }
+  }
+
+  // U-CSV-13
+  @ParameterizedTest
+  @CsvSource(
+      delimiter = '|',
+      textBlock =
+          """
+          9 % p.a.|INVALID_DECIMAL
+          -1|NEGATIVE_VALUE
+          1,2,3|INVALID_NUMBER_GROUPING
+          """)
+  void invalidCouponIsIgnoredWithItsErrorAndTheRowStillPasses(String raw, ErrorCode code) {
+    CanonicalRecord record = validator.validate(row(Map.of("coupon_rate", raw)));
+    CanonicalField coupon = record.field("coupon_rate");
+
+    assertThat(coupon.validationStatus()).isEqualTo(ValidationStatus.IGNORED);
+    assertThat(coupon.errors()).extracting(ValidationIssue::code).containsExactly(code);
+    assertThat(coupon.validNumber()).isEmpty();
+    assertThat(record.validationStatus()).isEqualTo(ValidationStatus.PASSED);
+  }
+
+  // U-CSV-13
+  @Test
+  void couponBeyondPercentBoundIsIgnored() {
+    CanonicalField coupon = field(Map.of("coupon_rate", "1" + "0".repeat(30)), "coupon_rate");
+
+    assertThat(coupon.validationStatus()).isEqualTo(ValidationStatus.IGNORED);
+    assertThat(coupon.parsedValue()).isNull();
+    assertThat(coupon.errors())
+        .extracting(ValidationIssue::code)
+        .containsExactly(ErrorCode.INVALID_DECIMAL);
   }
 }

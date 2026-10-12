@@ -188,6 +188,32 @@ class PublishSecurityDetailsIT extends PostgresIntegrationTest {
     assertThat(jobStatus(job)).isEqualTo("FAILED");
   }
 
+  /** I-COUPON-02: an NSDL rate is the backup, never stored over a bhavcopy rate. */
+  @Test
+  void couponRateIsStoredWithItsSourceOnlyWhileNoBhavcopyRateExists() {
+    ClaimedJob first = start("run_201");
+    publish.publish(first, details(first, "Simple", List.of()), FILES, completed(), 0);
+    assertThat(coupon()).containsEntry("coupon_rate_source", "NSDL");
+    assertThat(coupon().get("coupon_rate_trade_date")).isNull();
+    jdbc.sql(
+            """
+            UPDATE securities_data.securities
+            SET coupon_rate_value = 9.10, coupon_rate_source = 'BSE_BHAVCOPY',
+                coupon_rate_trade_date = DATE '2026-10-01'
+            WHERE isin = :isin
+            """)
+        .param("isin", ISIN.value())
+        .update();
+
+    ClaimedJob second = start("run_202");
+    JobOutcome outcome =
+        publish.publish(second, details(second, "Simple", List.of()), FILES, completed(), 0);
+
+    assertThat(outcome).isEqualTo(FILES.outcome(JobStatus.COMPLETED, 0, 0, 0));
+    assertThat((BigDecimal) coupon().get("coupon_rate_value")).isEqualByComparingTo("9.10");
+    assertThat(coupon()).containsEntry("coupon_rate_source", "BSE_BHAVCOPY");
+  }
+
   private ClaimedJob start(String fetchRunId) {
     Map<String, Object> event = SubmissionEvents.nsdl(fetchRunId, ISIN.value());
     JobId id = admitSubmission.admit(SubmissionEvents.submissionOf(event), event).jobId();
@@ -255,6 +281,17 @@ class PublishSecurityDetailsIT extends PostgresIntegrationTest {
             SELECT issuer_name, coupon_type, coupon_rate_value, coupon_rate_unit,
                    collateral_status, asset_coverage_value, asset_coverage_unit,
                    field_sources::text AS field_sources, updated_at
+            FROM securities_data.securities WHERE isin = :isin
+            """)
+        .param("isin", ISIN.value())
+        .query()
+        .singleRow();
+  }
+
+  private Map<String, Object> coupon() {
+    return jdbc.sql(
+            """
+            SELECT coupon_rate_value, coupon_rate_source, coupon_rate_trade_date
             FROM securities_data.securities WHERE isin = :isin
             """)
         .param("isin", ISIN.value())

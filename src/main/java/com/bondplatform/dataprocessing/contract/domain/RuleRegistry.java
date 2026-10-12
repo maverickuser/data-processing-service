@@ -30,7 +30,9 @@ public final class RuleRegistry {
             "blankToNull", TextNormalizers.BLANK_TO_NULL,
             "uppercase", TextNormalizers.UPPERCASE,
             "normalizeGroupedNumber", NumberNormalizers.GROUPED_NUMBER,
-            "stripTrailingPercent", NumberNormalizers.STRIP_TRAILING_PERCENT),
+            "stripTrailingPercent", NumberNormalizers.STRIP_TRAILING_PERCENT,
+            "keepBeforeFirstPercent", NumberNormalizers.KEEP_BEFORE_FIRST_PERCENT,
+            "zeroToNull", NumberNormalizers.ZERO_TO_NULL),
         Map.of("nonNegative", NumberValidators.NON_NEGATIVE));
   }
 

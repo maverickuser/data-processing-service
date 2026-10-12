@@ -18,14 +18,14 @@ class ContractValidatorTest {
   private static final DatasetUrn DATASET = new DatasetUrn("urn:bond-platform:dataset:sample");
   private static final CsvField ISIN =
       new CsvField(
-          "isin", "ISIN No.", FieldType.TEXT, true, List.of("trim", "uppercase"), List.of());
+          "isin", "ISIN No.", FieldType.TEXT, true, List.of("trim", "uppercase"), List.of(), false);
 
   private final ContractValidator validator = new ContractValidator(RuleRegistry.standard());
 
   @Test
   void duplicateCsvFieldNameIsReported() {
     CsvField sameNameOtherHeader =
-        new CsvField("isin", "Other", FieldType.TEXT, false, List.of("trim"), List.of());
+        new CsvField("isin", "Other", FieldType.TEXT, false, List.of("trim"), List.of(), false);
     SourceContract contract =
         new SourceContract.Csv(
             new ContractId("sample-csv", "v1"),

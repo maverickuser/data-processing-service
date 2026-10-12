@@ -26,9 +26,10 @@ import org.jspecify.annotations.Nullable;
  *   <li>Text accepts JSON strings only; surrounding whitespace is removed and case is kept.
  *   <li>Dates accept strings in {@code DD-MM-YYYY} or {@code YYYY-MM-DD} and become ISO dates.
  *   <li>Decimals accept JSON numbers, or strings with valid Western or Indian comma grouping; a
- *       percent may also end in {@code %}. Both must not be negative; zero is valid. A percent is
- *       in percentage points: {@code "8.94%"} is 8.94, and has at most 30 digits on each side of
- *       the decimal point, as {@link Percent} requires.
+ *       percent string is read only up to its first {@code %}, so {@code "8.1% (cat I & II)"} is
+ *       8.1. Both must not be negative; zero is valid. A percent is in percentage points: {@code
+ *       "8.94%"} is 8.94, and has at most 30 digits on each side of the decimal point, as {@link
+ *       Percent} requires.
  * </ul>
  *
  * <p>A value of the wrong JSON kind is {@code INVALID_TYPE}; it is never converted. A JSON number's
@@ -45,7 +46,7 @@ public final class JsonFieldReader {
   public JsonFieldReader(RuleRegistry registry) {
     this.decimalText = registry.normalizerFor(List.of("trim", "normalizeGroupedNumber"));
     this.percentText =
-        registry.normalizerFor(List.of("trim", "stripTrailingPercent", "normalizeGroupedNumber"));
+        registry.normalizerFor(List.of("trim", "keepBeforeFirstPercent", "normalizeGroupedNumber"));
     this.nonNegative = registry.numberValidatorFor(List.of("nonNegative"));
   }
 

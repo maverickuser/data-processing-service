@@ -148,6 +148,21 @@ class DailyMarketSummaryMapperTest {
         .hasMessage("Accepted record 7 has no ISIN");
   }
 
+  @Test
+  void fieldWhoseInvalidValueWasIgnoredMapsToNull() {
+    MappingContract couponAsFaceValue =
+        contract(
+            InternalModel.DAILY_MARKET_SUMMARIES,
+            Map.of("isin", "isin", "coupon_rate", "faceValue"));
+
+    DailyMarketSummary summary =
+        new DailyMarketSummaryMapper(couponAsFaceValue)
+            .map(GoldenBhavcopy.RUN, BSE, GoldenBhavcopy.acceptedWithIgnoredCoupon())
+            .orElseThrow();
+
+    assertThat(summary.faceValue()).isNull();
+  }
+
   private static CanonicalRow golden(long recordNumber) {
     return GoldenBhavcopy.rows().stream()
         .filter(row -> row.record().recordNumber() == recordNumber)

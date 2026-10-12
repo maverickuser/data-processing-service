@@ -2,9 +2,12 @@ package com.bondplatform.dataprocessing.publication.adapter.persistence;
 
 import com.bondplatform.dataprocessing.contract.domain.FieldType;
 import com.bondplatform.dataprocessing.publication.application.SecurityRepository;
+import com.bondplatform.dataprocessing.publication.domain.CouponSource;
+import com.bondplatform.dataprocessing.publication.domain.ExchangeCoupon;
 import com.bondplatform.dataprocessing.publication.domain.SecurityScalars;
 import com.bondplatform.dataprocessing.publication.domain.SecurityValue;
 import com.bondplatform.dataprocessing.publication.domain.SourceReference;
+import com.bondplatform.dataprocessing.publication.domain.StoredCoupon;
 import com.bondplatform.dataprocessing.shared.domain.CanonicalJson;
 import com.bondplatform.dataprocessing.shared.domain.Isin;
 import com.bondplatform.dataprocessing.shared.domain.Percent;
@@ -32,7 +35,8 @@ import org.springframework.stereotype.Repository;
  *
  * <p>Each field's source is kept in the {@code field_sources} JSON object under the field's
  * internal name, as {@code {"sourceRequestId", "sourceFile", "sourceLocation"}}: the same reference
- * the collection tables keep in columns (LLD section 17.5).
+ * the collection tables keep in columns (LLD section 17.5). The coupon rate also keeps which
+ * dataset supplied it and, for a bhavcopy, its trade date (decision 0004).
  */
 @Repository
 public class JdbcSecurityRepository implements SecurityRepository {
@@ -68,6 +72,29 @@ public class JdbcSecurityRepository implements SecurityRepository {
           new Column("couponRate", FieldType.PERCENT, "coupon_rate_value", "coupon_rate_unit"),
           new Column("couponType", FieldType.TEXT, "coupon_type", null),
           new Column("listingStatus", FieldType.TEXT, "listing_status", null));
+
+  /** Locks in ISIN order, the same order {@link #INSERT_MISSING} takes, so it cannot deadlock. */
+  static final String LOCK_COUPONS =
+      """
+      SELECT isin, coupon_rate_value, coupon_rate_source, coupon_rate_trade_date
+      FROM securities_data.securities
+      WHERE isin = ANY(?::text[])
+      ORDER BY isin
+      FOR UPDATE
+      """;
+
+  static final String REPLACE_COUPON =
+      """
+      UPDATE securities_data.securities
+      SET coupon_rate_value = ?, coupon_rate_unit = 'PERCENT', coupon_rate_source = 'BSE_BHAVCOPY',
+          coupon_rate_trade_date = ?, field_sources = field_sources || ?::jsonb, updated_at = ?
+      WHERE isin = ?
+      """;
+
+  static final String ADVANCE_COUPON_TRADE_DATE =
+      "UPDATE securities_data.securities SET coupon_rate_trade_date = ? WHERE isin = ?";
+
+  private static final String COUPON_RATE = "couponRate";
 
   static final String LOCK_VALUES =
       "SELECT "
@@ -125,6 +152,11 @@ public class JdbcSecurityRepository implements SecurityRepository {
                 assignments.add(column.unit() + " = ?");
                 arguments.add(Percent.UNIT);
               }
+              if (field.equals(COUPON_RATE)) {
+                assignments.add("coupon_rate_source = ?");
+                arguments.add(CouponSource.NSDL.name());
+                assignments.add("coupon_rate_trade_date = NULL");
+              }
               sources.put(field, source(value.source()));
             });
     for (String field : changes.cleared()) {
@@ -132,6 +164,10 @@ public class JdbcSecurityRepository implements SecurityRepository {
       assignments.add(column.value() + " = NULL");
       if (column.unit() != null) {
         assignments.add(column.unit() + " = NULL");
+      }
+      if (field.equals(COUPON_RATE)) {
+        assignments.add("coupon_rate_source = NULL");
+        assignments.add("coupon_rate_trade_date = NULL");
       }
     }
     // jsonb - text[] removes the cleared fields' sources; || then sets the changed ones.
@@ -147,6 +183,57 @@ public class JdbcSecurityRepository implements SecurityRepository {
             + " WHERE isin = ?";
     if (jdbc.update(sql, arguments.toArray()) == 0) {
       throw new IllegalStateException("No security " + isin);
+    }
+  }
+
+  @Override
+  public Map<Isin, StoredCoupon> lockCoupons(Collection<Isin> isins) {
+    if (isins.isEmpty()) {
+      return Map.of();
+    }
+    String[] values = isins.stream().map(Isin::value).distinct().toArray(String[]::new);
+    Map<Isin, StoredCoupon> coupons = new LinkedHashMap<>();
+    jdbc.query(
+        LOCK_COUPONS,
+        row -> {
+          BigDecimal rate = row.getBigDecimal("coupon_rate_value");
+          String source = row.getString("coupon_rate_source");
+          coupons.put(
+              new Isin(row.getString("isin")),
+              new StoredCoupon(
+                  rate == null ? null : Percent.of(rate),
+                  source == null ? null : CouponSource.valueOf(source),
+                  row.getObject("coupon_rate_trade_date", LocalDate.class)));
+        },
+        (Object) values);
+    return coupons;
+  }
+
+  @Override
+  public void storeBhavcopyCoupons(
+      List<ExchangeCoupon> replaced, List<ExchangeCoupon> advanced, Instant changedAt) {
+    OffsetDateTime timestamp = changedAt.atOffset(ZoneOffset.UTC);
+    if (!replaced.isEmpty()) {
+      jdbc.batchUpdate(
+          REPLACE_COUPON,
+          replaced.stream()
+              .map(
+                  coupon ->
+                      new Object[] {
+                        coupon.rate().value(),
+                        coupon.tradeDate().value(),
+                        CanonicalJson.of(Map.of(COUPON_RATE, source(coupon.source()))),
+                        timestamp,
+                        coupon.isin().value()
+                      })
+              .toList());
+    }
+    if (!advanced.isEmpty()) {
+      jdbc.batchUpdate(
+          ADVANCE_COUPON_TRADE_DATE,
+          advanced.stream()
+              .map(coupon -> new Object[] {coupon.tradeDate().value(), coupon.isin().value()})
+              .toList());
     }
   }
 

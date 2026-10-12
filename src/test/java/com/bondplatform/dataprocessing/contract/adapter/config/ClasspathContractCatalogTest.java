@@ -27,7 +27,7 @@ import org.junit.jupiter.api.Test;
 class ClasspathContractCatalogTest {
 
   private static final ContractPair BSE =
-      new ContractPair("bse-debt-bhavcopy-csv-v1", "bse-debt-bhavcopy-mapping-v1");
+      new ContractPair("bse-debt-bhavcopy-csv-v2", "bse-debt-bhavcopy-mapping-v2");
   private static final ContractPair NSDL =
       new ContractPair("nsdl-security-json-v1", "nsdl-security-mapping-v1");
   private static final DatasetUrn BSE_DATASET =
@@ -45,8 +45,8 @@ class ClasspathContractCatalogTest {
 
     assertThat(registry.datasets()).containsExactlyInAnyOrder(BSE_DATASET, NSDL_DATASET);
     PinnedContracts bse = registry.contractsFor(BSE_DATASET);
-    assertThat(bse.source().id().name()).isEqualTo("bse-debt-bhavcopy-csv-v1");
-    assertThat(bse.mapping().id().name()).isEqualTo("bse-debt-bhavcopy-mapping-v1");
+    assertThat(bse.source().id().name()).isEqualTo("bse-debt-bhavcopy-csv-v2");
+    assertThat(bse.mapping().id().name()).isEqualTo("bse-debt-bhavcopy-mapping-v2");
     assertThat(bse.sourceHash()).startsWith("sha256:").hasSize(71);
     assertThat(bse.mappingHash()).startsWith("sha256:").isNotEqualTo(bse.sourceHash());
     assertThat(registry.contractsFor(NSDL_DATASET).mapping().collections()).hasSize(5);
@@ -87,7 +87,7 @@ class ClasspathContractCatalogTest {
     assertThatThrownBy(() -> catalog.load(List.of(mismatched)))
         .isInstanceOf(InvalidContractException.class)
         .hasMessageContaining("nsdl-security-mapping-v1")
-        .hasMessageContaining("is paired with 'bse-debt-bhavcopy-csv-v1'");
+        .hasMessageContaining("is paired with 'bse-debt-bhavcopy-csv-v2'");
   }
 
   @Test
@@ -99,7 +99,7 @@ class ClasspathContractCatalogTest {
 
     assertThatThrownBy(() -> catalog.load(List.of(new ContractPair("renamed-v1", BSE.mapping()))))
         .isInstanceOf(ContractFormatException.class)
-        .hasMessageContaining("renamed-v1.yaml declares the contract bse-debt-bhavcopy-csv-v1");
+        .hasMessageContaining("renamed-v1.yaml declares the contract bse-debt-bhavcopy-csv-v2");
   }
 
   @Test
@@ -125,7 +125,7 @@ class ClasspathContractCatalogTest {
 
     assertThatThrownBy(() -> catalog.load(List.of(BSE)))
         .isInstanceOf(UncheckedIOException.class)
-        .hasMessageContaining("bse-debt-bhavcopy-csv-v1.yaml");
+        .hasMessageContaining("bse-debt-bhavcopy-csv-v2.yaml");
   }
 
   private ClasspathContractCatalog catalogOver(Map<String, String> files) {

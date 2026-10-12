@@ -5,25 +5,32 @@ import java.util.List;
 import org.jspecify.annotations.Nullable;
 
 /**
- * A quarantined row with its reviewable issues, numbered in the run's issue order (LLD sections 4.3
- * and 17.5).
+ * A row with reviewable issues, numbered in the run's issue order (LLD sections 4.3 and 17.5): a
+ * quarantined row, or an accepted row with a field whose invalid value was ignored.
  *
- * @param row the quarantined row
+ * @param row the row
  * @param isin the row's normalized ISIN, or {@code null} if it has none
  * @param issues the row's issues: each field's errors in field order, then the row's errors
  */
 public record RejectedRow(CanonicalRow row, @Nullable String isin, List<ReviewIssue> issues) {
 
-  /** Checks that the row was not accepted. */
+  /** Checks that an accepted row has issues, which only its ignored fields can give it. */
   public RejectedRow {
-    if (row.disposition() == Disposition.ACCEPTED) {
-      throw new IllegalArgumentException("Record " + row.record().recordNumber() + " is accepted");
+    if (row.disposition() == Disposition.ACCEPTED && issues.isEmpty()) {
+      throw new IllegalArgumentException(
+          "Record " + row.record().recordNumber() + " is accepted and has no issues");
     }
     issues = List.copyOf(issues);
   }
 
+  /** Returns whether the row itself is kept for review, which only a quarantined row is. */
+  public boolean quarantined() {
+    return row.disposition() != Disposition.ACCEPTED;
+  }
+
   /**
-   * Lists a quarantined row's issues, numbering them from {@code firstSequenceNumber}.
+   * Lists a row's issues, numbering them from {@code firstSequenceNumber}. An accepted row has
+   * issues only for its ignored fields; its caller must not build one without them.
    *
    * @param isinField the canonical field holding the ISIN
    */

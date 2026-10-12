@@ -52,9 +52,9 @@ class RejectedRowTest {
   }
 
   @Test
-  void acceptedRowIsNotRejected() {
+  void acceptedRowWithoutIgnoredFieldsIsNotRejected() {
     assertThatThrownBy(() -> RejectedRow.of(ROWS.get(0), "isin", 1))
         .isInstanceOf(IllegalArgumentException.class)
-        .hasMessage("Record 2 is accepted");
+        .hasMessage("Record 2 is accepted and has no issues");
   }
 }

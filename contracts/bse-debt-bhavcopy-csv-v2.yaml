@@ -1,13 +1,17 @@
 # Stage 1 (source -> canonical) for urn:bond-platform:dataset:bse-debt-trades
 # Parses, normalizes and validates selected columns into canonical rows.
-# Stage 2 (canonical -> internal model) is bse-debt-bhavcopy-mapping-v1.yaml.
+# Stage 2 (canonical -> internal model) is bse-debt-bhavcopy-mapping-v2.yaml.
+#
+# v2 (decision 0004) adds coupon_rate from COUP0N (%), spelled with a zero as BSE writes it. Zero
+# means "not reported", like a blank, and an invalid value is ignored with an error instead of
+# quarantining the row: the row's market data is still published.
 #
 # This file holds only what the service reads from it; an unknown key fails startup.
 # Behaviour that is the same for every CSV dataset is fixed in code and specified in the LLD:
 # file encoding, CSV dialect, blank lines, header matching and filename rules (sections 2.1, 5.1),
 # number format (5.2), row-rule execution (5.3), and duplicate winner selection (5.4).
 id: bse-debt-bhavcopy-csv
-version: v1
+version: v2
 dataset: urn:bond-platform:dataset:bse-debt-trades
 format: csv
 
@@ -25,6 +29,7 @@ fields:
   turnover:         { header: Total Turnover,      type: decimal, requiredValue: false, normalize: [trim, blankToNull, normalizeGroupedNumber], validate: [nonNegative] }
   face_value:       { header: FACE VALUE,          type: decimal, requiredValue: false, normalize: [trim, blankToNull, normalizeGroupedNumber], validate: [nonNegative] }
   isin:             { header: ISIN No.,            type: text,    requiredValue: true,  normalize: [trim, blankToNull, uppercase] }
+  coupon_rate:      { header: COUP0N (%),          type: percent, requiredValue: false, normalize: [trim, blankToNull, zeroToNull, normalizeGroupedNumber], validate: [nonNegative], onInvalid: ignoreValue }
 
 rowRules:
   - { rule: greaterThanOrEqual, left: high_price,  right: low_price }

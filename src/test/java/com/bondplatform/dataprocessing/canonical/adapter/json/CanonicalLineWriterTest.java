@@ -28,10 +28,10 @@ class CanonicalLineWriterTest {
         .isEqualTo("data-fetch-service-artifacts");
     assertThat(node.get("source").get("key").asString()).endsWith("BSE_fgroup01012026.csv");
     assertThat(node.get("source").get("recordNumber").asLong()).isEqualTo(2);
-    assertThat(node.get("sourceContractVersion").asString()).isEqualTo("bse-debt-bhavcopy-csv-v1");
+    assertThat(node.get("sourceContractVersion").asString()).isEqualTo("bse-debt-bhavcopy-csv-v2");
     assertThat(node.get("mappingContractVersion").asString())
-        .isEqualTo("bse-debt-bhavcopy-mapping-v1");
-    assertThat(node.get("fields").size()).isEqualTo(10);
+        .isEqualTo("bse-debt-bhavcopy-mapping-v2");
+    assertThat(node.get("fields").size()).isEqualTo(11);
     assertThat(node.get("rowValidationStatus").asString()).isEqualTo("PASSED");
     assertThat(node.get("disposition").asString()).isEqualTo("ACCEPTED");
     assertThat(node.get("supersededBy").isNull()).isTrue();

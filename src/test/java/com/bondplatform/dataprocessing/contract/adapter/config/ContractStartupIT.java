@@ -63,13 +63,13 @@ class ContractStartupIT {
   void failsWhenThePairIsInconsistent() {
     runner
         .withPropertyValues(
-            PREFIX + "source=bse-debt-bhavcopy-csv-v1", PREFIX + "mapping=nsdl-security-mapping-v1")
+            PREFIX + "source=bse-debt-bhavcopy-csv-v2", PREFIX + "mapping=nsdl-security-mapping-v1")
         .run(
             context ->
                 assertThat(context)
                     .getFailure()
                     .rootCause()
-                    .hasMessageContaining("bse-debt-bhavcopy-csv-v1 with nsdl-security-mapping-v1")
+                    .hasMessageContaining("bse-debt-bhavcopy-csv-v2 with nsdl-security-mapping-v1")
                     .hasMessageContaining("is paired with"));
   }
 }

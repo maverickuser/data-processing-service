@@ -98,6 +98,34 @@ class JdbcRejectedRecordStoreTest {
     assertThat(issue.getValue("rawValue")).isEqualTo("\"-1000\"");
   }
 
+  // U-CSV-13
+  @Test
+  void acceptedRowStoresOnlyTheIssuesOfItsIgnoredFieldsWithTheActionTaken() {
+    RejectedRow ignored = RejectedRow.of(GoldenBhavcopy.acceptedWithIgnoredCoupon(), "isin", 3);
+
+    store.saveAll(GoldenBhavcopy.RUN, RUN_ID, List.of(ignored));
+
+    assertThat(batch(JdbcRejectedRecordStore.INSERT_RECORD)).isEmpty();
+    SqlParameterSource[] issues = batch(JdbcRejectedRecordStore.INSERT_ISSUE);
+    assertThat(issues).hasSize(1);
+    SqlParameterSource issue = issues[0];
+    assertThat(issue.getValue("rejectedRecordId")).isNull();
+    assertThat(issue.getValue("sequenceNumber")).isEqualTo(3L);
+    assertThat(issue.getValue("code")).isEqualTo("INVALID_DECIMAL");
+    assertThat(issue.getValue("isin")).isEqualTo("INE002B08CD2");
+    assertThat(issue.getValue("recordNumber")).isEqualTo(6);
+    assertThat(issue.getValue("field")).isEqualTo("coupon_rate");
+    assertThat(issue.getValue("rawValue")).isEqualTo("\"9 % p.a.\"");
+    assertThat(issue.getValue("actionTaken")).isEqualTo(JdbcRejectedRecordStore.VALUE_IGNORED);
+  }
+
+  @Test
+  void quarantinedRowIssuesHaveNoActionTaken() {
+    store.saveAll(GoldenBhavcopy.RUN, RUN_ID, List.of(RejectedRow.of(ROWS.get(7), "isin", 1)));
+
+    assertThat(batch(JdbcRejectedRecordStore.INSERT_ISSUE)[0].getValue("actionTaken")).isNull();
+  }
+
   @Test
   void emptyBatchSendsNothing() {
     store.saveAll(GoldenBhavcopy.RUN, RUN_ID, List.of());

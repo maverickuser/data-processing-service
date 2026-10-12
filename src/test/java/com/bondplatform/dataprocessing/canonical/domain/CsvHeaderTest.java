@@ -22,8 +22,8 @@ class CsvHeaderTest {
 
     CsvHeader header = resolved(headers);
 
-    assertThat(header.columnCount()).isEqualTo(11);
-    assertThat(header.positions()).hasSize(10);
+    assertThat(header.columnCount()).isEqualTo(12);
+    assertThat(header.positions()).hasSize(11);
     assertThat(header.positions())
         .containsEntry("number_of_trades", headers.indexOf("  number OF trades "));
     assertThat(header.positions()).containsEntry("isin", headers.indexOf("ISIN No."));

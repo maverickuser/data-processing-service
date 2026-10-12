@@ -36,7 +36,7 @@ class CsvCanonicalizerTest {
 
   @Test
   void rejectedFileHandsOverNoRows() {
-    String content = BhavcopyContract.HEADER + "\n1,INE1,1,1,1,1,1,1,1,1,x\n1,2\n";
+    String content = BhavcopyContract.HEADER + "\n1,INE1,1,1,1,1,1,1,1,1,1,x\n1,2\n";
 
     CsvCanonicalizer.Outcome outcome = canonicalizer.canonicalize(text(content), rows::add);
 
@@ -49,8 +49,8 @@ class CsvCanonicalizerTest {
 
   @Test
   void contentThatChangesBetweenReadsIsRefused() {
-    String first = BhavcopyContract.HEADER + "\n1,INE1,1,1,1,1,1,1,1,1,x\n";
-    Iterator<String> reads = List.of(first + "2,INE2,1,1,1,1,1,1,1,1,x\n", first).iterator();
+    String first = BhavcopyContract.HEADER + "\n1,INE1,1,1,1,1,1,1,1,1,1,x\n";
+    Iterator<String> reads = List.of(first + "2,INE2,1,1,1,1,1,1,1,1,1,x\n", first).iterator();
 
     assertThatThrownBy(() -> canonicalizer.canonicalize(() -> stream(reads.next()), rows::add))
         .isInstanceOf(IllegalStateException.class)
