@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.bondplatform.dataprocessing.publication.domain.CouponSource;
 import com.bondplatform.dataprocessing.publication.domain.ExchangeCoupon;
+import com.bondplatform.dataprocessing.publication.domain.LockedSecurity;
 import com.bondplatform.dataprocessing.publication.domain.SecurityScalars;
 import com.bondplatform.dataprocessing.publication.domain.SecurityValue;
 import com.bondplatform.dataprocessing.publication.domain.SourceReference;
@@ -25,6 +26,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -195,15 +197,22 @@ class JdbcSecurityRepositoryTest {
 
   // U-COUPON-06
   @Test
-  void lockCouponsLocksDistinctIsinsInOrderAndReadsTheirCoupons() throws SQLException {
+  void lockLocksDistinctIsinsInOrderAndReadsCouponsAndDetailsRequests() throws SQLException {
     ResultSet bhavcopy = mock(ResultSet.class);
     when(bhavcopy.getString("isin")).thenReturn(FIRST.value());
     when(bhavcopy.getBigDecimal("coupon_rate_value")).thenReturn(new BigDecimal("8.10"));
     when(bhavcopy.getString("coupon_rate_source")).thenReturn("BSE_BHAVCOPY");
     when(bhavcopy.getObject("coupon_rate_trade_date", LocalDate.class))
         .thenReturn(LocalDate.of(2026, 10, 1));
+    when(bhavcopy.getInt("details_request_count")).thenReturn(2);
+    when(bhavcopy.getObject("updated_at", OffsetDateTime.class))
+        .thenReturn(RECORDED_AT.atOffset(ZoneOffset.UTC));
+    when(bhavcopy.getObject("details_requested_at", OffsetDateTime.class))
+        .thenReturn(RECORDED_AT.atOffset(ZoneOffset.UTC));
     ResultSet none = mock(ResultSet.class);
     when(none.getString("isin")).thenReturn(SECOND.value());
+    when(none.getObject("updated_at", OffsetDateTime.class))
+        .thenReturn(RECORDED_AT.atOffset(ZoneOffset.UTC));
     ArgumentCaptor<Object[]> arguments = ArgumentCaptor.forClass(Object[].class);
     doAnswer(
             invocation -> {
@@ -213,30 +222,44 @@ class JdbcSecurityRepositoryTest {
               return null;
             })
         .when(jdbc)
-        .query(
-            eq(JdbcSecurityRepository.LOCK_COUPONS),
-            any(RowCallbackHandler.class),
-            arguments.capture());
+        .query(eq(JdbcSecurityRepository.LOCK), any(RowCallbackHandler.class), arguments.capture());
 
-    Map<Isin, StoredCoupon> coupons = repository.lockCoupons(List.of(FIRST, SECOND, FIRST));
+    Map<Isin, LockedSecurity> locked = repository.lock(List.of(FIRST, SECOND, FIRST));
 
     assertThat((String[]) arguments.getValue()[0]).containsExactly(FIRST.value(), SECOND.value());
-    assertThat(coupons)
+    assertThat(locked)
         .containsExactly(
             Map.entry(
                 FIRST,
-                new StoredCoupon(
-                    Percent.parse("8.1"), CouponSource.BSE_BHAVCOPY, LocalDate.of(2026, 10, 1))),
-            Map.entry(SECOND, StoredCoupon.NONE));
-    assertThat(JdbcSecurityRepository.LOCK_COUPONS)
-        .contains("ORDER BY isin")
-        .contains("FOR UPDATE");
+                new LockedSecurity(
+                    new StoredCoupon(
+                        Percent.parse("8.1"), CouponSource.BSE_BHAVCOPY, LocalDate.of(2026, 10, 1)),
+                    2,
+                    RECORDED_AT,
+                    RECORDED_AT)),
+            Map.entry(SECOND, new LockedSecurity(StoredCoupon.NONE, 0, null, RECORDED_AT)));
+    assertThat(JdbcSecurityRepository.LOCK).contains("ORDER BY isin").contains("FOR UPDATE");
   }
 
   @Test
-  void lockCouponsOfNoIsinsTouchesNothing() {
-    assertThat(repository.lockCoupons(List.of())).isEmpty();
+  void lockOfNoIsinsTouchesNothing() {
+    assertThat(repository.lock(List.of())).isEmpty();
+    repository.recordDetailsRequests(List.of(), RECORDED_AT);
     verifyNoInteractions(jdbc);
+  }
+
+  // U-DETAILS-03
+  @Test
+  void recordsOneMoreRequestForEachDistinctIsinWithItsTime() {
+    repository.recordDetailsRequests(List.of(FIRST, SECOND, FIRST), RECORDED_AT);
+
+    ArgumentCaptor<Object[]> arguments = ArgumentCaptor.forClass(Object[].class);
+    verify(jdbc).update(eq(JdbcSecurityRepository.RECORD_DETAILS_REQUESTS), arguments.capture());
+    assertThat(arguments.getValue()[0]).isEqualTo(RECORDED_AT.atOffset(ZoneOffset.UTC));
+    assertThat((String[]) arguments.getValue()[1]).containsExactly(FIRST.value(), SECOND.value());
+    assertThat(JdbcSecurityRepository.RECORD_DETAILS_REQUESTS)
+        .contains("details_request_count = details_request_count + 1")
+        .doesNotContain("updated_at");
   }
 
   // U-COUPON-06

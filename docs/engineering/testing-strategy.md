@@ -111,6 +111,10 @@ Following Google's small/medium/large split:
 | U-COUPON-04 | CSV publication locks the reported securities and stores replaced and advanced rates before the summaries | 15.3 |
 | U-COUPON-05 | JSON publication leaves out its coupon rate when a bhavcopy rate is stored | 15.3 |
 | U-COUPON-06 | The repository locks coupons in ISIN order, writes rate, source, trade date and reference for a replacement, only the trade date for an advance, and clears source and date with the rate | 15.3, 22.1 |
+| U-DETAILS-01 | An existing security without coupon rate is asked again under 3 requests and a day after the last; not sooner, not beyond 3, not with a coupon stored or in the file | 14.1 |
+| U-DETAILS-02 | CSV publication requests created securities and those asked again, in ISIN order, and records each request | 14.1 |
+| U-DETAILS-04 | A security whose `updated_at` and latest request are both at least 30 days old is refreshed, whatever its coupon and request count | 14.1 |
+| U-DETAILS-03 | The repository locks with request count and time, and counts requests without touching `updated_at` | 14.3, 22.1 |
 | U-SCAL-01 | A scalar changes only when the normalised value differs; an identical value produces no update | 13.5 |
 | U-SCAL-02 | No-value inputs never erase an existing value | 13.5 |
 | U-SCAL-03 | Two files supply different valid values: later S3 `LastModified` wins; object key breaks ties; precedence is per field | 13.5 |
@@ -219,6 +223,8 @@ Following Google's small/medium/large split:
 | I-JSON-08 | JSON for an ISIN with existing daily summaries leaves those summaries untouched | 14.1 |
 | I-COUPON-01 | Bhavcopy rate replaces an NSDL rate with source `BSE_BHAVCOPY`, trade date and reference; an older trade date changes nothing; the same rate later advances only the trade date, not `updated_at`; the end-to-end bhavcopy stores `8.50` for its first ISIN | 15.3 |
 | I-COUPON-02 | An NSDL rate is stored with source `NSDL` and is not stored over a bhavcopy rate | 15.3 |
+| I-DETAILS-02 | A security with a coupon, unchanged and unrequested for 31 days, is requested again when it trades | 14.1 |
+| I-DETAILS-01 | A security without coupon is requested again only a day later, three times in all; a coupon in the file stops requests | 14.1 |
 
 ### Read APIs
 

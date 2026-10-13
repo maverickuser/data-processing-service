@@ -10,7 +10,9 @@ import com.bondplatform.dataprocessing.publication.domain.CouponPrecedence;
 import com.bondplatform.dataprocessing.publication.domain.CouponPrecedence.BhavcopyCouponChange;
 import com.bondplatform.dataprocessing.publication.domain.CouponSource;
 import com.bondplatform.dataprocessing.publication.domain.DailyMarketSummary;
+import com.bondplatform.dataprocessing.publication.domain.DetailsRequestPolicy;
 import com.bondplatform.dataprocessing.publication.domain.ExchangeCoupon;
+import com.bondplatform.dataprocessing.publication.domain.LockedSecurity;
 import com.bondplatform.dataprocessing.publication.domain.SecurityDetailsRequest;
 import com.bondplatform.dataprocessing.publication.domain.StoredCoupon;
 import com.bondplatform.dataprocessing.shared.domain.Isin;
@@ -21,6 +23,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -33,11 +36,12 @@ import org.springframework.transaction.annotation.Transactional;
  * Publishes a completely evaluated CSV file: its summaries and the job's outcome commit together,
  * or nothing does (LLD sections 7 and 8.1).
  *
- * <p>In one transaction it creates an ISIN-only security for each ISIN that has none, records one
- * security-details request in the outbox for each security it created (LLD section 14.3), stores
- * the coupon rates the file reports where they take precedence (decision 0004), upserts every
- * summary, and finishes the job. A failure at any step rolls back every summary, security, coupon,
- * and request of the file.
+ * <p>In one transaction it creates an ISIN-only security for each ISIN that has none, locks every
+ * traded security in ISIN order, stores the coupon rates the file reports where they take
+ * precedence (decision 0004), records one security-details request in the outbox for each security
+ * it created and for each one {@link DetailsRequestPolicy} asks again for (LLD section 14.3,
+ * decision 0005), upserts every summary, and finishes the job. A failure at any step rolls back
+ * every summary, security, coupon, and request of the file.
  *
  * <p>A file's rate that differs from a stored NSDL rate is logged as a warning; the file's rate is
  * stored all the same.
@@ -83,7 +87,8 @@ public class PublishDailyMarketSummaries {
    * @param accepted the summaries of every accepted row, in file order
    * @param coupons the coupon rates of the accepted rows that report one
    * @param outcome the job's final status, counts, and error count
-   * @return the ISINs whose securities this call created; their details are already requested
+   * @return the ISINs whose securities this call created; their details are already requested, as
+   *     are those of the existing securities asked for again
    * @throws IllegalStateException if the job is not running this attempt; nothing is stored
    */
   @Transactional
@@ -97,22 +102,21 @@ public class PublishDailyMarketSummaries {
     Set<Isin> isins = new LinkedHashSet<>();
     accepted.forEach(summary -> isins.add(summary.isin()));
     Set<Isin> created = securities.insertMissing(isins, now);
-    created.stream()
-        .sorted(Comparator.comparing(Isin::value))
-        .forEach(isin -> outbox.append(request(isin, now)));
-    storeCoupons(job, coupons, now);
+    Map<Isin, LockedSecurity> locked = securities.lock(isins);
+    storeCoupons(job, coupons, locked, now);
+    requestDetails(isins, created, coupons, locked, now);
     summaries.upsertAll(accepted, now);
     completion.complete(job, outcome);
     return created;
   }
 
-  private void storeCoupons(ClaimedJob job, List<ExchangeCoupon> coupons, Instant now) {
-    Map<Isin, StoredCoupon> stored =
-        securities.lockCoupons(coupons.stream().map(ExchangeCoupon::isin).toList());
+  private void storeCoupons(
+      ClaimedJob job, List<ExchangeCoupon> coupons, Map<Isin, LockedSecurity> locked, Instant now) {
     List<ExchangeCoupon> replaced = new ArrayList<>();
     List<ExchangeCoupon> advanced = new ArrayList<>();
     for (ExchangeCoupon coupon : coupons) {
-      StoredCoupon current = stored.getOrDefault(coupon.isin(), StoredCoupon.NONE);
+      LockedSecurity security = locked.get(coupon.isin());
+      StoredCoupon current = security == null ? StoredCoupon.NONE : security.coupon();
       if (CouponPrecedence.disagrees(current, CouponSource.BSE_BHAVCOPY, coupon.rate())) {
         LOG.warn(
             "Coupon rates differ, jobId={}, isin={}, bhavcopy={}, stored {}={}",
@@ -130,6 +134,31 @@ public class PublishDailyMarketSummaries {
       }
     }
     securities.storeBhavcopyCoupons(replaced, advanced, now);
+  }
+
+  /** Requests the details of every created security and of every one asked for again. */
+  private void requestDetails(
+      Set<Isin> traded,
+      Set<Isin> created,
+      List<ExchangeCoupon> coupons,
+      Map<Isin, LockedSecurity> locked,
+      Instant now) {
+    Set<Isin> withCoupon = new HashSet<>();
+    coupons.forEach(coupon -> withCoupon.add(coupon.isin()));
+    List<Isin> requested =
+        traded.stream()
+            .filter(
+                isin -> {
+                  LockedSecurity security = locked.get(isin);
+                  return created.contains(isin)
+                      || (security != null
+                          && DetailsRequestPolicy.requestsAgain(
+                              security, withCoupon.contains(isin), now));
+                })
+            .sorted(Comparator.comparing(Isin::value))
+            .toList();
+    requested.forEach(isin -> outbox.append(request(isin, now)));
+    securities.recordDetailsRequests(requested, now);
   }
 
   private NewOutboxEvent request(Isin isin, Instant now) {

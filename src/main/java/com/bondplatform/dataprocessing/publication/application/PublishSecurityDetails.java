@@ -7,6 +7,7 @@ import com.bondplatform.dataprocessing.job.domain.JobStatus;
 import com.bondplatform.dataprocessing.publication.domain.CouponPrecedence;
 import com.bondplatform.dataprocessing.publication.domain.CouponSource;
 import com.bondplatform.dataprocessing.publication.domain.JsonFileCounts;
+import com.bondplatform.dataprocessing.publication.domain.LockedSecurity;
 import com.bondplatform.dataprocessing.publication.domain.SecurityCollections;
 import com.bondplatform.dataprocessing.publication.domain.SecurityDetails;
 import com.bondplatform.dataprocessing.publication.domain.SecurityScalars;
@@ -98,10 +99,8 @@ public class PublishSecurityDetails {
     if (coupon == null || !(coupon.value() instanceof SecurityValue.Percentage rate)) {
       return scalars;
     }
-    StoredCoupon stored =
-        securities
-            .lockCoupons(List.of(details.isin()))
-            .getOrDefault(details.isin(), StoredCoupon.NONE);
+    LockedSecurity locked = securities.lock(List.of(details.isin())).get(details.isin());
+    StoredCoupon stored = locked == null ? StoredCoupon.NONE : locked.coupon();
     if (CouponPrecedence.disagrees(stored, CouponSource.NSDL, rate.value())) {
       LOG.warn(
           "Coupon rates differ, jobId={}, isin={}, nsdl={}, stored {}={}",

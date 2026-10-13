@@ -717,7 +717,7 @@ Trades arrive before security details by design. Security details are fetched on
 
 - Security details explicitly contain `isin` as their primary identifier.
 - When publishing an accepted CSV trade, create a minimal security record containing only its ISIN if no security exists. Processing metadata is separate from these business attributes.
-- Trigger a security-details event only when an accepted trade inserts a previously nonexistent ISIN into `securities_data.securities`. An existing security does not trigger a new event, whether fully populated, partially populated, or ISIN-only.
+- Trigger a security-details event when an accepted trade inserts a previously nonexistent ISIN into `securities_data.securities`. Since 2026-10-13 (decision 0005), an accepted trade also triggers one for an existing security under three conditions: it still has no coupon rate after the trade's own coupon rate is stored; fewer than 3 requests were made for it, the first included; and the latest was at least 1 day ago. A traded security is also refreshed, whatever its coupon rate and request count, when its `updated_at` and its latest request are both at least 30 days old. The refresh only appends new collection entries (section 13.6). Otherwise an existing security does not trigger a new event, whether fully populated, partially populated, or ISIN-only.
 - Quarantined CSV rows do not trigger security creation or enrichment requests.
 - JSON processing later enriches the same ISIN using the agreed scalar and collection rules. It does not create another identity or replace accepted trades.
 - Security-details retrieval is asynchronous; successful trade publication does not wait for it to finish.
@@ -787,11 +787,11 @@ The dispatcher preserves the same CloudEvent envelope across send retries. The c
 
 Use the database insert result as the trigger, rather than an unchecked read followed by an insert. Proposed PostgreSQL implementation: `INSERT ... ON CONFLICT (isin) DO NOTHING RETURNING isin`; create an outbox event only for a returned ISIN. Execute the security insert, accepted trade publication, and event intent in one transaction. The ISIN primary key ensures concurrent transactions cannot both create the same security and trigger new initial events.
 
-Repeated trades and retries find the existing security and create no new details-request event. A failed transaction rolls back both security creation and its event intent; a retry can then create both together. Outbox delivery retries resend the original event, independently of the new-security trigger. An existing ISIN-only record with no prior event is not automatically backfilled by this flow.
+Repeated trades and retries find the existing security and create no new details-request event, except for a security without a coupon rate under decision 0005. `details_request_count` and `details_requested_at` on the security count those requests; they are updated in the same transaction as the event, and they leave `updated_at` alone. A failed transaction rolls back both security creation and its event intent; a retry can then create both together. Outbox delivery retries resend the original event, independently of the new-security trigger. An existing ISIN-only record with no prior event is not automatically backfilled by this flow.
 
 ### 14.4 Completion boundary and unresolved details
 
-The agreed trigger is creation of a previously nonexistent security during accepted-trade processing. Do not check individual data points or infer completeness to decide whether to publish. Later trades never initiate a fresh fetch for an existing ISIN, including after a failed or empty download. Any future manual retry/refresh feature is separate from this trigger and is not part of the currently agreed automatic flow.
+The agreed trigger is creation of a previously nonexistent security during accepted-trade processing. Do not check individual data points or infer completeness to decide whether to publish. Later trades initiate a fresh fetch for an existing ISIN only as decision 0005 allows: a security without a coupon rate is requested again at most three times in all and a day apart, and any security is refreshed once its details and its latest request are at least 30 days old. Any future manual retry/refresh feature is separate from this trigger and is not part of the currently agreed automatic flow.
 
 The existing download service consumes this queue, retrieves the security JSON, writes completed immutable S3 files and their manifest, and calls `POST /v1/event-ingestions`. Its own LLD governs durable admission and SQS acknowledgment. The handoff carries a complete manifest rather than a prefix to scan.
 
@@ -1313,6 +1313,8 @@ CREATE TABLE securities_data.securities (
   coupon_rate_unit       TEXT CHECK (coupon_rate_unit = 'PERCENT'),
   coupon_rate_source     TEXT CHECK (coupon_rate_source IN ('BSE_BHAVCOPY', 'NSDL')),  -- V7
   coupon_rate_trade_date DATE,                                                      -- V7
+  details_request_count  INTEGER NOT NULL DEFAULT 0 CHECK (details_request_count >= 0),  -- V8
+  details_requested_at   TIMESTAMPTZ,                                                -- V8
   coupon_type            TEXT,
   listing_status         TEXT,
   field_sources          JSONB NOT NULL DEFAULT '{}',

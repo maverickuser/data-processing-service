@@ -2,9 +2,9 @@ package com.bondplatform.dataprocessing.publication.application;
 
 import com.bondplatform.dataprocessing.publication.domain.CouponSource;
 import com.bondplatform.dataprocessing.publication.domain.ExchangeCoupon;
+import com.bondplatform.dataprocessing.publication.domain.LockedSecurity;
 import com.bondplatform.dataprocessing.publication.domain.SecurityScalars;
 import com.bondplatform.dataprocessing.publication.domain.SecurityValue;
-import com.bondplatform.dataprocessing.publication.domain.StoredCoupon;
 import com.bondplatform.dataprocessing.shared.domain.Isin;
 import java.time.Instant;
 import java.util.Collection;
@@ -51,11 +51,17 @@ public interface SecurityRepository {
 
   /**
    * Locks the securities' rows until the transaction ends, in ISIN order so that two transactions
-   * locking overlapping sets cannot deadlock, and returns their stored coupons.
+   * locking overlapping sets cannot deadlock, and returns their coupons and details requests.
    *
-   * @return the stored coupon of every given ISIN that has a security
+   * @return the state of every given ISIN that has a security
    */
-  Map<Isin, StoredCoupon> lockCoupons(Collection<Isin> isins);
+  Map<Isin, LockedSecurity> lock(Collection<Isin> isins);
+
+  /**
+   * Counts one more security-details request for each security, made at {@code requestedAt}. The
+   * securities' update time does not change: a request is not a change to the security.
+   */
+  void recordDetailsRequests(Collection<Isin> isins, Instant requestedAt);
 
   /**
    * Stores bhavcopy coupon rates on securities whose rows the caller has locked.

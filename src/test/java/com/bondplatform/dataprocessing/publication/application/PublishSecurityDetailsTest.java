@@ -19,6 +19,7 @@ import com.bondplatform.dataprocessing.publication.domain.CashFlow;
 import com.bondplatform.dataprocessing.publication.domain.CouponSource;
 import com.bondplatform.dataprocessing.publication.domain.JsonFileCounts;
 import com.bondplatform.dataprocessing.publication.domain.Listing;
+import com.bondplatform.dataprocessing.publication.domain.LockedSecurity;
 import com.bondplatform.dataprocessing.publication.domain.SecurityCollections;
 import com.bondplatform.dataprocessing.publication.domain.SecurityDetails;
 import com.bondplatform.dataprocessing.publication.domain.SecurityEntry;
@@ -118,12 +119,15 @@ class PublishSecurityDetailsTest {
         details(
             new SecurityScalars(Map.of("couponRate", rate("8.76"), "couponType", field("Simple"))),
             new SecurityCollections(List.of(), List.of(), List.of(), List.of()));
-    when(securities.lockCoupons(List.of(ISIN)))
+    when(securities.lock(List.of(ISIN)))
         .thenReturn(
             Map.of(
                 ISIN,
-                new StoredCoupon(
-                    Percent.parse("8.8"), CouponSource.BSE_BHAVCOPY, LocalDate.of(2026, 10, 1))));
+                locked(
+                    new StoredCoupon(
+                        Percent.parse("8.8"),
+                        CouponSource.BSE_BHAVCOPY,
+                        LocalDate.of(2026, 10, 1)))));
 
     publish.publish(job, details, FILES, JobStatus.COMPLETED, 0);
 
@@ -138,11 +142,12 @@ class PublishSecurityDetailsTest {
         details(
             new SecurityScalars(Map.of("couponRate", rate("8.76"))),
             new SecurityCollections(List.of(), List.of(), List.of(), List.of()));
-    when(securities.lockCoupons(List.of(ISIN)))
-        .thenReturn(Map.of(ISIN, new StoredCoupon(Percent.parse("8"), CouponSource.NSDL, null)));
+    when(securities.lock(List.of(ISIN)))
+        .thenReturn(
+            Map.of(ISIN, locked(new StoredCoupon(Percent.parse("8"), CouponSource.NSDL, null))));
 
     publish.publish(job, details, FILES, JobStatus.COMPLETED, 0);
-    when(securities.lockCoupons(List.of(ISIN))).thenReturn(Map.of());
+    when(securities.lock(List.of(ISIN))).thenReturn(Map.of());
     publish.publish(job, details, FILES, JobStatus.COMPLETED, 0);
 
     verify(securities, times(2))
@@ -158,7 +163,7 @@ class PublishSecurityDetailsTest {
 
     publish.publish(job, details, FILES, JobStatus.COMPLETED, 0);
 
-    verify(securities, never()).lockCoupons(any());
+    verify(securities, never()).lock(any());
   }
 
   @Test
@@ -188,5 +193,9 @@ class PublishSecurityDetailsTest {
     return new SecurityScalars.Field(
         new SecurityValue.Percentage(Percent.parse(value)),
         new SourceReference(SOURCE.jobId(), "INE831R08076_coupon-details.json", "$.coupensVo"));
+  }
+
+  private static LockedSecurity locked(StoredCoupon coupon) {
+    return new LockedSecurity(coupon, 1, null, NOW);
   }
 }
