@@ -15,6 +15,7 @@ import com.bondplatform.dataprocessing.outbox.application.OutboxDispatcher;
 import com.bondplatform.dataprocessing.persistence.PostgresIntegrationTest;
 import com.bondplatform.dataprocessing.review.application.GetJobStatus;
 import com.bondplatform.dataprocessing.review.application.GetSecurity;
+import com.bondplatform.dataprocessing.review.application.GetSecurityMetrics;
 import com.bondplatform.dataprocessing.review.application.ListDailyMarketSummaries;
 import com.bondplatform.dataprocessing.review.application.ListJobErrors;
 import com.bondplatform.dataprocessing.review.application.ListSecurities;
@@ -202,6 +203,7 @@ class FunctionRolesIT extends PostgresIntegrationTest {
         .as("an unknown ISIN, checked against the securities")
         .isEmpty();
     assertThat(reader.getBean(GetJobStatus.class).find(bhavcopy)).isPresent();
+    assertThat(reader.getBean(GetSecurityMetrics.class).current().securities()).isPositive();
     assertThat(reader.getBean(ListJobErrors.class).list(bhavcopy, null, null)).isPresent();
   }
 

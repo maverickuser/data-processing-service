@@ -4,7 +4,8 @@ info:
   version: 1.0.0
   description: >-
     Design contract, not evidence of deployment. Public, unauthenticated, read-only
-    endpoints for job status, error review, the ISIN list, securities and daily market summaries.
+    endpoints for job status, error review, the ISIN list, securities, daily market summaries
+    and business metrics.
     Responses never expose S3 buckets, keys, version IDs, presigned URLs or upstream
     source URLs. The upstream submission endpoint is defined separately in
     data-processing-service-openapi.yaml.
@@ -97,6 +98,21 @@ paths:
               schema: { $ref: '#/components/schemas/DailyMarketSummaryPage' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /v1/metrics:
+    get:
+      operationId: getMetrics
+      summary: Security counts as they are now
+      description: >-
+        Counts of known ISINs and of those missing details, cash flows, current ratings, a coupon
+        rate or a collateral status. ISIN-only securities are counted. All counts are read in one
+        statement, so they describe the same moment.
+      responses:
+        '200':
+          description: Current counts
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Metrics' }
         '500': { $ref: '#/components/responses/ServerError' }
 components:
   parameters:
@@ -314,6 +330,43 @@ components:
         faceValue: { type: [number, 'null'], description: Face value reported by the exchange for that trade date. }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    Metrics:
+      type: object
+      required:
+        - securitiesCount
+        - securitiesCountWithoutDetails
+        - securitiesCountWithoutCashFlows
+        - securitiesCountWithoutCurrentRatings
+        - securitiesCountWithoutCouponRate
+        - securitiesCountWithoutCollateralStatus
+      properties:
+        securitiesCount:
+          type: integer
+          minimum: 0
+          description: Every known ISIN, whatever else is stored for it.
+        securitiesCountWithoutDetails:
+          type: integer
+          minimum: 0
+          description: >-
+            ISINs with nothing stored but the ISIN: no detail field (coupon rate included,
+            whatever its source) and no cash flow, listing, rating or collateral asset. Daily
+            market summaries are not details.
+        securitiesCountWithoutCashFlows:
+          type: integer
+          minimum: 0
+          description: ISINs with no cash flow.
+        securitiesCountWithoutCurrentRatings:
+          type: integer
+          minimum: 0
+          description: ISINs with no rating recorded as current; earlier ratings do not count.
+        securitiesCountWithoutCouponRate:
+          type: integer
+          minimum: 0
+          description: ISINs with no coupon rate from either source.
+        securitiesCountWithoutCollateralStatus:
+          type: integer
+          minimum: 0
+          description: ISINs with no collateral status.
     IsinPage:
       type: object
       required: [items, nextToken]

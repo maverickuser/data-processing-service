@@ -1,6 +1,7 @@
 package com.bondplatform.dataprocessing.review.application;
 
 import com.bondplatform.dataprocessing.review.domain.RatingObservation;
+import com.bondplatform.dataprocessing.review.domain.SecurityMetrics;
 import com.bondplatform.dataprocessing.review.domain.SecurityView;
 import com.bondplatform.dataprocessing.shared.domain.Isin;
 import java.util.List;
@@ -27,4 +28,7 @@ public interface SecurityReviewRepository {
 
   /** Returns every recorded cash flow, by due date. */
   List<SecurityView.CashFlow> cashFlows(Isin isin);
+
+  /** Returns the security counts, all read in one statement. */
+  SecurityMetrics metrics();
 }

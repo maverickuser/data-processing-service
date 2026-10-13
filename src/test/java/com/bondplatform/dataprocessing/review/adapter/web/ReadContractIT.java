@@ -59,6 +59,7 @@ class ReadContractIT extends PostgresIntegrationTest {
   private static final String SECURITY = "/v1/securities/{isin}";
   private static final String SUMMARIES = "/v1/securities/{isin}/daily-market-summaries";
   private static final String SECURITIES = "/v1/securities";
+  private static final String METRICS = "/v1/metrics";
   private static final String CSV_COUNTS =
       "{\"sourceRecords\": 2, \"acceptedRows\": 1, \"invalidRows\": 1, \"supersededRows\": 0}";
   private static final String JSON_COUNTS =
@@ -105,6 +106,7 @@ class ReadContractIT extends PostgresIntegrationTest {
     check(http, SUMMARIES, 404, get(SUMMARIES, "INE999999999"));
     check(http, SECURITIES, 200, get(SECURITIES));
     check(http, SECURITIES, 400, get(SECURITIES).param("pageToken", "changed"));
+    check(http, METRICS, 200, get(METRICS));
 
     // A 500 cannot be caused from outside; HttpErrorResponsesIT checks its problem shape
     assertThat(covered)

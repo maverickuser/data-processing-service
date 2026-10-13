@@ -327,11 +327,11 @@ run "public_reads_and_signed_submission_at_the_custom_domain" {
 
   assert {
     condition = (
-      length(aws_apigatewayv2_route.read) == 10 &&
+      length(aws_apigatewayv2_route.read) == 11 &&
       length([for key in keys(aws_apigatewayv2_route.read) : key if startswith(key, "GET /docs")]) == 5 &&
       alltrue([for key, route in aws_apigatewayv2_route.read : (startswith(key, "GET /v1/") || key == "GET /docs" || startswith(key, "GET /docs/")) && route.authorization_type == "NONE"])
     )
-    error_message = "The five read routes and the five documentation routes are GET and have no authorizer."
+    error_message = "The six read routes and the five documentation routes are GET and have no authorizer."
   }
 
   assert {
