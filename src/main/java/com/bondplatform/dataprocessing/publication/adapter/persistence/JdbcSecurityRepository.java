@@ -4,6 +4,7 @@ import com.bondplatform.dataprocessing.contract.domain.FieldType;
 import com.bondplatform.dataprocessing.publication.application.SecurityRepository;
 import com.bondplatform.dataprocessing.publication.domain.CouponSource;
 import com.bondplatform.dataprocessing.publication.domain.ExchangeCoupon;
+import com.bondplatform.dataprocessing.publication.domain.LockedSecurity;
 import com.bondplatform.dataprocessing.publication.domain.SecurityScalars;
 import com.bondplatform.dataprocessing.publication.domain.SecurityValue;
 import com.bondplatform.dataprocessing.publication.domain.SourceReference;
@@ -74,9 +75,10 @@ public class JdbcSecurityRepository implements SecurityRepository {
           new Column("listingStatus", FieldType.TEXT, "listing_status", null));
 
   /** Locks in ISIN order, the same order {@link #INSERT_MISSING} takes, so it cannot deadlock. */
-  static final String LOCK_COUPONS =
+  static final String LOCK =
       """
-      SELECT isin, coupon_rate_value, coupon_rate_source, coupon_rate_trade_date
+      SELECT isin, coupon_rate_value, coupon_rate_source, coupon_rate_trade_date,
+             details_request_count, details_requested_at
       FROM securities_data.securities
       WHERE isin = ANY(?::text[])
       ORDER BY isin
@@ -89,6 +91,13 @@ public class JdbcSecurityRepository implements SecurityRepository {
       SET coupon_rate_value = ?, coupon_rate_unit = 'PERCENT', coupon_rate_source = 'BSE_BHAVCOPY',
           coupon_rate_trade_date = ?, field_sources = field_sources || ?::jsonb, updated_at = ?
       WHERE isin = ?
+      """;
+
+  static final String RECORD_DETAILS_REQUESTS =
+      """
+      UPDATE securities_data.securities
+      SET details_request_count = details_request_count + 1, details_requested_at = ?
+      WHERE isin = ANY(?::text[])
       """;
 
   static final String ADVANCE_COUPON_TRADE_DATE =
@@ -187,26 +196,41 @@ public class JdbcSecurityRepository implements SecurityRepository {
   }
 
   @Override
-  public Map<Isin, StoredCoupon> lockCoupons(Collection<Isin> isins) {
+  public Map<Isin, LockedSecurity> lock(Collection<Isin> isins) {
     if (isins.isEmpty()) {
       return Map.of();
     }
-    String[] values = isins.stream().map(Isin::value).distinct().toArray(String[]::new);
-    Map<Isin, StoredCoupon> coupons = new LinkedHashMap<>();
+    Map<Isin, LockedSecurity> locked = new LinkedHashMap<>();
     jdbc.query(
-        LOCK_COUPONS,
+        LOCK,
         row -> {
           BigDecimal rate = row.getBigDecimal("coupon_rate_value");
           String source = row.getString("coupon_rate_source");
-          coupons.put(
+          OffsetDateTime requestedAt = row.getObject("details_requested_at", OffsetDateTime.class);
+          locked.put(
               new Isin(row.getString("isin")),
-              new StoredCoupon(
-                  rate == null ? null : Percent.of(rate),
-                  source == null ? null : CouponSource.valueOf(source),
-                  row.getObject("coupon_rate_trade_date", LocalDate.class)));
+              new LockedSecurity(
+                  new StoredCoupon(
+                      rate == null ? null : Percent.of(rate),
+                      source == null ? null : CouponSource.valueOf(source),
+                      row.getObject("coupon_rate_trade_date", LocalDate.class)),
+                  row.getInt("details_request_count"),
+                  requestedAt == null ? null : requestedAt.toInstant()));
         },
-        (Object) values);
-    return coupons;
+        (Object) distinct(isins));
+    return locked;
+  }
+
+  @Override
+  public void recordDetailsRequests(Collection<Isin> isins, Instant requestedAt) {
+    if (isins.isEmpty()) {
+      return;
+    }
+    jdbc.update(RECORD_DETAILS_REQUESTS, requestedAt.atOffset(ZoneOffset.UTC), distinct(isins));
+  }
+
+  private static String[] distinct(Collection<Isin> isins) {
+    return isins.stream().map(Isin::value).distinct().toArray(String[]::new);
   }
 
   @Override

@@ -76,7 +76,9 @@ class SecuritiesSchemaIT extends PostgresIntegrationTest {
             "created_at timestamp with time zone NOT NULL",
             "updated_at timestamp with time zone NOT NULL",
             "coupon_rate_source text",
-            "coupon_rate_trade_date date");
+            "coupon_rate_trade_date date",
+            "details_request_count integer NOT NULL DEFAULT 0",
+            "details_requested_at timestamp with time zone");
     assertThat(schema.indexes(SCHEMA, "securities"))
         .containsExactly(
             "CREATE UNIQUE INDEX securities_pkey ON securities_data.securities"
@@ -306,6 +308,7 @@ class SecuritiesSchemaIT extends PostgresIntegrationTest {
           coupon_rate_unit|'PERCENT'|'FRACTION'
           coupon_rate_source|'BSE_BHAVCOPY'|'NSE_BHAVCOPY'
           coupon_rate_source|'NSDL'|'nsdl'
+          details_request_count|3|-1
           asset_coverage_unit|'PERCENT'|'RATIO'
           """)
   void securityChecksRejectNegativeFaceValueAndUnknownUnits(
