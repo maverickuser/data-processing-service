@@ -9,6 +9,7 @@ locals {
     "GET /v1/securities",
     "GET /v1/securities/{isin}",
     "GET /v1/securities/{isin}/daily-market-summaries",
+    "GET /v1/metrics",
     # The read API's documentation: Swagger UI and the read OpenAPI document, fixed files only
     "GET /docs",
     "GET /docs/openapi.yaml",

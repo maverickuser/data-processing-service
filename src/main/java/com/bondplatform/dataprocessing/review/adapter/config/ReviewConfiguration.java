@@ -3,6 +3,7 @@ package com.bondplatform.dataprocessing.review.adapter.config;
 import com.bondplatform.dataprocessing.review.application.DailyMarketSummaryRepository;
 import com.bondplatform.dataprocessing.review.application.GetJobStatus;
 import com.bondplatform.dataprocessing.review.application.GetSecurity;
+import com.bondplatform.dataprocessing.review.application.GetSecurityMetrics;
 import com.bondplatform.dataprocessing.review.application.JobReviewRepository;
 import com.bondplatform.dataprocessing.review.application.ListDailyMarketSummaries;
 import com.bondplatform.dataprocessing.review.application.ListJobErrors;
@@ -31,6 +32,12 @@ public class ReviewConfiguration {
   @Bean
   public ListSecurities listSecurities(SecurityReviewRepository securities) {
     return new ListSecurities(securities);
+  }
+
+  /** Answers security metrics requests. */
+  @Bean
+  public GetSecurityMetrics getSecurityMetrics(SecurityReviewRepository securities) {
+    return new GetSecurityMetrics(securities);
   }
 
   /** Answers security view requests. */

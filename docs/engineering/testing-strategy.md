@@ -151,6 +151,7 @@ Following Google's small/medium/large split:
 | U-REV-06 | No response model has a field that can carry an S3 bucket, key, version, or source URL | 16 |
 | U-REV-07 | The documentation routes serve only the packaged Swagger UI page, its starter script, Swagger UI's script and style sheet, and the committed read OpenAPI document, each with its media type and an entity tag of its content; the function fails to start if any is missing; only the read function serves them | 23.2 |
 | U-REV-08 | Only responses under `/docs` get the documentation pages' Content-Security-Policy; every other response loads nothing | 23.2 |
+| U-REV-10 | Metrics: counts map by column under their agreed names and are read in one statement; a negative count or one larger than the total is refused | 20.5 |
 | U-REV-09 | The ISIN list pages 50 at a time with a token holding the last ISIN shown, round-trips an ISIN of any text, and rejects a changed or foreign token before reading | 20.4 |
 
 ### Architecture
@@ -239,6 +240,7 @@ Following Google's small/medium/large split:
 | I-READ-07 | No read response body contains a bucket name, object key, or `source_url` present in the test data | 16 |
 | I-READ-08 | Decimals are serialised as exact JSON numbers; timestamps are UTC | 20.1 |
 | I-READ-09 | Through the Lambda entry point, `/docs` and its files are served under the documentation policy, the served document equals the committed one, an unchanged file is `304`, and any other `/docs` path or packaged library file is a `404` problem | 23.2 |
+| I-READ-11 | Metrics over HTTP: ISIN-only securities counted; a BSE coupon or an earlier rating is a detail; an earlier rating is not current; the six counts match the stored data | 20.5 |
 | I-READ-10 | ISIN list: ascending, pages as 50 then the rest, ISIN-only securities included, empty `items` without securities, `400` on a changed token | 20.4 |
 
 ### Operations

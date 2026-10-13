@@ -2,6 +2,7 @@ package com.bondplatform.dataprocessing.review.adapter.persistence;
 
 import com.bondplatform.dataprocessing.review.application.SecurityReviewRepository;
 import com.bondplatform.dataprocessing.review.domain.RatingObservation;
+import com.bondplatform.dataprocessing.review.domain.SecurityMetrics;
 import com.bondplatform.dataprocessing.review.domain.SecurityView;
 import com.bondplatform.dataprocessing.shared.domain.Isin;
 import java.sql.ResultSet;
@@ -11,6 +12,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -76,11 +79,62 @@ public class JdbcSecurityReviewRepository implements SecurityReviewRepository {
       ORDER BY due_date NULLS LAST, first_recorded_at, id
       """;
 
+  /**
+   * One pass over the securities. Each "has no ..." check is an index lookup: every collection
+   * table's distinct-entry index starts with {@code isin}, and the ratings one with {@code (isin,
+   * source_category)}.
+   */
+  static final String METRICS =
+      """
+      SELECT count(*) AS securities,
+             count(*) FILTER (
+               WHERE s.issuer_name IS NULL AND s.issuer_ownership_type IS NULL
+                 AND s.instrument_type IS NULL AND s.allotment_date IS NULL
+                 AND s.redemption_date IS NULL AND s.original_face_value IS NULL
+                 AND s.collateral_status IS NULL AND s.asset_coverage_basis IS NULL
+                 AND s.asset_coverage_value IS NULL AND s.coupon_rate_value IS NULL
+                 AND s.coupon_type IS NULL AND s.listing_status IS NULL
+                 AND NOT EXISTS (SELECT 1 FROM securities_data.security_cash_flows c
+                                 WHERE c.isin = s.isin)
+                 AND NOT EXISTS (SELECT 1 FROM securities_data.security_listings l
+                                 WHERE l.isin = s.isin)
+                 AND NOT EXISTS (SELECT 1 FROM securities_data.security_ratings r
+                                 WHERE r.isin = s.isin)
+                 AND NOT EXISTS (SELECT 1 FROM securities_data.security_collateral_assets a
+                                 WHERE a.isin = s.isin)) AS without_details,
+             count(*) FILTER (
+               WHERE NOT EXISTS (SELECT 1 FROM securities_data.security_cash_flows c
+                                 WHERE c.isin = s.isin)) AS without_cash_flows,
+             count(*) FILTER (
+               WHERE NOT EXISTS (SELECT 1 FROM securities_data.security_ratings r
+                                 WHERE r.isin = s.isin AND r.source_category = 'CURRENT'))
+               AS without_current_ratings,
+             count(*) FILTER (WHERE s.coupon_rate_value IS NULL) AS without_coupon_rate,
+             count(*) FILTER (WHERE s.collateral_status IS NULL) AS without_collateral_status
+      FROM securities_data.securities s
+      """;
+
   private final NamedParameterJdbcOperations jdbc;
 
   /** Creates the repository. */
   public JdbcSecurityReviewRepository(NamedParameterJdbcOperations jdbc) {
     this.jdbc = jdbc;
+  }
+
+  @Override
+  public SecurityMetrics metrics() {
+    return Objects.requireNonNull(
+        jdbc.queryForObject(
+            METRICS,
+            Map.of(),
+            (row, n) ->
+                new SecurityMetrics(
+                    row.getLong("securities"),
+                    row.getLong("without_details"),
+                    row.getLong("without_cash_flows"),
+                    row.getLong("without_current_ratings"),
+                    row.getLong("without_coupon_rate"),
+                    row.getLong("without_collateral_status"))));
   }
 
   @Override

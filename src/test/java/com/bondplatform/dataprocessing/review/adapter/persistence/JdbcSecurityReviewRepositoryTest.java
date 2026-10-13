@@ -7,6 +7,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.bondplatform.dataprocessing.review.domain.RatingObservation;
+import com.bondplatform.dataprocessing.review.domain.SecurityMetrics;
 import com.bondplatform.dataprocessing.review.domain.SecurityView;
 import com.bondplatform.dataprocessing.shared.domain.Isin;
 import java.math.BigDecimal;
@@ -18,6 +19,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
@@ -179,5 +181,25 @@ class JdbcSecurityReviewRepositoryTest {
         .thenReturn(List.of());
     read.accept(repository);
     return type.cast(Objects.requireNonNull(mapper.getValue().mapRow(row, 0)));
+  }
+
+  // U-REV-10
+  @Test
+  @SuppressWarnings("unchecked")
+  void metricsAreReadInOneStatementAndMappedByColumn() throws SQLException {
+    when(row.getLong("securities")).thenReturn(6L);
+    when(row.getLong("without_details")).thenReturn(1L);
+    when(row.getLong("without_cash_flows")).thenReturn(2L);
+    when(row.getLong("without_current_ratings")).thenReturn(3L);
+    when(row.getLong("without_coupon_rate")).thenReturn(4L);
+    when(row.getLong("without_collateral_status")).thenReturn(5L);
+    when(jdbc.queryForObject(
+            eq(JdbcSecurityReviewRepository.METRICS), eq(Map.of()), any(RowMapper.class)))
+        .thenAnswer(invocation -> invocation.<RowMapper<?>>getArgument(2).mapRow(row, 0));
+
+    assertThat(repository.metrics()).isEqualTo(new SecurityMetrics(6, 1, 2, 3, 4, 5));
+    assertThat(JdbcSecurityReviewRepository.METRICS)
+        .contains("r.source_category = 'CURRENT'")
+        .contains("FROM securities_data.securities s");
   }
 }

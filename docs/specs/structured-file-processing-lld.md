@@ -1111,6 +1111,7 @@ Agreed v1 read surface (2026-10-02). All endpoints are public, unauthenticated, 
 | `GET /v1/securities` | Every known ISIN in ascending order, 50 per page with cursor pagination (section 20.4) |
 | `GET /v1/securities/{isin}` | One combined security view: scalar details, current ratings and rating history, listings, cash-flow schedule, and collateral assets |
 | `GET /v1/securities/{isin}/daily-market-summaries` | Daily market summaries for one ISIN, with optional `fromDate` and `toDate` |
+| `GET /v1/metrics` | Security counts as they are now: all ISINs and those missing details, cash flows, current ratings, coupon rate, or collateral status (section 20.5) |
 
 Separate per-collection endpoints for ratings, listings, and cash flows are not part of v1. Change (2026-10-11): `GET /v1/daily-market-summaries?tradeDate=` was removed and replaced by `GET /v1/securities`, the list of known ISINs; summaries are read per ISIN only. Path and query ISINs are trimmed and uppercased before lookup.
 
@@ -1247,6 +1248,32 @@ Agreed (2026-10-11). `GET /v1/securities` returns every ISIN in `securities_data
 - Ordered by `isin` ascending; 50 per page; no filters. No securities returns `200` with empty `items`.
 - Pagination uses the same opaque cursor convention as the other lists. The token holds the last ISIN shown and pages by key, so a security inserted between pages neither repeats nor shifts later ones; one inserted before the cursor is not shown in that pass.
 - A changed `pageToken`, or one issued by another list, returns `400` as `application/problem+json`.
+
+### 20.5 Metrics response
+
+Agreed (2026-10-13, decision 0006). `GET /v1/metrics` returns six counts of securities as they are now. Every count includes ISIN-only securities. No history and no `asOf` parameter.
+
+```json
+{
+  "securitiesCount": 612,
+  "securitiesCountWithoutDetails": 18,
+  "securitiesCountWithoutCashFlows": 140,
+  "securitiesCountWithoutCurrentRatings": 95,
+  "securitiesCountWithoutCouponRate": 71,
+  "securitiesCountWithoutCollateralStatus": 40
+}
+```
+
+| Field | Counts ISINs where |
+|---|---|
+| `securitiesCount` | the ISIN is known, whatever else is stored |
+| `securitiesCountWithoutDetails` | the 12 detail fields of section 15.3 are null (a coupon rate from either source is a detail), and there is no cash flow, listing, rating, or collateral asset; daily market summaries are not details |
+| `securitiesCountWithoutCashFlows` | there is no cash flow |
+| `securitiesCountWithoutCurrentRatings` | there is no rating with source category `CURRENT`; earlier ratings do not count |
+| `securitiesCountWithoutCouponRate` | there is no coupon rate from any source |
+| `securitiesCountWithoutCollateralStatus` | there is no collateral status |
+
+One statement computes all six over `securities`, so they describe one moment. Each "has no" check is a lookup on an existing collection index that starts with `isin`.
 
 ## 21. Operational defaults
 

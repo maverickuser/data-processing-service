@@ -18,7 +18,10 @@ import org.springframework.web.context.WebApplicationContext;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** I-READ-03 and I-READ-10: the security view and the ISIN list over HTTP, from PostgreSQL. */
+/**
+ * I-READ-03, I-READ-10 and I-READ-11: the security view, the ISIN list and the metrics over HTTP,
+ * from PostgreSQL.
+ */
 class SecurityIT extends PostgresIntegrationTest {
 
   private static final String ISIN = "INE831R08076";
@@ -194,6 +197,64 @@ class SecurityIT extends PostgresIntegrationTest {
     MockHttpServletResponse response = http.perform(request).andReturn().getResponse();
     assertThat(response.getStatus()).isEqualTo(200);
     return json.readTree(response.getContentAsString());
+  }
+
+  // I-READ-11
+  @Test
+  void metricsCountEachKindOfMissingDataWithIsinOnlySecuritiesIncluded() throws Exception {
+    isinOnly("INE000000001");
+    jdbc.sql(
+            """
+            INSERT INTO securities_data.securities
+              (isin, coupon_rate_value, coupon_rate_unit, coupon_rate_source,
+               coupon_rate_trade_date, created_at, updated_at)
+            VALUES ('INE000000002', 8.10, 'PERCENT', 'BSE_BHAVCOPY', DATE '2026-10-09', now(),
+                    now())
+            """)
+        .update();
+    jdbc.sql(
+            """
+            INSERT INTO securities_data.securities
+              (isin, issuer_name, collateral_status, coupon_rate_value, coupon_rate_unit,
+               created_at, updated_at)
+            VALUES (:isin, 'ABHFL', 'Secured', 8.94, 'PERCENT', now(), now())
+            """)
+        .param("isin", ISIN)
+        .update();
+    insert("security_cash_flows", "event_type, due_date", "'Interest', DATE '2027-06-08'");
+    insert("security_ratings", "source_category, rating", "'CURRENT', 'AAA'");
+    isinOnly("INE000000004");
+    jdbc.sql(
+            """
+            INSERT INTO securities_data.security_ratings
+              (id, isin, source_category, rating, source_request_id, source_file,
+               source_location, first_recorded_at)
+            VALUES (:id, 'INE000000004', 'EARLIER', 'A', :request, 'a.json', '$.x', now())
+            """)
+        .param("id", UUID.randomUUID())
+        .param("request", UUID.randomUUID())
+        .update();
+
+    MockHttpServletResponse response = http.perform(get("/v1/metrics")).andReturn().getResponse();
+
+    assertThat(response.getStatus()).isEqualTo(200);
+    JsonNode body = json.readTree(response.getContentAsString());
+    assertThat(body.propertyNames())
+        .containsExactlyInAnyOrder(
+            "securitiesCount",
+            "securitiesCountWithoutDetails",
+            "securitiesCountWithoutCashFlows",
+            "securitiesCountWithoutCurrentRatings",
+            "securitiesCountWithoutCouponRate",
+            "securitiesCountWithoutCollateralStatus");
+    assertThat(body.get("securitiesCount").asLong()).isEqualTo(4);
+    // Only the ISIN-only security: a BSE coupon or an earlier rating is a detail
+    assertThat(body.get("securitiesCountWithoutDetails").asLong()).isEqualTo(1);
+    assertThat(body.get("securitiesCountWithoutCashFlows").asLong()).isEqualTo(3);
+    // An earlier rating is not a current one
+    assertThat(body.get("securitiesCountWithoutCurrentRatings").asLong()).isEqualTo(3);
+    assertThat(body.get("securitiesCountWithoutCouponRate").asLong()).isEqualTo(2);
+    assertThat(body.get("securitiesCountWithoutCollateralStatus").asLong()).isEqualTo(3);
   }
 
   private JsonNode security(String isin) throws Exception {
