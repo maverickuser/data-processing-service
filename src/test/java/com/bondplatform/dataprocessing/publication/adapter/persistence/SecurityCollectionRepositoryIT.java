@@ -161,7 +161,8 @@ class SecurityCollectionRepositoryIT extends PostgresIntegrationTest {
     assertThat(textOf("security_cash_flows"))
         .isEqualTo(
             "event_type=Interest, record_date=2026-01-01, due_date=2026-02-02,"
-                + " amount_payable=11.5, payment_date=2026-03-03, new_face_value=22.5");
+                + " amount_payable=11.5, payment_date=2026-03-03, new_face_value=22.5,"
+                + " source_category=SCHEDULE");
     assertThat(textOf("security_listings")).isEqualTo("exchange_name=Nse, listing_date=2019-06-14");
     assertThat(textOf("security_ratings"))
         .isEqualTo(
