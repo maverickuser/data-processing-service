@@ -26,6 +26,6 @@ class JsonCanonicalRunTest {
 
   private static JsonCanonicalRun run(int attempt) {
     return new JsonCanonicalRun(
-        JOB, attempt, Isin.of("INE831R08076"), "nsdl-security-json-v1", "nsdl-security-mapping-v1");
+        JOB, attempt, Isin.of("INE831R08076"), "nsdl-security-json-v2", "nsdl-security-mapping-v2");
   }
 }

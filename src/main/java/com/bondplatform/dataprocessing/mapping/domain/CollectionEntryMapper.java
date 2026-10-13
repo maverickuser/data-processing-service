@@ -38,7 +38,8 @@ import org.jspecify.annotations.Nullable;
  *   <li>Entries with equal values are one entry; the first one given keeps its source and its
  *       numbers as written. Numbers are equal regardless of trailing zeros, as in the database.
  *   <li>A rating's source category comes from its collection's constant, so the same values in the
- *       current and the earlier list are two entries.
+ *       current and the earlier list are two entries. A cash flow's comes the same way, from the
+ *       scheduled or the interest list.
  *   <li>Skipped entries, which have no usable field, are left out.
  * </ul>
  */
@@ -130,6 +131,8 @@ public final class CollectionEntryMapper {
     return switch (collection.target()) {
       case InternalModel.CASH_FLOWS ->
           new CashFlow(
+              CashFlow.SourceCategory.valueOf(
+                  Objects.requireNonNull(collection.constants().get("sourceCategory"))),
               values.text("eventType"),
               values.date("recordDate"),
               values.date("dueDate"),

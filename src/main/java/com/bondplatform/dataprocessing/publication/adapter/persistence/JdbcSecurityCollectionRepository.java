@@ -47,11 +47,23 @@ public class JdbcSecurityCollectionRepository implements SecurityCollectionRepos
       ON CONFLICT (isin, %s) DO NOTHING
       """;
 
+  /**
+   * A cash flow's source category is stored but is not part of its identity: the unique index
+   * covers the business columns only, so a payment in both NSDL lists is stored once, with the
+   * category of the list read first (decision 0007). The conflict target is left out because it is
+   * the table's only unique index besides the key.
+   */
   static final String INSERT_CASH_FLOW =
-      insertInto(
-          "security_cash_flows",
-          "event_type, record_date, due_date, amount_payable, payment_date, new_face_value",
-          ":eventType, :recordDate, :dueDate, :amountPayable, :paymentDate, :newFaceValue");
+      """
+      INSERT INTO securities_data.security_cash_flows
+        (id, isin, source_category, event_type, record_date, due_date, amount_payable,
+         payment_date, new_face_value, source_request_id, source_file, source_location,
+         first_recorded_at)
+      VALUES
+        (:id, :isin, :sourceCategory, :eventType, :recordDate, :dueDate, :amountPayable,
+         :paymentDate, :newFaceValue, :sourceRequestId, :sourceFile, :sourceLocation, :recordedAt)
+      ON CONFLICT DO NOTHING
+      """;
 
   static final String INSERT_LISTING =
       insertInto("security_listings", "exchange_name, listing_date", ":exchangeName, :listingDate");
@@ -88,6 +100,7 @@ public class JdbcSecurityCollectionRepository implements SecurityCollectionRepos
         recordedAt,
         (cashFlow, parameters) ->
             parameters
+                .addValue("sourceCategory", cashFlow.sourceCategory().name())
                 .addValue("eventType", cashFlow.eventType())
                 .addValue("recordDate", cashFlow.recordDate())
                 .addValue("dueDate", cashFlow.dueDate())

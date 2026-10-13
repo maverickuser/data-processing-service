@@ -256,8 +256,15 @@ components:
         firstRecordedAt: { type: string, format: date-time }
     CashFlow:
       type: object
-      required: [eventType, recordDate, dueDate, amountPayable, paymentDate, newFaceValue, firstRecordedAt]
+      required: [sourceCategory, eventType, recordDate, dueDate, amountPayable, paymentDate, newFaceValue, firstRecordedAt]
       properties:
+        sourceCategory:
+          type: string
+          enum: [SCHEDULE, INTEREST]
+          description: >-
+            The NSDL list the cash flow was read from: cashFlowSchedule (SCHEDULE) or
+            interestCashFlowSchedule (INTEREST). Interest entries carry their amount only when
+            NSDL gives an amountPayable.
         eventType: { type: [string, 'null'] }
         recordDate: { type: [string, 'null'], format: date }
         dueDate: { type: [string, 'null'], format: date }

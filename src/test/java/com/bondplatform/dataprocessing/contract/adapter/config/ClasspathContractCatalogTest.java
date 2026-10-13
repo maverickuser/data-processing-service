@@ -29,7 +29,7 @@ class ClasspathContractCatalogTest {
   private static final ContractPair BSE =
       new ContractPair("bse-debt-bhavcopy-csv-v2", "bse-debt-bhavcopy-mapping-v2");
   private static final ContractPair NSDL =
-      new ContractPair("nsdl-security-json-v1", "nsdl-security-mapping-v1");
+      new ContractPair("nsdl-security-json-v2", "nsdl-security-mapping-v2");
   private static final DatasetUrn BSE_DATASET =
       new DatasetUrn("urn:bond-platform:dataset:bse-debt-trades");
   private static final DatasetUrn NSDL_DATASET =
@@ -49,7 +49,7 @@ class ClasspathContractCatalogTest {
     assertThat(bse.mapping().id().name()).isEqualTo("bse-debt-bhavcopy-mapping-v2");
     assertThat(bse.sourceHash()).startsWith("sha256:").hasSize(71);
     assertThat(bse.mappingHash()).startsWith("sha256:").isNotEqualTo(bse.sourceHash());
-    assertThat(registry.contractsFor(NSDL_DATASET).mapping().collections()).hasSize(5);
+    assertThat(registry.contractsFor(NSDL_DATASET).mapping().collections()).hasSize(6);
   }
 
   @Test
@@ -86,7 +86,7 @@ class ClasspathContractCatalogTest {
 
     assertThatThrownBy(() -> catalog.load(List.of(mismatched)))
         .isInstanceOf(InvalidContractException.class)
-        .hasMessageContaining("nsdl-security-mapping-v1")
+        .hasMessageContaining("nsdl-security-mapping-v2")
         .hasMessageContaining("is paired with 'bse-debt-bhavcopy-csv-v2'");
   }
 

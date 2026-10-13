@@ -31,7 +31,7 @@ class CheckContractsTest(unittest.TestCase):
         self.assertEqual(self.run_check().returncode, 0)
 
     def test_missing_contract_fails(self):
-        os.remove(self.path("contracts", "nsdl-security-mapping-v1.yaml"))
+        os.remove(self.path("contracts", "nsdl-security-mapping-v2.yaml"))
         self.assertEqual(self.run_check().returncode, 1)
 
     def test_unexpected_contract_fails(self):
@@ -40,16 +40,16 @@ class CheckContractsTest(unittest.TestCase):
         self.assertEqual(self.run_check().returncode, 1)
 
     def test_contract_without_required_keys_fails(self):
-        with open(self.path("contracts", "nsdl-security-json-v1.yaml"), "w", encoding="utf-8") as handle:
+        with open(self.path("contracts", "nsdl-security-json-v2.yaml"), "w", encoding="utf-8") as handle:
             handle.write("id: nsdl-security-json\nversion: v1\n")
         result = self.run_check()
         self.assertEqual(result.returncode, 1)
         self.assertIn("missing dataset, format", result.stderr)
 
     def test_mapping_naming_unknown_source_contract_fails(self):
-        target = self.path("contracts", "nsdl-security-mapping-v1.yaml")
+        target = self.path("contracts", "nsdl-security-mapping-v2.yaml")
         with open(target, encoding="utf-8") as handle:
-            text = handle.read().replace("sourceContract: nsdl-security-json-v1", "sourceContract: nope-v1")
+            text = handle.read().replace("sourceContract: nsdl-security-json-v2", "sourceContract: nope-v1")
         with open(target, "w", encoding="utf-8") as handle:
             handle.write(text)
         self.assertEqual(self.run_check().returncode, 1)

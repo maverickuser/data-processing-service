@@ -143,6 +143,7 @@ class JdbcSecurityReviewRepositoryTest {
     when(row.getString("exchange_name")).thenReturn("NSE");
     when(row.getObject("listing_date", LocalDate.class)).thenReturn(DAY);
     when(row.getString("event_type")).thenReturn("Interest");
+    when(row.getString("source_category")).thenReturn("SCHEDULE");
     when(row.getObject("due_date", LocalDate.class)).thenReturn(DAY);
     when(row.getBigDecimal("amount_payable")).thenReturn(new BigDecimal("89400.00"));
     when(row.getObject("first_recorded_at", OffsetDateTime.class)).thenReturn(AT);
@@ -169,7 +170,14 @@ class JdbcSecurityReviewRepositoryTest {
     assertThat(cashFlow)
         .isEqualTo(
             new SecurityView.CashFlow(
-                "Interest", null, DAY, new BigDecimal("89400.00"), null, null, INSTANT));
+                "SCHEDULE",
+                "Interest",
+                null,
+                DAY,
+                new BigDecimal("89400.00"),
+                null,
+                null,
+                INSTANT));
   }
 
   /** Runs a read, then maps the row with the mapper it passed for that query. */

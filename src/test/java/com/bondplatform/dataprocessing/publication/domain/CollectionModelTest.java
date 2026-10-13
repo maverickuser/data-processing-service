@@ -21,7 +21,10 @@ class CollectionModelTest {
 
   @Test
   void entriesMayHaveEveryValueAbsent() {
-    assertThat(new CashFlow(null, null, null, null, null, null).eventType()).isNull();
+    assertThat(
+            new CashFlow(CashFlow.SourceCategory.SCHEDULE, null, null, null, null, null, null)
+                .eventType())
+        .isNull();
     assertThat(new Listing(null, null).exchangeName()).isNull();
     assertThat(new CollateralAsset(null, null, null).remarks()).isNull();
     assertThat(
@@ -40,10 +43,22 @@ class CollectionModelTest {
   void cashFlowsWithTheSameValuesAreEqual() {
     CashFlow first =
         new CashFlow(
-            "Interest", null, LocalDate.of(2027, 6, 8), new BigDecimal("89400"), null, null);
+            CashFlow.SourceCategory.SCHEDULE,
+            "Interest",
+            null,
+            LocalDate.of(2027, 6, 8),
+            new BigDecimal("89400"),
+            null,
+            null);
     CashFlow second =
         new CashFlow(
-            "Interest", null, LocalDate.of(2027, 6, 8), new BigDecimal("89400"), null, null);
+            CashFlow.SourceCategory.SCHEDULE,
+            "Interest",
+            null,
+            LocalDate.of(2027, 6, 8),
+            new BigDecimal("89400"),
+            null,
+            null);
 
     assertThat(first).isEqualTo(second);
   }

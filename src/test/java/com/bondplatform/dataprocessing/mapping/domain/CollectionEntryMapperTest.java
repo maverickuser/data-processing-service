@@ -101,10 +101,16 @@ class CollectionEntryMapperTest {
             List.of(
                 sample("INE831R08076_coupon-details.json"), sample("INE831R08076_listings.json")));
 
-    assertThat(collections.cashFlows()).hasSize(11);
-    assertThat(collections.cashFlows().getLast().value())
+    // 11 scheduled payments, and 3 interest entries whose amountPayable NSDL leaves empty
+    assertThat(collections.cashFlows()).hasSize(14);
+    assertThat(collections.cashFlows())
+        .filteredOn(entry -> entry.value().sourceCategory() == CashFlow.SourceCategory.INTEREST)
+        .hasSize(3)
+        .allSatisfy(entry -> assertThat(entry.value().amountPayable()).isNull());
+    assertThat(collections.cashFlows().get(10).value())
         .isEqualTo(
             new CashFlow(
+                CashFlow.SourceCategory.SCHEDULE,
                 "Full Redemption",
                 LocalDate.of(2029, 5, 24),
                 LocalDate.of(2029, 6, 8),
@@ -177,6 +183,7 @@ class CollectionEntryMapperTest {
             new SecurityEntry<>(
                 ISIN,
                 new CashFlow(
+                    CashFlow.SourceCategory.SCHEDULE,
                     "Interest",
                     null,
                     LocalDate.of(2027, 6, 8),

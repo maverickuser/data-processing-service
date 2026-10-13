@@ -73,7 +73,7 @@ class GetSecurityTest {
     SecurityView.Listing listing =
         new SecurityView.Listing("NSE", LocalDate.of(2019, 6, 14), RECORDED);
     SecurityView.CashFlow cashFlow =
-        new SecurityView.CashFlow("Interest", null, null, null, null, null, RECORDED);
+        new SecurityView.CashFlow("SCHEDULE", "Interest", null, null, null, null, null, RECORDED);
     when(securities.ratings(ISIN)).thenReturn(List.of(earlier, current));
     when(securities.listings(ISIN)).thenReturn(List.of(listing));
     when(securities.cashFlows(ISIN)).thenReturn(List.of(cashFlow));

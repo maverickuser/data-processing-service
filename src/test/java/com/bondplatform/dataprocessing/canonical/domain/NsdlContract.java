@@ -24,7 +24,7 @@ public final class NsdlContract {
   public static final PinnedContracts PINNED =
       new ClasspathContractCatalog(
               new YamlContractLoader(), new ContractValidator(RuleRegistry.standard()))
-          .load(List.of(new ContractPair("nsdl-security-json-v1", "nsdl-security-mapping-v1")))
+          .load(List.of(new ContractPair("nsdl-security-json-v2", "nsdl-security-mapping-v2")))
           .contractsFor(new DatasetUrn("urn:bond-platform:dataset:nsdl-security"));
 
   /** The real NSDL source contract. */

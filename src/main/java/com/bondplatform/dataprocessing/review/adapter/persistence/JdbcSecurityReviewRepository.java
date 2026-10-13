@@ -72,8 +72,8 @@ public class JdbcSecurityReviewRepository implements SecurityReviewRepository {
 
   static final String CASH_FLOWS =
       """
-      SELECT event_type, record_date, due_date, amount_payable, payment_date, new_face_value,
-             first_recorded_at
+      SELECT source_category, event_type, record_date, due_date, amount_payable, payment_date,
+             new_face_value, first_recorded_at
       FROM securities_data.security_cash_flows
       WHERE isin = :isin
       ORDER BY due_date NULLS LAST, first_recorded_at, id
@@ -210,6 +210,7 @@ public class JdbcSecurityReviewRepository implements SecurityReviewRepository {
         byIsin(isin),
         (row, n) ->
             new SecurityView.CashFlow(
+                row.getString("source_category"),
                 row.getString("event_type"),
                 date(row, "record_date"),
                 date(row, "due_date"),

@@ -90,9 +90,9 @@ class YamlContractLoaderTest {
   @Test
   void loadsTheCommittedNsdlSourceContract() {
     SourceContract.Json contract =
-        (SourceContract.Json) loader.loadSourceContract(committed("nsdl-security-json-v1"));
+        (SourceContract.Json) loader.loadSourceContract(committed("nsdl-security-json-v2"));
 
-    assertThat(contract.id().name()).isEqualTo("nsdl-security-json-v1");
+    assertThat(contract.id().name()).isEqualTo("nsdl-security-json-v2");
     assertThat(contract.dataset().value()).isEqualTo("urn:bond-platform:dataset:nsdl-security");
     assertThat(contract.maxCombinedBytes()).isEqualTo(10_485_760L);
     assertThat(contract.scalars())
@@ -109,7 +109,12 @@ class YamlContractLoaderTest {
     assertThat(contract.collections())
         .extracting(JsonCollection::name)
         .containsExactly(
-            "cash_flows", "listings", "current_ratings", "earlier_ratings", "collateral_assets");
+            "cash_flows",
+            "interest_cash_flows",
+            "listings",
+            "current_ratings",
+            "earlier_ratings",
+            "collateral_assets");
     JsonCollection cashFlows = contract.collections().get(0);
     assertThat(cashFlows.path())
         .isEqualTo("$.coupensVo.cashFlowScheduleDetails.cashFlowSchedule[*]");
@@ -121,11 +126,11 @@ class YamlContractLoaderTest {
   @Test
   void earlierRatingsReuseTheCurrentRatingFields() {
     SourceContract.Json contract =
-        (SourceContract.Json) loader.loadSourceContract(committed("nsdl-security-json-v1"));
+        (SourceContract.Json) loader.loadSourceContract(committed("nsdl-security-json-v2"));
 
-    assertThat(contract.collections().get(3).fields())
+    assertThat(contract.collections().get(4).fields())
         .hasSize(7)
-        .isEqualTo(contract.collections().get(2).fields());
+        .isEqualTo(contract.collections().get(3).fields());
   }
 
   @Test
@@ -147,9 +152,9 @@ class YamlContractLoaderTest {
 
   @Test
   void loadsTheCommittedNsdlMappingContract() {
-    MappingContract contract = loader.loadMappingContract(committed("nsdl-security-mapping-v1"));
+    MappingContract contract = loader.loadMappingContract(committed("nsdl-security-mapping-v2"));
 
-    assertThat(contract.sourceContract()).isEqualTo("nsdl-security-json-v1");
+    assertThat(contract.sourceContract()).isEqualTo("nsdl-security-json-v2");
     assertThat(contract.primary().target()).isEqualTo("securities_data.securities");
     assertThat(contract.primary().fields())
         .hasSize(12)
@@ -158,14 +163,21 @@ class YamlContractLoaderTest {
     assertThat(contract.collections())
         .extracting(CollectionMapping::name)
         .containsExactly(
-            "cash_flows", "listings", "current_ratings", "earlier_ratings", "collateral_assets");
-    CollectionMapping earlierRatings = contract.collections().get(3);
+            "cash_flows",
+            "interest_cash_flows",
+            "listings",
+            "current_ratings",
+            "earlier_ratings",
+            "collateral_assets");
+    CollectionMapping earlierRatings = contract.collections().get(4);
+    assertThat(contract.collections().get(1).constants())
+        .containsEntry("sourceCategory", "INTEREST");
     assertThat(earlierRatings.target()).isEqualTo("securities_data.security_ratings");
     assertThat(earlierRatings.constants()).containsEntry("sourceCategory", "EARLIER");
     assertThat(earlierRatings.fields()).containsEntry("rating_agency_name", "ratingAgencyName");
     assertThat(contract.collections().get(0).fields())
         .containsEntry("new_face_value", "newFaceValue");
-    assertThat(contract.collections().get(1).constants()).isEmpty();
+    assertThat(contract.collections().get(2).constants()).isEmpty();
   }
 
   @Test
@@ -245,7 +257,7 @@ class YamlContractLoaderTest {
 
   @Test
   void unsupportedKeyInJsonContractIsRejected() {
-    String json = committed("nsdl-security-json-v1");
+    String json = committed("nsdl-security-json-v2");
 
     assertRejected(json + "types:\n  decimal: { normalize: [evaluateExpression] }\n", "types");
     assertRejected(
@@ -266,7 +278,7 @@ class YamlContractLoaderTest {
   @Test
   void unsupportedKeyInMappingContractIsRejected() {
     String csvMapping = committed("bse-debt-bhavcopy-mapping-v2");
-    String jsonMapping = committed("nsdl-security-mapping-v1");
+    String jsonMapping = committed("nsdl-security-mapping-v2");
 
     assertMappingRejected(csvMapping + "eligibleDisposition: FAILED\n", "eligibleDisposition");
     assertMappingRejected(jsonMapping + "rules:\n  - { rule: bogusRule }\n", "rules");

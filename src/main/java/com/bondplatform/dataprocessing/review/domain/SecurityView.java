@@ -66,8 +66,12 @@ public record SecurityView(
   public record Listing(
       @Nullable String exchangeName, @Nullable LocalDate listingDate, Instant firstRecordedAt) {}
 
-  /** A recorded cash flow. */
+  /**
+   * A recorded cash flow, with the NSDL list it was read from ({@code SCHEDULE} or {@code
+   * INTEREST}).
+   */
   public record CashFlow(
+      String sourceCategory,
       @Nullable String eventType,
       @Nullable LocalDate recordDate,
       @Nullable LocalDate dueDate,

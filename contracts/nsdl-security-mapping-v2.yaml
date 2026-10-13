@@ -6,9 +6,12 @@
 # inputs erase nothing, and competing values in one request are resolved by S3 LastModified then
 # object key (section 13.5); collections are append-only and deduplicated on all mapped fields
 # (section 13.6); an Unsecured status clears coverage and suppresses assets (section 15.2).
+#
+# v2 (decision 0007): both NSDL cash-flow lists fill security_cash_flows, told apart by the
+# sourceCategory constant. A payment identical in both lists is stored once.
 id: nsdl-security-mapping
-version: v1
-sourceContract: nsdl-security-json-v1
+version: v2
+sourceContract: nsdl-security-json-v2
 
 security:
   target: securities_data.securities
@@ -29,7 +32,12 @@ security:
 collections:
   cash_flows:
     target: securities_data.security_cash_flows
-    fields: { event_type: eventType, record_date: recordDate, due_date: dueDate, amount_payable: amountPayable, payment_date: paymentDate, new_face_value: newFaceValue }
+    constants: { sourceCategory: SCHEDULE }
+    fields: &cashFlowMap { event_type: eventType, record_date: recordDate, due_date: dueDate, amount_payable: amountPayable, payment_date: paymentDate, new_face_value: newFaceValue }
+  interest_cash_flows:
+    target: securities_data.security_cash_flows
+    constants: { sourceCategory: INTEREST }
+    fields: *cashFlowMap
   listings:
     target: securities_data.security_listings
     fields: { exchange_name: exchangeName, listing_date: listingDate }
