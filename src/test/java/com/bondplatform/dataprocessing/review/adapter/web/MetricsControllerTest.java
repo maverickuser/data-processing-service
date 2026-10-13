@@ -8,6 +8,7 @@ import com.bondplatform.dataprocessing.review.adapter.web.MetricsController.Metr
 import com.bondplatform.dataprocessing.review.application.GetSecurityMetrics;
 import com.bondplatform.dataprocessing.review.domain.SecurityMetrics;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.ResponseEntity;
 
 /** Test case U-REV-10. */
 class MetricsControllerTest {
@@ -17,7 +18,9 @@ class MetricsControllerTest {
     GetSecurityMetrics getSecurityMetrics = mock(GetSecurityMetrics.class);
     when(getSecurityMetrics.current()).thenReturn(new SecurityMetrics(6, 1, 2, 3, 4, 5));
 
-    assertThat(new MetricsController(getSecurityMetrics).metrics())
-        .isEqualTo(new MetricsResponse(6, 1, 2, 3, 4, 5));
+    ResponseEntity<MetricsResponse> response = new MetricsController(getSecurityMetrics).metrics();
+
+    assertThat(response.getBody()).isEqualTo(new MetricsResponse(6, 1, 2, 3, 4, 5));
+    assertThat(response.getHeaders().getCacheControl()).isEqualTo("max-age=60, public");
   }
 }

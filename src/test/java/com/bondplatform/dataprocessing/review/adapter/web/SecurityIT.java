@@ -238,6 +238,7 @@ class SecurityIT extends PostgresIntegrationTest {
     MockHttpServletResponse response = http.perform(get("/v1/metrics")).andReturn().getResponse();
 
     assertThat(response.getStatus()).isEqualTo(200);
+    assertThat(response.getHeader("Cache-Control")).isEqualTo("max-age=60, public");
     JsonNode body = json.readTree(response.getContentAsString());
     assertThat(body.propertyNames())
         .containsExactlyInAnyOrder(

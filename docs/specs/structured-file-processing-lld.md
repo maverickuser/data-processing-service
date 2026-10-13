@@ -1273,7 +1273,7 @@ Agreed (2026-10-13, decision 0006). `GET /v1/metrics` returns six counts of secu
 | `securitiesCountWithoutCouponRate` | there is no coupon rate from any source |
 | `securitiesCountWithoutCollateralStatus` | there is no collateral status |
 
-One statement computes all six over `securities`, so they describe one moment. Each "has no" check is a lookup on an existing collection index that starts with `isin`.
+One statement computes all six over `securities`, so they describe one moment. It finds once per security which collections it has, each by a lookup on an existing collection index that starts with `isin`. Responses carry `Cache-Control: max-age=60, public`, since each one reads every security. The list of detail fields is fixed in the query: a detail column added to section 15.3 must be added there too.
 
 ## 21. Operational defaults
 

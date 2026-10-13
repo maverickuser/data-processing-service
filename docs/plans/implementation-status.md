@@ -4,7 +4,7 @@ Factual record of progress against the [implementation plan](data-processing-ser
 
 Rules: a PR link is added only when the PR exists. `State` is one of `not started`, `in progress`, `in review`, `merged`. `Verified checks` lists what actually ran and passed on the merged head. Planned or mocked work is never marked deployed or live-tested.
 
-Last updated: 2026-10-11.
+Last updated: 2026-10-13.
 
 | PR | Stack | Branch | State | PR link | Verified checks | Notes |
 |---|---|---|---|---|---|---|

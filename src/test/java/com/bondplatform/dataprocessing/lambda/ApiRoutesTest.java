@@ -9,9 +9,11 @@ import com.bondplatform.dataprocessing.admission.domain.SubmissionValidator;
 import com.bondplatform.dataprocessing.review.adapter.web.ApiDocumentationController;
 import com.bondplatform.dataprocessing.review.adapter.web.DailyMarketSummaryController;
 import com.bondplatform.dataprocessing.review.adapter.web.JobStatusController;
+import com.bondplatform.dataprocessing.review.adapter.web.MetricsController;
 import com.bondplatform.dataprocessing.review.adapter.web.SecurityController;
 import com.bondplatform.dataprocessing.review.application.GetJobStatus;
 import com.bondplatform.dataprocessing.review.application.GetSecurity;
+import com.bondplatform.dataprocessing.review.application.GetSecurityMetrics;
 import com.bondplatform.dataprocessing.review.application.ListDailyMarketSummaries;
 import com.bondplatform.dataprocessing.review.application.ListJobErrors;
 import com.bondplatform.dataprocessing.review.application.ListSecurities;
@@ -35,12 +37,14 @@ class ApiRoutesTest {
               () -> new PublicApiProperties(URI.create("https://processing.example")))
           .withBean(GetSecurity.class, () -> mock(GetSecurity.class))
           .withBean(ListSecurities.class, () -> mock(ListSecurities.class))
+          .withBean(GetSecurityMetrics.class, () -> mock(GetSecurityMetrics.class))
           .withBean(GetJobStatus.class, () -> mock(GetJobStatus.class))
           .withBean(ListJobErrors.class, () -> mock(ListJobErrors.class))
           .withBean(ListDailyMarketSummaries.class, () -> mock(ListDailyMarketSummaries.class))
           .withUserConfiguration(
               EventIngestionController.class,
               SecurityController.class,
+              MetricsController.class,
               DailyMarketSummaryController.class,
               JobStatusController.class,
               ApiDocumentationController.class);
@@ -54,6 +58,7 @@ class ApiRoutesTest {
               assertThat(context).doesNotHaveBean(EventIngestionController.class);
               assertThat(context)
                   .hasSingleBean(SecurityController.class)
+                  .hasSingleBean(MetricsController.class)
                   .hasSingleBean(DailyMarketSummaryController.class)
                   .hasSingleBean(JobStatusController.class)
                   .hasSingleBean(ApiDocumentationController.class);
@@ -69,6 +74,7 @@ class ApiRoutesTest {
               assertThat(context).hasSingleBean(EventIngestionController.class);
               assertThat(context)
                   .doesNotHaveBean(SecurityController.class)
+                  .doesNotHaveBean(MetricsController.class)
                   .doesNotHaveBean(DailyMarketSummaryController.class)
                   .doesNotHaveBean(JobStatusController.class)
                   .doesNotHaveBean(ApiDocumentationController.class);
@@ -82,6 +88,7 @@ class ApiRoutesTest {
             assertThat(context)
                 .doesNotHaveBean(EventIngestionController.class)
                 .doesNotHaveBean(SecurityController.class)
+                .doesNotHaveBean(MetricsController.class)
                 .doesNotHaveBean(DailyMarketSummaryController.class)
                 .doesNotHaveBean(JobStatusController.class)
                 .doesNotHaveBean(ApiDocumentationController.class));
@@ -97,6 +104,7 @@ class ApiRoutesTest {
                 assertThat(context)
                     .hasSingleBean(EventIngestionController.class)
                     .hasSingleBean(SecurityController.class)
+                    .hasSingleBean(MetricsController.class)
                     .hasSingleBean(DailyMarketSummaryController.class)
                     .hasSingleBean(JobStatusController.class));
   }

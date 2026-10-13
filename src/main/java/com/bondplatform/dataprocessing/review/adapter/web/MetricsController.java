@@ -2,8 +2,11 @@ package com.bondplatform.dataprocessing.review.adapter.web;
 
 import com.bondplatform.dataprocessing.review.application.GetSecurityMetrics;
 import com.bondplatform.dataprocessing.review.domain.SecurityMetrics;
+import java.time.Duration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
+import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -19,10 +22,15 @@ public class MetricsController {
     this.getSecurityMetrics = getSecurityMetrics;
   }
 
-  /** Returns the security counts as they are now. */
+  /** How long a client may reuse the counts: each request reads every security. */
+  static final Duration MAX_AGE = Duration.ofMinutes(1);
+
+  /** Returns the security counts as they are now; clients may reuse them for a minute. */
   @GetMapping(path = "/v1/metrics", produces = MediaType.APPLICATION_JSON_VALUE)
-  public MetricsResponse metrics() {
-    return MetricsResponse.of(getSecurityMetrics.current());
+  public ResponseEntity<MetricsResponse> metrics() {
+    return ResponseEntity.ok()
+        .cacheControl(CacheControl.maxAge(MAX_AGE).cachePublic())
+        .body(MetricsResponse.of(getSecurityMetrics.current()));
   }
 
   /** The body of {@code GET /v1/metrics}, as the read OpenAPI defines it. */

@@ -80,38 +80,46 @@ public class JdbcSecurityReviewRepository implements SecurityReviewRepository {
       """;
 
   /**
-   * One pass over the securities. Each "has no ..." check is an index lookup: every collection
-   * table's distinct-entry index starts with {@code isin}, and the ratings one with {@code (isin,
-   * source_category)}.
+   * One pass over the securities that finds, once per security, which collections it has; the
+   * counts are then taken over those flags. Each existence check is an index lookup: every
+   * collection table's distinct-entry index starts with {@code isin}, and the ratings one with
+   * {@code (isin, source_category)}. The detail fields are those of LLD section 15.3.
    */
   static final String METRICS =
       """
-      SELECT count(*) AS securities,
-             count(*) FILTER (
-               WHERE s.issuer_name IS NULL AND s.issuer_ownership_type IS NULL
+      WITH flags AS (
+        SELECT s.coupon_rate_value IS NULL AS no_coupon_rate,
+               s.collateral_status IS NULL AS no_collateral_status,
+               (s.issuer_name IS NULL AND s.issuer_ownership_type IS NULL
                  AND s.instrument_type IS NULL AND s.allotment_date IS NULL
                  AND s.redemption_date IS NULL AND s.original_face_value IS NULL
                  AND s.collateral_status IS NULL AND s.asset_coverage_basis IS NULL
                  AND s.asset_coverage_value IS NULL AND s.coupon_rate_value IS NULL
-                 AND s.coupon_type IS NULL AND s.listing_status IS NULL
-                 AND NOT EXISTS (SELECT 1 FROM securities_data.security_cash_flows c
-                                 WHERE c.isin = s.isin)
-                 AND NOT EXISTS (SELECT 1 FROM securities_data.security_listings l
-                                 WHERE l.isin = s.isin)
-                 AND NOT EXISTS (SELECT 1 FROM securities_data.security_ratings r
-                                 WHERE r.isin = s.isin)
-                 AND NOT EXISTS (SELECT 1 FROM securities_data.security_collateral_assets a
-                                 WHERE a.isin = s.isin)) AS without_details,
+                 AND s.coupon_type IS NULL AND s.listing_status IS NULL) AS no_detail_field,
+               EXISTS (SELECT 1 FROM securities_data.security_cash_flows c
+                       WHERE c.isin = s.isin) AS has_cash_flow,
+               EXISTS (SELECT 1 FROM securities_data.security_ratings r
+                       WHERE r.isin = s.isin AND r.source_category = 'CURRENT')
+                 AS has_current_rating,
+               EXISTS (SELECT 1 FROM securities_data.security_ratings r
+                       WHERE r.isin = s.isin AND r.source_category = 'EARLIER')
+                 AS has_earlier_rating,
+               EXISTS (SELECT 1 FROM securities_data.security_listings l
+                       WHERE l.isin = s.isin) AS has_listing,
+               EXISTS (SELECT 1 FROM securities_data.security_collateral_assets a
+                       WHERE a.isin = s.isin) AS has_collateral_asset
+        FROM securities_data.securities s
+      )
+      SELECT count(*) AS securities,
              count(*) FILTER (
-               WHERE NOT EXISTS (SELECT 1 FROM securities_data.security_cash_flows c
-                                 WHERE c.isin = s.isin)) AS without_cash_flows,
-             count(*) FILTER (
-               WHERE NOT EXISTS (SELECT 1 FROM securities_data.security_ratings r
-                                 WHERE r.isin = s.isin AND r.source_category = 'CURRENT'))
-               AS without_current_ratings,
-             count(*) FILTER (WHERE s.coupon_rate_value IS NULL) AS without_coupon_rate,
-             count(*) FILTER (WHERE s.collateral_status IS NULL) AS without_collateral_status
-      FROM securities_data.securities s
+               WHERE no_detail_field AND NOT has_cash_flow AND NOT has_current_rating
+                 AND NOT has_earlier_rating AND NOT has_listing AND NOT has_collateral_asset)
+               AS without_details,
+             count(*) FILTER (WHERE NOT has_cash_flow) AS without_cash_flows,
+             count(*) FILTER (WHERE NOT has_current_rating) AS without_current_ratings,
+             count(*) FILTER (WHERE no_coupon_rate) AS without_coupon_rate,
+             count(*) FILTER (WHERE no_collateral_status) AS without_collateral_status
+      FROM flags
       """;
 
   private final NamedParameterJdbcOperations jdbc;
