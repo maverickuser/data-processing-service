@@ -1,7 +1,7 @@
 # 0005 — Request a security's details again: missing coupon rate or stale details
 
 Date: 2026-10-13
-Status: accepted
+Status: accepted; its monthly refresh superseded by 0008
 
 ## Context
 

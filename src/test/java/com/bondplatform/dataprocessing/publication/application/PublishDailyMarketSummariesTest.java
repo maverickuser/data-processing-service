@@ -44,6 +44,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
@@ -217,17 +218,17 @@ class PublishDailyMarketSummariesTest {
         .thenReturn(
             Map.of(
                 noCouponDayOld,
-                new LockedSecurity(StoredCoupon.NONE, 1, NOW.minus(Duration.ofDays(1)), NOW),
+                complete(StoredCoupon.NONE, 1, NOW.minus(Duration.ofDays(1))),
                 noCouponHourOld,
-                new LockedSecurity(StoredCoupon.NONE, 1, NOW.minusSeconds(3600), NOW),
+                complete(StoredCoupon.NONE, 1, NOW.minusSeconds(3600)),
                 noCouponThreeAsked,
-                new LockedSecurity(StoredCoupon.NONE, 3, NOW.minus(Duration.ofDays(9)), NOW),
+                complete(StoredCoupon.NONE, 3, NOW.minus(Duration.ofDays(9))),
                 withStoredCoupon,
                 requested(new StoredCoupon(Percent.parse("8"), CouponSource.NSDL, null)),
                 couponInThisFile,
                 requested(StoredCoupon.NONE),
                 created,
-                new LockedSecurity(StoredCoupon.NONE, 0, null, NOW)));
+                complete(StoredCoupon.NONE, 0, null)));
     ArgumentCaptor<NewOutboxEvent> events = ArgumentCaptor.forClass(NewOutboxEvent.class);
 
     publish.publish(
@@ -252,8 +253,14 @@ class PublishDailyMarketSummariesTest {
     verify(securities).recordDetailsRequests(List.of(noCouponDayOld, created), NOW);
   }
 
+  /** A security asked for once, a month ago, with cash flows, current ratings and collateral. */
   private static LockedSecurity requested(StoredCoupon coupon) {
-    return new LockedSecurity(coupon, 1, NOW.minus(Duration.ofDays(30)), NOW);
+    return complete(coupon, 1, NOW.minus(Duration.ofDays(30)));
+  }
+
+  private static LockedSecurity complete(
+      StoredCoupon coupon, int requests, @Nullable Instant lastRequest) {
+    return new LockedSecurity(coupon, requests, lastRequest, true, true, true);
   }
 
   /** Hands out 00000000-0000-0000-0000-000000000001, then ...002, and so on. */

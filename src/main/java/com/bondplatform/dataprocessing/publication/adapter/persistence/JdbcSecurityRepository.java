@@ -77,12 +77,18 @@ public class JdbcSecurityRepository implements SecurityRepository {
   /** Locks in ISIN order, the same order {@link #INSERT_MISSING} takes, so it cannot deadlock. */
   static final String LOCK =
       """
-      SELECT isin, coupon_rate_value, coupon_rate_source, coupon_rate_trade_date,
-             details_request_count, details_requested_at, updated_at
-      FROM securities_data.securities
-      WHERE isin = ANY(?::text[])
-      ORDER BY isin
-      FOR UPDATE
+      SELECT s.isin, s.coupon_rate_value, s.coupon_rate_source, s.coupon_rate_trade_date,
+             s.details_request_count, s.details_requested_at,
+             s.collateral_status IS NOT NULL AS has_collateral_status,
+             EXISTS (SELECT 1 FROM securities_data.security_cash_flows c
+                     WHERE c.isin = s.isin) AS has_cash_flows,
+             EXISTS (SELECT 1 FROM securities_data.security_ratings r
+                     WHERE r.isin = s.isin AND r.source_category = 'CURRENT')
+               AS has_current_ratings
+      FROM securities_data.securities s
+      WHERE s.isin = ANY(?::text[])
+      ORDER BY s.isin
+      FOR UPDATE OF s
       """;
 
   static final String REPLACE_COUPON =
@@ -216,7 +222,9 @@ public class JdbcSecurityRepository implements SecurityRepository {
                       row.getObject("coupon_rate_trade_date", LocalDate.class)),
                   row.getInt("details_request_count"),
                   requestedAt == null ? null : requestedAt.toInstant(),
-                  row.getObject("updated_at", OffsetDateTime.class).toInstant()));
+                  row.getBoolean("has_cash_flows"),
+                  row.getBoolean("has_current_ratings"),
+                  row.getBoolean("has_collateral_status")));
         },
         (Object) distinct(isins));
     return locked;
