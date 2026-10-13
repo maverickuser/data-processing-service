@@ -14,7 +14,7 @@ class ContractPropertiesTest {
 
   @Test
   void acceptsListOfNamedPairs() {
-    ContractPair pair = new ContractPair("nsdl-security-json-v1", "nsdl-security-mapping-v1");
+    ContractPair pair = new ContractPair("nsdl-security-json-v2", "nsdl-security-mapping-v2");
 
     assertThat(new ContractProperties(List.of(pair)).contracts()).containsExactly(pair);
   }
@@ -32,10 +32,10 @@ class ContractPropertiesTest {
   @ValueSource(strings = {"", " ", "../contracts/x-v1", "Name-V1", "a/b", "name.yaml", "-v1"})
   void contractNameMustBePlainLowercaseName(String name) {
     assertThatIllegalStateException()
-        .isThrownBy(() -> new ContractPair(name, "nsdl-security-mapping-v1"))
+        .isThrownBy(() -> new ContractPair(name, "nsdl-security-mapping-v2"))
         .withMessageContaining("data-processing.contracts[].source");
     assertThatIllegalStateException()
-        .isThrownBy(() -> new ContractPair("nsdl-security-json-v1", name))
+        .isThrownBy(() -> new ContractPair("nsdl-security-json-v2", name))
         .withMessageContaining("data-processing.contracts[].mapping");
   }
 }

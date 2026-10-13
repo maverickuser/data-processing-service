@@ -51,6 +51,7 @@ class SecurityCollectionRepositoryIT extends PostgresIntegrationTest {
   void appendsNewCashFlowWithItsValuesSourceAndFirstRecordedTime() {
     CashFlow cashFlow =
         new CashFlow(
+            CashFlow.SourceCategory.SCHEDULE,
             "Partial Redemption",
             LocalDate.of(2026, 6, 17),
             LocalDate.of(2026, 7, 2),
@@ -72,6 +73,55 @@ class SecurityCollectionRepositoryIT extends PostgresIntegrationTest {
     assertThat(row.get("id")).isNotNull();
   }
 
+  /** I-JSON-09: both NSDL lists are stored, and a payment in both is stored once. */
+  @Test
+  void interestCashFlowIsStoredWithItsCategoryAndAPaymentInBothListsOnce() {
+    CashFlow scheduled =
+        new CashFlow(
+            CashFlow.SourceCategory.SCHEDULE,
+            "Interest",
+            LocalDate.of(2025, 5, 26),
+            LocalDate.of(2025, 6, 10),
+            null,
+            LocalDate.of(2025, 6, 10),
+            null);
+    CashFlow sameInInterestList =
+        new CashFlow(
+            CashFlow.SourceCategory.INTEREST,
+            "Interest",
+            LocalDate.of(2025, 5, 26),
+            LocalDate.of(2025, 6, 10),
+            null,
+            LocalDate.of(2025, 6, 10),
+            null);
+    CashFlow onlyInInterestList =
+        new CashFlow(
+            CashFlow.SourceCategory.INTEREST,
+            "Interest",
+            LocalDate.of(2026, 2, 18),
+            LocalDate.of(2026, 3, 5),
+            null,
+            LocalDate.of(2026, 3, 5),
+            null);
+
+    int appended =
+        collections.appendCashFlows(
+            List.of(
+                entry(ISIN, scheduled, "$.s[0]"),
+                entry(ISIN, sameInInterestList, "$.i[0]"),
+                entry(ISIN, onlyInInterestList, "$.i[1]")),
+            FIRST);
+
+    assertThat(appended).isEqualTo(2);
+    assertThat(
+            jdbc.sql(
+                    "SELECT source_category FROM securities_data.security_cash_flows"
+                        + " ORDER BY due_date")
+                .query(String.class)
+                .list())
+        .containsExactly("SCHEDULE", "INTEREST");
+  }
+
   @Test
   void everyColumnOfEveryCollectionIsStoredInItsOwnPlace() {
     collections.appendCashFlows(
@@ -79,6 +129,7 @@ class SecurityCollectionRepositoryIT extends PostgresIntegrationTest {
             entry(
                 ISIN,
                 new CashFlow(
+                    CashFlow.SourceCategory.SCHEDULE,
                     "Interest",
                     LocalDate.of(2026, 1, 1),
                     LocalDate.of(2026, 2, 2),
@@ -110,7 +161,8 @@ class SecurityCollectionRepositoryIT extends PostgresIntegrationTest {
     assertThat(textOf("security_cash_flows"))
         .isEqualTo(
             "event_type=Interest, record_date=2026-01-01, due_date=2026-02-02,"
-                + " amount_payable=11.5, payment_date=2026-03-03, new_face_value=22.5");
+                + " amount_payable=11.5, payment_date=2026-03-03, new_face_value=22.5,"
+                + " source_category=SCHEDULE");
     assertThat(textOf("security_listings")).isEqualTo("exchange_name=Nse, listing_date=2019-06-14");
     assertThat(textOf("security_ratings"))
         .isEqualTo(
@@ -125,12 +177,24 @@ class SecurityCollectionRepositoryIT extends PostgresIntegrationTest {
   void identicalEntryIsSkippedAndKeepsItsOriginalSourceAndTime() {
     CashFlow cashFlow =
         new CashFlow(
-            "Interest", null, LocalDate.of(2027, 6, 8), new BigDecimal("89400"), null, null);
+            CashFlow.SourceCategory.SCHEDULE,
+            "Interest",
+            null,
+            LocalDate.of(2027, 6, 8),
+            new BigDecimal("89400"),
+            null,
+            null);
     collections.appendCashFlows(List.of(entry(ISIN, cashFlow, "$.x[0]")), FIRST);
 
     CashFlow sameWithOtherScale =
         new CashFlow(
-            "Interest", null, LocalDate.of(2027, 6, 8), new BigDecimal("89400.00"), null, null);
+            CashFlow.SourceCategory.SCHEDULE,
+            "Interest",
+            null,
+            LocalDate.of(2027, 6, 8),
+            new BigDecimal("89400.00"),
+            null,
+            null);
     int appended =
         collections.appendCashFlows(
             List.of(

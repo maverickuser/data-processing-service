@@ -115,7 +115,15 @@ class NsdlProcessingIT extends PostgresIntegrationTest {
     assertThat(security.get("coupon_type")).isEqualTo("Simple");
     assertThat(security.get("redemption_date")).isEqualTo(Date.valueOf("2029-06-08"));
     assertThat((BigDecimal) security.get("coupon_rate_value")).isEqualByComparingTo("8.94");
-    assertThat(count("security_cash_flows")).isEqualTo(11);
+    // 11 scheduled payments and 3 interest entries (decision 0007)
+    assertThat(count("security_cash_flows")).isEqualTo(14);
+    assertThat(
+            jdbc.sql(
+                    "SELECT count(*) FROM securities_data.security_cash_flows"
+                        + " WHERE source_category = 'INTEREST'")
+                .query(Long.class)
+                .single())
+        .isEqualTo(3);
     assertThat(count("security_listings")).isEqualTo(2);
     assertThat(count("security_ratings")).isEqualTo(15);
     // The redemptions file has no usable selected value, so nothing refers to it

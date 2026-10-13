@@ -56,6 +56,7 @@ class JdbcSecurityCollectionRepositoryTest {
     databaseAddsEveryRow();
     CashFlow cashFlow =
         new CashFlow(
+            CashFlow.SourceCategory.SCHEDULE,
             "Partial Redemption",
             LocalDate.of(2026, 6, 17),
             LocalDate.of(2026, 7, 2),
@@ -69,6 +70,7 @@ class JdbcSecurityCollectionRepositoryTest {
     assertThat(appended).isEqualTo(1);
     assertThat(bound.getValue("id")).isEqualTo(new UUID(0, 1));
     assertThat(bound.getValue("isin")).isEqualTo("INE831R08076");
+    assertThat(bound.getValue("sourceCategory")).isEqualTo("SCHEDULE");
     assertThat(bound.getValue("eventType")).isEqualTo("Partial Redemption");
     assertThat(bound.getValue("recordDate")).isEqualTo(LocalDate.of(2026, 6, 17));
     assertThat(bound.getValue("dueDate")).isEqualTo(LocalDate.of(2026, 7, 2));
@@ -86,7 +88,11 @@ class JdbcSecurityCollectionRepositoryTest {
     databaseAddsEveryRow();
 
     repository.appendCashFlows(
-        List.of(entry(new CashFlow(null, null, null, null, null, null))), RECORDED_AT);
+        List.of(
+            entry(
+                new CashFlow(
+                    CashFlow.SourceCategory.SCHEDULE, null, null, null, null, null, null))),
+        RECORDED_AT);
 
     SqlParameterSource bound = singleBatch(JdbcSecurityCollectionRepository.INSERT_CASH_FLOW)[0];
     for (String column :
@@ -239,5 +245,12 @@ class JdbcSecurityCollectionRepositoryTest {
 
   private static <T> SecurityEntry<T> entry(T value) {
     return new SecurityEntry<>(ISIN, value, SOURCE);
+  }
+
+  @Test
+  void cashFlowCarriesItsSourceCategoryAndSkipsAnyDuplicate() {
+    assertThat(JdbcSecurityCollectionRepository.INSERT_CASH_FLOW)
+        .contains(":sourceCategory")
+        .endsWith("ON CONFLICT DO NOTHING\n");
   }
 }

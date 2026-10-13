@@ -120,8 +120,8 @@ class SecuritiesSchemaIT extends PostgresIntegrationTest {
   // I-DB-01
   @Test
   void appendOnlyTablesMatchTheDesign() {
-    assertThat(schema.columns(SCHEMA, "security_cash_flows"))
-        .containsExactlyElementsOf(
+    List<String> cashFlowColumns =
+        new ArrayList<>(
             appendOnlyColumns(
                 "event_type text",
                 "record_date date",
@@ -129,6 +129,10 @@ class SecuritiesSchemaIT extends PostgresIntegrationTest {
                 "amount_payable numeric",
                 "payment_date date",
                 "new_face_value numeric"));
+    // V9 appends the column after the existing ones
+    cashFlowColumns.add("source_category text NOT NULL DEFAULT 'SCHEDULE'::text");
+    assertThat(schema.columns(SCHEMA, "security_cash_flows"))
+        .containsExactlyElementsOf(cashFlowColumns);
     assertThat(schema.columns(SCHEMA, "security_listings"))
         .containsExactlyElementsOf(appendOnlyColumns("exchange_name text", "listing_date date"));
     assertThat(schema.columns(SCHEMA, "security_ratings"))

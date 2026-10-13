@@ -16,8 +16,8 @@ public final class JsonEvidence {
           JobId.parse("0b6f0a52-6b1e-4d0c-9f43-2f3a5d1c7e10"),
           1,
           Isin.of("INE831R08076"),
-          "nsdl-security-json-v1",
-          "nsdl-security-mapping-v1");
+          "nsdl-security-json-v2",
+          "nsdl-security-mapping-v2");
 
   /**
    * A coupon rate that is not a number, an entry with one bad date, and ratings of the wrong kind.

@@ -21,7 +21,7 @@ class AdmissionConfigurationTest {
     ContractRegistry nsdlOnly =
         new ClasspathContractCatalog(
                 new YamlContractLoader(), new ContractValidator(RuleRegistry.standard()))
-            .load(List.of(new ContractPair("nsdl-security-json-v1", "nsdl-security-mapping-v1")));
+            .load(List.of(new ContractPair("nsdl-security-json-v2", "nsdl-security-mapping-v2")));
 
     SubmissionValidator validator = new AdmissionConfiguration().submissionValidator(nsdlOnly);
 

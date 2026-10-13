@@ -72,7 +72,16 @@ class PublishSecurityDetailsTest {
             new SecurityCollections(
                 List.of(
                     new SecurityEntry<>(
-                        ISIN, new CashFlow("Interest", null, null, null, null, null), SOURCE)),
+                        ISIN,
+                        new CashFlow(
+                            CashFlow.SourceCategory.SCHEDULE,
+                            "Interest",
+                            null,
+                            null,
+                            null,
+                            null,
+                            null),
+                        SOURCE)),
                 List.of(new SecurityEntry<>(ISIN, new Listing("NSE", null), SOURCE)),
                 List.of(),
                 List.of()));

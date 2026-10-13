@@ -66,7 +66,7 @@ public final class InternalModel {
                   Map.entry("listingStatus", FieldType.TEXT))),
           CASH_FLOWS,
           Target.collection(
-              Map.of(),
+              Map.of("sourceCategory", Set.of("SCHEDULE", "INTEREST")),
               Map.of(
                   "eventType", FieldType.TEXT,
                   "recordDate", FieldType.DATE,

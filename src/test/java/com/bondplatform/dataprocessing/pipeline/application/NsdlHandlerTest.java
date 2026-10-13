@@ -145,7 +145,7 @@ class NsdlHandlerTest {
     handler.process(job);
 
     SecurityDetails details = published().details();
-    assertThat(details.collections().cashFlows()).hasSize(11);
+    assertThat(details.collections().cashFlows()).hasSize(14);
     assertThat(details.collections().listings()).hasSize(2);
     assertThat(details.collections().ratings()).hasSize(15);
     assertThat(details.collections().collateralAssets()).isEmpty();

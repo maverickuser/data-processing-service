@@ -574,7 +574,7 @@ This section records agreed JSON behavior. Do not apply CSV row quarantine, trad
 - The filename-derived ISIN is authoritative. An ISIN inside a payload is optional; disagreement is logged as a warning and does not block processing or redirect data to another security.
 - The combined size of JSON files must not exceed 10 MB.
 - An empty manifest file list, or a JSON request listing no JSON files, fails without business-data changes.
-- Select the processor-owned YAML contract from the CloudEvent `dataschema` URN. In v1, `urn:bond-platform:dataset:nsdl-security` maps to the single `nsdl-security-json-v1.yaml` contract and `urn:bond-platform:dataset:bse-debt-trades` maps to `bse-debt-bhavcopy-csv-v1.yaml` (since 2026-10-12, `bse-debt-bhavcopy-csv-v2.yaml` and `bse-debt-bhavcopy-mapping-v2.yaml`, decision 0004). `data.event_type` and each file's `job_id` are validated as neutral source metadata and used for routing/traceability; they do not select separate contracts. Filenames identify the ISIN or trade-date context only and never select field mappings. There is no per-file `processing_contract` field. Agreed (2026-10-02): processing is two-stage with two contracts per dataset. The dataset URN selects the stage-1 source-to-canonical contract (`nsdl-security-json-v1.yaml`, `bse-debt-bhavcopy-csv-v1.yaml`), which owns extraction, normalization, and validation into canonical records with snake_case canonical field names. Each has one stage-2 canonical-to-internal-model mapping contract (`nsdl-security-mapping-v1.yaml`, `bse-debt-bhavcopy-mapping-v1.yaml`) that names its `sourceContract`, consumes only validated canonical values, and owns targets, persistence policy, and lineage. Both contract versions are pinned at job admission. The standalone YAML files are authoritative over the illustrative snippets in section 6.
+- Select the processor-owned YAML contract from the CloudEvent `dataschema` URN. In v1, `urn:bond-platform:dataset:nsdl-security` maps to the single `nsdl-security-json-v1.yaml` contract (since 2026-10-14, `nsdl-security-json-v2.yaml` and `nsdl-security-mapping-v2.yaml`, decision 0007) and `urn:bond-platform:dataset:bse-debt-trades` maps to `bse-debt-bhavcopy-csv-v1.yaml` (since 2026-10-12, `bse-debt-bhavcopy-csv-v2.yaml` and `bse-debt-bhavcopy-mapping-v2.yaml`, decision 0004). `data.event_type` and each file's `job_id` are validated as neutral source metadata and used for routing/traceability; they do not select separate contracts. Filenames identify the ISIN or trade-date context only and never select field mappings. There is no per-file `processing_contract` field. Agreed (2026-10-02): processing is two-stage with two contracts per dataset. The dataset URN selects the stage-1 source-to-canonical contract (`nsdl-security-json-v1.yaml`, `bse-debt-bhavcopy-csv-v1.yaml`), which owns extraction, normalization, and validation into canonical records with snake_case canonical field names. Each has one stage-2 canonical-to-internal-model mapping contract (`nsdl-security-mapping-v1.yaml`, `bse-debt-bhavcopy-mapping-v1.yaml`) that names its `sourceContract`, consumes only validated canonical values, and owns targets, persistence policy, and lineage. Both contract versions are pinned at job admission. The standalone YAML files are authoritative over the illustrative snippets in section 6.
 - All selected payload fields are optional. Unselected fields do not contribute mapped data.
 
 Persist the supplied manifest and its source-file references; resolve `LastModified` and available version/checksum metadata from the objects for the previously agreed precedence rules. Reuse stable manifest inputs during retries. Do not add unlisted objects discovered under related prefixes. The manifest may list any number of JSON files, including multiple files that contribute to the same collection such as `security_cash_flows`; process each listed file with the single dataset contract selected by `dataschema`, using `job_id` only to preserve source traceability. Append/deduplicate normalized outputs under the existing ISIN rules. The filename ISIN must also equal the manifest's `inputs.isin_code` after the same normalization; a difference fails the request with `INVALID_SOURCE_FILENAME` (implementation choice 2026-10-03, as no separate code is defined). An empty normalized filename identifier cannot satisfy the mandatory source-identity requirement; agreed outcome: the whole request is `FAILED` with `INVALID_SOURCE_FILENAME` (for example `_ratings.json`) and no business-data changes, consistent with the mixed-ISIN rule.
@@ -590,6 +590,7 @@ These paths identify the selected source data; internal names are in section 15 
 | Asset cover | `$.instrumentsVo.assetCover.securedFlag`, `$.instrumentsVo.assetCover.assetCvge`, `$.instrumentsVo.assetCover.assetCvrPercent`; `$.instrumentsVo.assetCover.assetList[*]`: `assetType`, `securityDetails`, `remarks` |
 | Coupon | `$.coupensVo.couponDetails.couponRate`, `$.coupensVo.couponDetails.couponType` |
 | Payment schedule | Contract-defined paths, including the sample `$.coupensVo.cashFlowScheduleDetails.cashFlowSchedule[*]`: `cashFlowsEvent`, `recordDate`, `dueDate`, `amountPayable`, `paymentDate`, `newFaceVal` |
+| Interest payment schedule | `$.coupensVo.cashFlowScheduleDetails.interestCashFlowSchedule[*]`: the same six fields (decision 0007) |
 | Listing status | `$.listingStatus` |
 | Listings | `$.listingDetails[*]`: `exchangeName`, `listingDate` |
 | Current ratings | `$.currentRatings[*]`: `creditRatingAgencyName`, `currentRating`, `outlook`, `ratingAction`, `creditRatingDate`, `ratingChangeDate`, `dateOfVerification` |
@@ -644,7 +645,7 @@ For an invalid scalar value, leave existing accepted data unchanged. Inside a co
 
 ### 13.6 Append-only collections
 
-- Payment schedule, listing, and rating entries are append-only.
+- Payment schedule, listing, and rating entries are append-only. Both NSDL cash-flow lists append to the same cash flows; each entry keeps its list as `source_category` (`SCHEDULE` or `INTEREST`), which is not part of its identity, so an entry identical in both lists is stored once (decision 0007).
 - Deduplicate by filename ISIN, collection identity, and all selected normalized field values.
 - An identical entry is skipped, including duplicates in one input, across its files, or from repeated submissions.
 - A changed combination of selected values is a new entry; existing entries are neither overwritten nor deleted.
@@ -999,7 +1000,7 @@ Use `data_processing` for ingestion jobs and attempts, source-file references, c
 | Qualified table name | Record meaning |
 |---|---|
 | `securities_data.securities` | One security identified by ISIN, including an initial ISIN-only record |
-| `securities_data.security_cash_flows` | Distinct scheduled interest/redemption cash-flow observations |
+| `securities_data.security_cash_flows` | Distinct scheduled interest/redemption cash-flow observations, from NSDL's scheduled and interest lists |
 | `securities_data.security_listings` | Distinct exchange listing observations |
 | `securities_data.security_ratings` | Distinct credit-rating observations with current/earlier source category |
 | `securities_data.security_collateral_assets` | Distinct append-only collateral asset observations |
@@ -1376,7 +1377,7 @@ The four append-only tables share one pattern: UUID `id` primary key, `isin` for
 
 | Table | Business columns in the unique index |
 |---|---|
-| `security_cash_flows` | `event_type`, `record_date DATE`, `due_date DATE`, `amount_payable NUMERIC`, `payment_date DATE`, `new_face_value NUMERIC` |
+| `security_cash_flows` | `event_type`, `record_date DATE`, `due_date DATE`, `amount_payable NUMERIC`, `payment_date DATE`, `new_face_value NUMERIC`, and since V9 `source_category TEXT NOT NULL DEFAULT 'SCHEDULE'` (`SCHEDULE` or `INTEREST`, not in the unique index; decision 0007) |
 | `security_listings` | `exchange_name`, `listing_date DATE` |
 | `security_ratings` | `source_category` (`CURRENT`/`EARLIER`, NOT NULL), `rating_agency_name`, `rating`, `outlook`, `rating_action`, `rating_date DATE`, `rating_change_date DATE`, `verification_date DATE` |
 | `security_collateral_assets` | `asset_type`, `collateral_description`, `remarks` |

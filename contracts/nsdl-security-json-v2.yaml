@@ -2,7 +2,10 @@
 # Extracts, normalizes and validates selected values into canonical records.
 # One contract for every JSON file listed in an NSDL manifest. Each path is applied to
 # every file; a path that is absent in a file is "no update". Filenames never select paths.
-# Stage 2 (canonical -> internal model) is nsdl-security-mapping-v1.yaml.
+# Stage 2 (canonical -> internal model) is nsdl-security-mapping-v2.yaml.
+#
+# v2 (decision 0007) adds interest_cash_flows, NSDL's interestCashFlowSchedule, read with the same
+# fields as cashFlowSchedule.
 #
 # This file holds only what the service reads from it; an unknown key fails startup.
 # Behaviour that is the same for every JSON dataset is fixed in code and specified in the LLD:
@@ -12,7 +15,7 @@
 # malformed files and wrongly typed sections are handled as in section 13.7.
 # {isin}_redemptions.json is listed by the fetch service but has no selected paths in v1.
 id: nsdl-security-json
-version: v1
+version: v2
 dataset: urn:bond-platform:dataset:nsdl-security
 format: json
 
@@ -43,6 +46,15 @@ collections:
       amount_payable: { path: amountPayable, type: decimal }
       payment_date:   { path: paymentDate, type: date }
       new_face_value: { path: newFaceVal, type: decimal }   # populated on Partial Redemption events
+  interest_cash_flows:
+    path: $.coupensVo.cashFlowScheduleDetails.interestCashFlowSchedule[*]
+    fields:
+      event_type:     { path: cashFlowsEvent, type: text }
+      record_date:    { path: recordDate, type: date }
+      due_date:       { path: dueDate, type: date }
+      amount_payable: { path: amountPayable, type: decimal }
+      payment_date:   { path: paymentDate, type: date }
+      new_face_value: { path: newFaceVal, type: decimal }
   listings:
     path: $.listingDetails[*]
     fields:

@@ -59,7 +59,11 @@ class CollectionExtractorTest {
     List<JsonCollectionEntry> abhfl = sample("INE831R08076_coupon-details.json");
     List<JsonCollectionEntry> partial = sample("INE0O7U07046_coupon-details.json");
 
-    assertThat(abhfl).hasSize(11).allMatch(entry -> entry.collection().equals("cash_flows"));
+    assertThat(abhfl).hasSize(14);
+    assertThat(abhfl).filteredOn(entry -> entry.collection().equals("cash_flows")).hasSize(11);
+    assertThat(abhfl)
+        .filteredOn(entry -> entry.collection().equals("interest_cash_flows"))
+        .hasSize(3);
     assertThat(usable(abhfl.get(0)))
         .containsExactlyEntriesOf(
             ordered(
