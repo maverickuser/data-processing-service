@@ -115,7 +115,8 @@ public class PublishDailyMarketSummaries {
     List<ExchangeCoupon> replaced = new ArrayList<>();
     List<ExchangeCoupon> advanced = new ArrayList<>();
     for (ExchangeCoupon coupon : coupons) {
-      StoredCoupon current = locked.getOrDefault(coupon.isin(), LockedSecurity.NEW).coupon();
+      LockedSecurity security = locked.get(coupon.isin());
+      StoredCoupon current = security == null ? StoredCoupon.NONE : security.coupon();
       if (CouponPrecedence.disagrees(current, CouponSource.BSE_BHAVCOPY, coupon.rate())) {
         LOG.warn(
             "Coupon rates differ, jobId={}, isin={}, bhavcopy={}, stored {}={}",

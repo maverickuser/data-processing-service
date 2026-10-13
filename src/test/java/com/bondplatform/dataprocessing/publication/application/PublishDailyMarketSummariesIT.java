@@ -240,6 +240,28 @@ class PublishDailyMarketSummariesIT extends PostgresIntegrationTest {
     assertThat(requestCount(ALPHA)).isEqualTo(1);
   }
 
+  /** I-DETAILS-02: a security unchanged and unrequested for 30 days is refreshed when it trades. */
+  @Test
+  void staleSecurityIsRequestedAgainEvenWithCoupon() {
+    ClaimedJob first = start("run_101");
+    publish.publish(
+        first,
+        List.of(summary(first, ALPHA, "100")),
+        List.of(coupon(first, ALPHA, "8.10", "2026-01-01")),
+        outcome(JobStatus.COMPLETED));
+    jdbc.sql(
+            "UPDATE securities_data.securities SET updated_at = updated_at - INTERVAL '31 days',"
+                + " details_requested_at = details_requested_at - INTERVAL '31 days'")
+        .update();
+
+    ClaimedJob later = start("run_102");
+    publish.publish(
+        later, List.of(summary(later, ALPHA, "100")), List.of(), outcome(JobStatus.COMPLETED));
+
+    assertThat(detailRequests()).containsExactly("isin/" + ALPHA, "isin/" + ALPHA);
+    assertThat(requestCount(ALPHA)).isEqualTo(2);
+  }
+
   private int requestCount(String isin) {
     return jdbc.sql(
             "SELECT details_request_count FROM securities_data.securities WHERE isin = :isin")

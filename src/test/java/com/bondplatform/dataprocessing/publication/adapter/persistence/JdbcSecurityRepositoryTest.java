@@ -205,10 +205,14 @@ class JdbcSecurityRepositoryTest {
     when(bhavcopy.getObject("coupon_rate_trade_date", LocalDate.class))
         .thenReturn(LocalDate.of(2026, 10, 1));
     when(bhavcopy.getInt("details_request_count")).thenReturn(2);
+    when(bhavcopy.getObject("updated_at", OffsetDateTime.class))
+        .thenReturn(RECORDED_AT.atOffset(ZoneOffset.UTC));
     when(bhavcopy.getObject("details_requested_at", OffsetDateTime.class))
         .thenReturn(RECORDED_AT.atOffset(ZoneOffset.UTC));
     ResultSet none = mock(ResultSet.class);
     when(none.getString("isin")).thenReturn(SECOND.value());
+    when(none.getObject("updated_at", OffsetDateTime.class))
+        .thenReturn(RECORDED_AT.atOffset(ZoneOffset.UTC));
     ArgumentCaptor<Object[]> arguments = ArgumentCaptor.forClass(Object[].class);
     doAnswer(
             invocation -> {
@@ -231,8 +235,9 @@ class JdbcSecurityRepositoryTest {
                     new StoredCoupon(
                         Percent.parse("8.1"), CouponSource.BSE_BHAVCOPY, LocalDate.of(2026, 10, 1)),
                     2,
+                    RECORDED_AT,
                     RECORDED_AT)),
-            Map.entry(SECOND, LockedSecurity.NEW));
+            Map.entry(SECOND, new LockedSecurity(StoredCoupon.NONE, 0, null, RECORDED_AT)));
     assertThat(JdbcSecurityRepository.LOCK).contains("ORDER BY isin").contains("FOR UPDATE");
   }
 

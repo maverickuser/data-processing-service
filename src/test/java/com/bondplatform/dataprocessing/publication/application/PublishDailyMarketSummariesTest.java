@@ -217,17 +217,17 @@ class PublishDailyMarketSummariesTest {
         .thenReturn(
             Map.of(
                 noCouponDayOld,
-                new LockedSecurity(StoredCoupon.NONE, 1, NOW.minus(Duration.ofDays(1))),
+                new LockedSecurity(StoredCoupon.NONE, 1, NOW.minus(Duration.ofDays(1)), NOW),
                 noCouponHourOld,
-                new LockedSecurity(StoredCoupon.NONE, 1, NOW.minusSeconds(3600)),
+                new LockedSecurity(StoredCoupon.NONE, 1, NOW.minusSeconds(3600), NOW),
                 noCouponThreeAsked,
-                new LockedSecurity(StoredCoupon.NONE, 3, NOW.minus(Duration.ofDays(9))),
+                new LockedSecurity(StoredCoupon.NONE, 3, NOW.minus(Duration.ofDays(9)), NOW),
                 withStoredCoupon,
                 requested(new StoredCoupon(Percent.parse("8"), CouponSource.NSDL, null)),
                 couponInThisFile,
                 requested(StoredCoupon.NONE),
                 created,
-                LockedSecurity.NEW));
+                new LockedSecurity(StoredCoupon.NONE, 0, null, NOW)));
     ArgumentCaptor<NewOutboxEvent> events = ArgumentCaptor.forClass(NewOutboxEvent.class);
 
     publish.publish(
@@ -253,7 +253,7 @@ class PublishDailyMarketSummariesTest {
   }
 
   private static LockedSecurity requested(StoredCoupon coupon) {
-    return new LockedSecurity(coupon, 1, NOW.minus(Duration.ofDays(30)));
+    return new LockedSecurity(coupon, 1, NOW.minus(Duration.ofDays(30)), NOW);
   }
 
   /** Hands out 00000000-0000-0000-0000-000000000001, then ...002, and so on. */

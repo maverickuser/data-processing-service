@@ -99,11 +99,8 @@ public class PublishSecurityDetails {
     if (coupon == null || !(coupon.value() instanceof SecurityValue.Percentage rate)) {
       return scalars;
     }
-    StoredCoupon stored =
-        securities
-            .lock(List.of(details.isin()))
-            .getOrDefault(details.isin(), LockedSecurity.NEW)
-            .coupon();
+    LockedSecurity locked = securities.lock(List.of(details.isin())).get(details.isin());
+    StoredCoupon stored = locked == null ? StoredCoupon.NONE : locked.coupon();
     if (CouponPrecedence.disagrees(stored, CouponSource.NSDL, rate.value())) {
       LOG.warn(
           "Coupon rates differ, jobId={}, isin={}, nsdl={}, stored {}={}",

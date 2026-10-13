@@ -78,7 +78,7 @@ public class JdbcSecurityRepository implements SecurityRepository {
   static final String LOCK =
       """
       SELECT isin, coupon_rate_value, coupon_rate_source, coupon_rate_trade_date,
-             details_request_count, details_requested_at
+             details_request_count, details_requested_at, updated_at
       FROM securities_data.securities
       WHERE isin = ANY(?::text[])
       ORDER BY isin
@@ -215,7 +215,8 @@ public class JdbcSecurityRepository implements SecurityRepository {
                       source == null ? null : CouponSource.valueOf(source),
                       row.getObject("coupon_rate_trade_date", LocalDate.class)),
                   row.getInt("details_request_count"),
-                  requestedAt == null ? null : requestedAt.toInstant()));
+                  requestedAt == null ? null : requestedAt.toInstant(),
+                  row.getObject("updated_at", OffsetDateTime.class).toInstant()));
         },
         (Object) distinct(isins));
     return locked;
