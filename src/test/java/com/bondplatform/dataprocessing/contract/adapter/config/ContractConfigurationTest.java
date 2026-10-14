@@ -14,7 +14,7 @@ class ContractConfigurationTest {
     ContractConfiguration configuration = new ContractConfiguration();
     ContractProperties properties =
         new ContractProperties(
-            List.of(new ContractPair("nsdl-security-json-v2", "nsdl-security-mapping-v2")));
+            List.of(new ContractPair("nsdl-security-json-v3", "nsdl-security-mapping-v3")));
 
     ContractRegistry registry =
         configuration.contractRegistry(properties, configuration.ruleRegistry());

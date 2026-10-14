@@ -29,7 +29,7 @@ class ClasspathContractCatalogTest {
   private static final ContractPair BSE =
       new ContractPair("bse-debt-bhavcopy-csv-v2", "bse-debt-bhavcopy-mapping-v2");
   private static final ContractPair NSDL =
-      new ContractPair("nsdl-security-json-v2", "nsdl-security-mapping-v2");
+      new ContractPair("nsdl-security-json-v3", "nsdl-security-mapping-v3");
   private static final DatasetUrn BSE_DATASET =
       new DatasetUrn("urn:bond-platform:dataset:bse-debt-trades");
   private static final DatasetUrn NSDL_DATASET =
@@ -86,7 +86,7 @@ class ClasspathContractCatalogTest {
 
     assertThatThrownBy(() -> catalog.load(List.of(mismatched)))
         .isInstanceOf(InvalidContractException.class)
-        .hasMessageContaining("nsdl-security-mapping-v2")
+        .hasMessageContaining("nsdl-security-mapping-v3")
         .hasMessageContaining("is paired with 'bse-debt-bhavcopy-csv-v2'");
   }
 

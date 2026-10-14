@@ -61,9 +61,11 @@ class CollectionExtractorTest {
 
     assertThat(abhfl).hasSize(14);
     assertThat(abhfl).filteredOn(entry -> entry.collection().equals("cash_flows")).hasSize(11);
+    // U-JSON-16: an interest entry's amount comes from amountRedeem (decision 0009)
     assertThat(abhfl)
         .filteredOn(entry -> entry.collection().equals("interest_cash_flows"))
-        .hasSize(3);
+        .extracting(entry -> usable(entry).get("amount_payable"))
+        .containsExactly("4.47", "4.47", "4.47");
     assertThat(usable(abhfl.get(0)))
         .containsExactlyEntriesOf(
             ordered(

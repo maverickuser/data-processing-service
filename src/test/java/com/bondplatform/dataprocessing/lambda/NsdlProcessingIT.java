@@ -124,6 +124,15 @@ class NsdlProcessingIT extends PostgresIntegrationTest {
                 .query(Long.class)
                 .single())
         .isEqualTo(3);
+    // I-JSON-10: each interest entry stores its amountRedeem (decision 0009)
+    assertThat(
+            jdbc.sql(
+                    "SELECT amount_payable FROM securities_data.security_cash_flows"
+                        + " WHERE source_category = 'INTEREST'")
+                .query(BigDecimal.class)
+                .list())
+        .hasSize(3)
+        .allSatisfy(amount -> assertThat(amount).isEqualByComparingTo("4.47"));
     assertThat(count("security_listings")).isEqualTo(2);
     assertThat(count("security_ratings")).isEqualTo(15);
     // The redemptions file has no usable selected value, so nothing refers to it

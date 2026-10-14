@@ -9,9 +9,10 @@
 #
 # v2 (decision 0007): both NSDL cash-flow lists fill security_cash_flows, told apart by the
 # sourceCategory constant. A payment identical in both lists is stored once.
+# v3 (decision 0009) only follows nsdl-security-json-v3; the mapping is unchanged.
 id: nsdl-security-mapping
-version: v2
-sourceContract: nsdl-security-json-v2
+version: v3
+sourceContract: nsdl-security-json-v3
 
 security:
   target: securities_data.securities

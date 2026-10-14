@@ -8,8 +8,8 @@ require 'yaml'
 
 ROOT = ARGV[0] || '.'
 
-SOURCE_CONTRACTS = %w[bse-debt-bhavcopy-csv-v2 nsdl-security-json-v2].freeze
-MAPPING_CONTRACTS = %w[bse-debt-bhavcopy-mapping-v2 nsdl-security-mapping-v2].freeze
+SOURCE_CONTRACTS = %w[bse-debt-bhavcopy-csv-v2 nsdl-security-json-v3].freeze
+MAPPING_CONTRACTS = %w[bse-debt-bhavcopy-mapping-v2 nsdl-security-mapping-v3].freeze
 OPENAPI_DOCUMENTS = %w[data-processing-service-openapi data-processing-service-read-openapi].freeze
 
 def load_yaml(path)

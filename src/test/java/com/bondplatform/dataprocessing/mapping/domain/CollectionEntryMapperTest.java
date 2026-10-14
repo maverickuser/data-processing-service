@@ -101,12 +101,13 @@ class CollectionEntryMapperTest {
             List.of(
                 sample("INE831R08076_coupon-details.json"), sample("INE831R08076_listings.json")));
 
-    // 11 scheduled payments, and 3 interest entries whose amountPayable NSDL leaves empty
+    // 11 scheduled payments, and 3 interest entries with their amountRedeem (decision 0009)
     assertThat(collections.cashFlows()).hasSize(14);
     assertThat(collections.cashFlows())
         .filteredOn(entry -> entry.value().sourceCategory() == CashFlow.SourceCategory.INTEREST)
         .hasSize(3)
-        .allSatisfy(entry -> assertThat(entry.value().amountPayable()).isNull());
+        .allSatisfy(
+            entry -> assertThat(entry.value().amountPayable()).isEqualByComparingTo("4.47"));
     assertThat(collections.cashFlows().get(10).value())
         .isEqualTo(
             new CashFlow(
