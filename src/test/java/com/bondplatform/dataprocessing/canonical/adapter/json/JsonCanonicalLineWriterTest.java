@@ -25,8 +25,8 @@ class JsonCanonicalLineWriterTest {
     assertThat(line.get("isin").asString()).isEqualTo("INE831R08076");
     assertThat(line.at("/source/bucket").asString()).isEqualTo(WITH_ERRORS.bucket());
     assertThat(line.at("/source/key").asString()).isEqualTo(WITH_ERRORS.key());
-    assertThat(line.get("sourceContractVersion").asString()).isEqualTo("nsdl-security-json-v2");
-    assertThat(line.get("mappingContractVersion").asString()).isEqualTo("nsdl-security-mapping-v2");
+    assertThat(line.get("sourceContractVersion").asString()).isEqualTo("nsdl-security-json-v3");
+    assertThat(line.get("mappingContractVersion").asString()).isEqualTo("nsdl-security-mapping-v3");
     assertThat(line.get("status").asString()).isEqualTo("READ");
     assertThat(line.has("fileErrors")).isFalse();
     assertThat(line.get("scalars")).hasSizeGreaterThan(2);

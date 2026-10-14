@@ -714,7 +714,7 @@
               "SCHEDULE",
               "INTEREST"
             ],
-            "description": "The NSDL list the cash flow was read from: cashFlowSchedule (SCHEDULE) or interestCashFlowSchedule (INTEREST). Interest entries carry their amount only when NSDL gives an amountPayable."
+            "description": "The NSDL list the cash flow was read from: cashFlowSchedule (SCHEDULE) or interestCashFlowSchedule (INTEREST). An interest entry's amountPayable is NSDL's amountRedeem."
           },
           "eventType": {
             "type": [

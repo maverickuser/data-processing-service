@@ -40,7 +40,7 @@ class AdmitSubmissionTest {
           .load(
               List.of(
                   new ContractPair("bse-debt-bhavcopy-csv-v2", "bse-debt-bhavcopy-mapping-v2"),
-                  new ContractPair("nsdl-security-json-v2", "nsdl-security-mapping-v2")));
+                  new ContractPair("nsdl-security-json-v3", "nsdl-security-mapping-v3")));
 
   private final InMemoryRequests requests = new InMemoryRequests();
   private final List<NewOutboxEvent> outbox = new ArrayList<>();
@@ -72,8 +72,8 @@ class AdmitSubmissionTest {
     assertThat(stored.inputsJson()).isEqualTo("{\"isin_code\":\"INE121A07QY9\"}");
     assertThat(stored.manifest().key()).isEqualTo("runs/run_202/manifest.json");
     assertThat(stored.submissionEventJson()).startsWith("{\"data\":{").contains("\"specversion\"");
-    assertThat(stored.contracts().source().name()).isEqualTo("nsdl-security-json-v2");
-    assertThat(stored.contracts().mapping().name()).isEqualTo("nsdl-security-mapping-v2");
+    assertThat(stored.contracts().source().name()).isEqualTo("nsdl-security-json-v3");
+    assertThat(stored.contracts().mapping().name()).isEqualTo("nsdl-security-mapping-v3");
     assertThat(stored.contracts().sourceHash()).startsWith("sha256:");
     assertThat(stored.contracts().mappingHash()).isNotEqualTo(stored.contracts().sourceHash());
     assertThat(stored.submittedAt()).isEqualTo(NOW);

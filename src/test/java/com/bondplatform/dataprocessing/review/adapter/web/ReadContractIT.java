@@ -231,7 +231,7 @@ class ReadContractIT extends PostgresIntegrationTest {
     long stored =
         rejections.saveJson(
             new JsonCanonicalRun(
-                job, 1, Isin.of(ISIN), "nsdl-security-json-v2", "nsdl-security-mapping-v2"),
+                job, 1, Isin.of(ISIN), "nsdl-security-json-v3", "nsdl-security-mapping-v3"),
             run,
             List.of(
                 JsonEvidence.read(JsonEvidence.WITH_ERRORS, List.of(JsonEvidence.IGNORED)),

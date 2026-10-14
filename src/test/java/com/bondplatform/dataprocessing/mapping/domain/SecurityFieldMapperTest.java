@@ -99,7 +99,7 @@ class SecurityFieldMapperTest {
     MappingContract contract =
         new MappingContract(
             NsdlContract.PINNED.mapping().id(),
-            "nsdl-security-json-v2",
+            "nsdl-security-json-v3",
             new MappingContract.RecordMapping(
                 InternalModel.SECURITIES, Map.of("issuer_name", "issuer")),
             List.of());
