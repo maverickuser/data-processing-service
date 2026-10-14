@@ -205,6 +205,6 @@ class PublishSecurityDetailsTest {
   }
 
   private static LockedSecurity locked(StoredCoupon coupon) {
-    return new LockedSecurity(coupon, 1, null, NOW);
+    return new LockedSecurity(coupon, 1, null, true, true, true);
   }
 }

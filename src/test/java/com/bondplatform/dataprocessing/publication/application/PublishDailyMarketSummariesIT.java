@@ -218,9 +218,32 @@ class PublishDailyMarketSummariesIT extends PostgresIntegrationTest {
     assertThat(requestCount(ALPHA)).isEqualTo(3);
   }
 
-  /** I-DETAILS-01: a coupon in the file, or one already stored, stops further requests. */
+  /** I-DETAILS-01: a security with every counted detail is not requested again. */
   @Test
-  void securityWithCouponIsNotRequestedAgain() {
+  void securityWithEveryCountedDetailIsNotRequestedAgain() {
+    ClaimedJob first = start("run_101");
+    publish.publish(
+        first,
+        List.of(summary(first, ALPHA, "100")),
+        List.of(coupon(first, ALPHA, "8.10", "2026-01-01")),
+        outcome(JobStatus.COMPLETED));
+    completeDetails(ALPHA);
+    jdbc.sql(
+            "UPDATE securities_data.securities"
+                + " SET details_requested_at = details_requested_at - INTERVAL '2 days'")
+        .update();
+
+    ClaimedJob later = start("run_102");
+    publish.publish(
+        later, List.of(summary(later, ALPHA, "100")), List.of(), outcome(JobStatus.COMPLETED));
+
+    assertThat(detailRequests()).containsExactly("isin/" + ALPHA);
+    assertThat(requestCount(ALPHA)).isEqualTo(1);
+  }
+
+  /** I-DETAILS-02: a coupon alone is not enough; missing cash flows still ask again. */
+  @Test
+  void securityWithCouponButMissingOtherDetailsIsRequestedAgain() {
     ClaimedJob first = start("run_101");
     publish.publish(
         first,
@@ -236,30 +259,32 @@ class PublishDailyMarketSummariesIT extends PostgresIntegrationTest {
     publish.publish(
         later, List.of(summary(later, ALPHA, "100")), List.of(), outcome(JobStatus.COMPLETED));
 
-    assertThat(detailRequests()).containsExactly("isin/" + ALPHA);
-    assertThat(requestCount(ALPHA)).isEqualTo(1);
-  }
-
-  /** I-DETAILS-02: a security unchanged and unrequested for 30 days is refreshed when it trades. */
-  @Test
-  void staleSecurityIsRequestedAgainEvenWithCoupon() {
-    ClaimedJob first = start("run_101");
-    publish.publish(
-        first,
-        List.of(summary(first, ALPHA, "100")),
-        List.of(coupon(first, ALPHA, "8.10", "2026-01-01")),
-        outcome(JobStatus.COMPLETED));
-    jdbc.sql(
-            "UPDATE securities_data.securities SET updated_at = updated_at - INTERVAL '31 days',"
-                + " details_requested_at = details_requested_at - INTERVAL '31 days'")
-        .update();
-
-    ClaimedJob later = start("run_102");
-    publish.publish(
-        later, List.of(summary(later, ALPHA, "100")), List.of(), outcome(JobStatus.COMPLETED));
-
     assertThat(detailRequests()).containsExactly("isin/" + ALPHA, "isin/" + ALPHA);
     assertThat(requestCount(ALPHA)).isEqualTo(2);
+  }
+
+  /** Stores a cash flow, a current rating and a collateral status for the security. */
+  private void completeDetails(String isin) {
+    jdbc.sql(
+            "UPDATE securities_data.securities SET collateral_status = 'Secured'"
+                + " WHERE isin = :isin")
+        .param("isin", isin)
+        .update();
+    for (String insert :
+        List.of(
+            "INSERT INTO securities_data.security_cash_flows (id, isin, event_type, due_date,"
+                + " source_request_id, source_file, source_location, first_recorded_at)"
+                + " VALUES (:id, :isin, 'Interest', DATE '2027-06-08', :request, 'a.json', '$.x',"
+                + " now())",
+            "INSERT INTO securities_data.security_ratings (id, isin, source_category, rating,"
+                + " source_request_id, source_file, source_location, first_recorded_at)"
+                + " VALUES (:id, :isin, 'CURRENT', 'AAA', :request, 'a.json', '$.x', now())")) {
+      jdbc.sql(insert)
+          .param("id", UUID.randomUUID())
+          .param("isin", isin)
+          .param("request", UUID.randomUUID())
+          .update();
+    }
   }
 
   private int requestCount(String isin) {
