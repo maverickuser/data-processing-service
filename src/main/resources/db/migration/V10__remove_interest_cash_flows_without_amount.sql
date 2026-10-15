@@ -1,4 +1,4 @@
--- Until nsdl-security-json-v4, interest cash flows were stored without their amount: NSDL leaves
+-- Until nsdl-security-json-v3, interest cash flows were stored without their amount: NSDL leaves
 -- amountPayable null in interestCashFlowSchedule and puts the interest paid in amountRedeem
 -- (decision 0009). The amount is part of a cash flow's identity, so the corrected entries would
 -- be stored beside these. This one-off repair removes them; rerunning the affected NSDL requests
