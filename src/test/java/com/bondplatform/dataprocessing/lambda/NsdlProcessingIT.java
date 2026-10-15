@@ -114,6 +114,9 @@ class NsdlProcessingIT extends PostgresIntegrationTest {
     assertThat(security.get("issuer_name")).isEqualTo("ADITYA BIRLA HOUSING FINANCE LIMITED");
     assertThat(security.get("coupon_type")).isEqualTo("Simple");
     assertThat(security.get("redemption_date")).isEqualTo(Date.valueOf("2029-06-08"));
+    // I-JSON-11 (decision 0010)
+    assertThat((BigDecimal) security.get("total_issue_size")).isEqualByComparingTo("200");
+    assertThat(security.get("seniority_repayment")).isEqualTo("Subordinate Tier 1");
     assertThat((BigDecimal) security.get("coupon_rate_value")).isEqualByComparingTo("8.94");
     // 11 scheduled payments and 3 interest entries (decision 0007)
     assertThat(count("security_cash_flows")).isEqualTo(14);
@@ -407,7 +410,8 @@ class NsdlProcessingIT extends PostgresIntegrationTest {
             """
             SELECT issuer_name, coupon_type, coupon_rate_value, redemption_date, collateral_status,
                    asset_coverage_basis, asset_coverage_value, asset_coverage_unit,
-                   field_sources::text AS field_sources, updated_at
+                   total_issue_size, seniority_repayment, field_sources::text AS field_sources,
+                   updated_at
             FROM securities_data.securities WHERE isin = :isin
             """)
         .param("isin", ISIN)

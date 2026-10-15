@@ -97,6 +97,7 @@ Following Google's small/medium/large split:
 | U-JSON-14 | A percent string is read up to its first `%` (`8.76% p.a. FOR CATEGORY IV` is `8.76`); `RESET RATE (REFER REMARKS)` and `Nifty Midcap 150` fail with `INVALID_DECIMAL` | 13.4 |
 | U-JSON-15 | The interest cash-flow list is read with the same fields as the scheduled one and mapped with source category `INTEREST` | 13.2, 13.6 |
 | U-JSON-16 | An interest cash-flow entry's `amount_payable` is read from `amountRedeem`; the scheduled list still reads `amountPayable` | 13.2 |
+| U-JSON-17 | The instrument details yield `total_issue_size` (decimal) and `seniority_repayment` (text), mapped to `totalIssueSize` and `seniorityRepayment` | 13.2, 15.3 |
 
 ### Stage 2 and publication decisions (`mapping`, `publication`)
 
@@ -226,6 +227,7 @@ Following Google's small/medium/large split:
 | I-JSON-08 | JSON for an ISIN with existing daily summaries leaves those summaries untouched | 14.1 |
 | I-JSON-09 | Scheduled and interest cash flows are stored with their source category; an entry identical in both lists is stored once | 13.6, 22.1 |
 | I-JSON-10 | Interest cash flows are stored with their `amountRedeem` amount | 13.2, 22.1 |
+| I-JSON-11 | An NSDL job stores the security's total issue size and seniority in repayment | 15.3, 22.1 |
 | I-COUPON-01 | Bhavcopy rate replaces an NSDL rate with source `BSE_BHAVCOPY`, trade date and reference; an older trade date changes nothing; the same rate later advances only the trade date, not `updated_at`; the end-to-end bhavcopy stores `8.50` for its first ISIN | 15.3 |
 | I-COUPON-02 | An NSDL rate is stored with source `NSDL` and is not stored over a bhavcopy rate | 15.3 |
 | I-DETAILS-02 | A security with a coupon but no cash flows is requested again a day later; one with all four counted details is not | 14.1 |
@@ -246,6 +248,7 @@ Following Google's small/medium/large split:
 | I-READ-09 | Through the Lambda entry point, `/docs` and its files are served under the documentation policy, the served document equals the committed one, an unchanged file is `304`, and any other `/docs` path or packaged library file is a `404` problem | 23.2 |
 | I-READ-10 | ISIN list: ascending, pages as 50 then the rest, ISIN-only securities included, empty `items` without securities, `400` on a changed token | 20.4 |
 | I-READ-11 | Metrics over HTTP: ISIN-only securities counted; a BSE coupon or an earlier rating is a detail; an earlier rating is not current; the six counts match the stored data | 20.5 |
+| I-READ-12 | The security response shows `totalIssueSize` and `seniorityRepayment` | 17.1 |
 
 ### Operations
 

@@ -2,12 +2,13 @@
 # Extracts, normalizes and validates selected values into canonical records.
 # One contract for every JSON file listed in an NSDL manifest. Each path is applied to
 # every file; a path that is absent in a file is "no update". Filenames never select paths.
-# Stage 2 (canonical -> internal model) is nsdl-security-mapping-v3.yaml.
+# Stage 2 (canonical -> internal model) is nsdl-security-mapping-v4.yaml.
 #
 # v2 (decision 0007) adds interest_cash_flows, NSDL's interestCashFlowSchedule, read with the same
 # fields as cashFlowSchedule.
 # v3 (decision 0009) reads the interest list's amount_payable from amountRedeem: NSDL leaves
 # amountPayable null there and puts the interest paid in amountRedeem.
+# v4 (decision 0010) adds total_issue_size and seniority_repayment from the instrument details.
 #
 # This file holds only what the service reads from it; an unknown key fails startup.
 # Behaviour that is the same for every JSON dataset is fixed in code and specified in the LLD:
@@ -17,7 +18,7 @@
 # malformed files and wrongly typed sections are handled as in section 13.7.
 # {isin}_redemptions.json is listed by the fetch service but has no selected paths in v1.
 id: nsdl-security-json
-version: v3
+version: v4
 dataset: urn:bond-platform:dataset:nsdl-security
 format: json
 
@@ -31,6 +32,8 @@ scalars:
   allotment_date:         { path: $.instrumentsVo.instruments.allotmentDate, type: date }
   redemption_date:        { path: $.instrumentsVo.instruments.redemptionDate, type: date }
   original_face_value:    { path: $.instrumentsVo.instruments.issuePrice, type: decimal }
+  total_issue_size:       { path: $.instrumentsVo.instruments.totalIssueSize, type: decimal }   # in crore rupees
+  seniority_repayment:    { path: $.instrumentsVo.instruments.seniorityRepayment, type: text }
   collateral_status:      { path: $.instrumentsVo.assetCover.securedFlag, type: text }
   asset_coverage_basis:   { path: $.instrumentsVo.assetCover.assetCvge, type: text }
   asset_coverage:         { path: $.instrumentsVo.assetCover.assetCvrPercent, type: percent }

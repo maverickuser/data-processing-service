@@ -65,6 +65,8 @@ class SecurityControllerTest {
                 LocalDate.of(2019, 6, 10),
                 LocalDate.of(2029, 6, 8),
                 new BigDecimal("1000000"),
+                new BigDecimal("200"),
+                "Subordinate Tier 1",
                 new BigDecimal("8.94"),
                 "Simple",
                 "Listed",

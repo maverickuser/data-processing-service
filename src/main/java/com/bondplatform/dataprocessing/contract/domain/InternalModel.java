@@ -58,6 +58,8 @@ public final class InternalModel {
                   Map.entry("allotmentDate", FieldType.DATE),
                   Map.entry("redemptionDate", FieldType.DATE),
                   Map.entry("originalFaceValue", FieldType.DECIMAL),
+                  Map.entry("totalIssueSize", FieldType.DECIMAL),
+                  Map.entry("seniorityRepayment", FieldType.TEXT),
                   Map.entry("collateralStatus", FieldType.TEXT),
                   Map.entry("assetCoverageBasis", FieldType.TEXT),
                   Map.entry("assetCoverage", FieldType.PERCENT),

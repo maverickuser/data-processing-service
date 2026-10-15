@@ -34,6 +34,8 @@ class SecurityIT extends PostgresIntegrationTest {
           "allotmentDate",
           "redemptionDate",
           "originalFaceValue",
+          "totalIssueSize",
+          "seniorityRepayment",
           "couponRate",
           "couponType",
           "listingStatus",
@@ -66,10 +68,11 @@ class SecurityIT extends PostgresIntegrationTest {
               (isin, issuer_name, issuer_ownership_type, instrument_type, allotment_date,
                redemption_date, original_face_value, collateral_status, asset_coverage_basis,
                asset_coverage_value, asset_coverage_unit, coupon_rate_value, coupon_rate_unit,
-               coupon_type, listing_status, field_sources, created_at, updated_at)
+               coupon_type, listing_status, total_issue_size, seniority_repayment, field_sources,
+               created_at, updated_at)
             VALUES (:isin, 'ADITYA BIRLA HOUSING FINANCE LIMITED', 'Non PSU', 'Debentures',
                DATE '2019-06-10', DATE '2029-06-08', 1000000, 'Secured', 'Book Debts', 100.0,
-               'PERCENT', 8.94, 'PERCENT', 'Simple', 'Listed',
+               'PERCENT', 8.94, 'PERCENT', 'Simple', 'Listed', 200, 'Subordinate Tier 1',
                '{"couponType": {"sourceFile": "a.json"}}', TIMESTAMPTZ '2026-09-21T15:00:00Z',
                TIMESTAMPTZ '2026-09-27T14:31:02Z')
             """)
@@ -100,6 +103,9 @@ class SecurityIT extends PostgresIntegrationTest {
     assertThat(body.get("issuerName").asString()).isEqualTo("ADITYA BIRLA HOUSING FINANCE LIMITED");
     assertThat(body.get("allotmentDate").asString()).isEqualTo("2019-06-10");
     assertThat(body.get("originalFaceValue").decimalValue()).isEqualByComparingTo("1000000");
+    // I-READ-12
+    assertThat(body.get("totalIssueSize").decimalValue()).isEqualByComparingTo("200");
+    assertThat(body.get("seniorityRepayment").asString()).isEqualTo("Subordinate Tier 1");
     assertThat(body.at("/couponRate/value").decimalValue()).isEqualByComparingTo("8.94");
     assertThat(body.at("/couponRate/unit").asString()).isEqualTo("PERCENT");
     assertThat(body.at("/assetCoverage/value").decimalValue()).isEqualByComparingTo("100");

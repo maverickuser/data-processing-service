@@ -39,8 +39,9 @@ public class JdbcSecurityReviewRepository implements SecurityReviewRepository {
   static final String FIND =
       """
       SELECT isin, issuer_name, issuer_ownership_type, instrument_type, allotment_date,
-             redemption_date, original_face_value, coupon_rate_value, coupon_type, listing_status,
-             collateral_status, asset_coverage_basis, asset_coverage_value, created_at, updated_at
+             redemption_date, original_face_value, total_issue_size, seniority_repayment,
+             coupon_rate_value, coupon_type, listing_status, collateral_status,
+             asset_coverage_basis, asset_coverage_value, created_at, updated_at
       FROM securities_data.securities
       WHERE isin = :isin
       """;
@@ -95,7 +96,8 @@ public class JdbcSecurityReviewRepository implements SecurityReviewRepository {
                  AND s.redemption_date IS NULL AND s.original_face_value IS NULL
                  AND s.collateral_status IS NULL AND s.asset_coverage_basis IS NULL
                  AND s.asset_coverage_value IS NULL AND s.coupon_rate_value IS NULL
-                 AND s.coupon_type IS NULL AND s.listing_status IS NULL) AS no_detail_field,
+                 AND s.coupon_type IS NULL AND s.listing_status IS NULL
+                 AND s.total_issue_size IS NULL AND s.seniority_repayment IS NULL) AS no_detail_field,
                EXISTS (SELECT 1 FROM securities_data.security_cash_flows c
                        WHERE c.isin = s.isin) AS has_cash_flow,
                EXISTS (SELECT 1 FROM securities_data.security_ratings r
@@ -233,6 +235,8 @@ public class JdbcSecurityReviewRepository implements SecurityReviewRepository {
         date(row, "allotment_date"),
         date(row, "redemption_date"),
         row.getBigDecimal("original_face_value"),
+        row.getBigDecimal("total_issue_size"),
+        row.getString("seniority_repayment"),
         row.getBigDecimal("coupon_rate_value"),
         row.getString("coupon_type"),
         row.getString("listing_status"),

@@ -189,7 +189,7 @@ class JobErrorsIT extends PostgresIntegrationTest {
     long stored =
         rejections.saveJson(
             new JsonCanonicalRun(
-                job, 1, Isin.of(ISIN), "nsdl-security-json-v3", "nsdl-security-mapping-v3"),
+                job, 1, Isin.of(ISIN), "nsdl-security-json-v4", "nsdl-security-mapping-v4"),
             run,
             List.of(JsonEvidence.read(listings, List.of())));
     jobRuns.completeRun(
