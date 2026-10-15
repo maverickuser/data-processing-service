@@ -805,6 +805,8 @@
           "allotmentDate",
           "redemptionDate",
           "originalFaceValue",
+          "totalIssueSize",
+          "seniorityRepayment",
           "couponRate",
           "couponType",
           "listingStatus",
@@ -861,6 +863,21 @@
               "null"
             ],
             "description": "NSDL instrument issuePrice."
+          },
+          "totalIssueSize": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "NSDL instrument totalIssueSize",
+            "in crore rupees.": null
+          },
+          "seniorityRepayment": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "NSDL instrument seniorityRepayment."
           },
           "couponRate": {
             "oneOf": [

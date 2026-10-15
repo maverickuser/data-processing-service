@@ -84,5 +84,5 @@ data-processing:
   contracts:
     - source: bse-debt-bhavcopy-csv-v2
       mapping: bse-debt-bhavcopy-mapping-v2
-    - source: nsdl-security-json-v3
-      mapping: nsdl-security-mapping-v3
+    - source: nsdl-security-json-v4
+      mapping: nsdl-security-mapping-v4

@@ -574,7 +574,7 @@ This section records agreed JSON behavior. Do not apply CSV row quarantine, trad
 - The filename-derived ISIN is authoritative. An ISIN inside a payload is optional; disagreement is logged as a warning and does not block processing or redirect data to another security.
 - The combined size of JSON files must not exceed 10 MB.
 - An empty manifest file list, or a JSON request listing no JSON files, fails without business-data changes.
-- Select the processor-owned YAML contract from the CloudEvent `dataschema` URN. In v1, `urn:bond-platform:dataset:nsdl-security` maps to the single `nsdl-security-json-v1.yaml` contract (since 2026-10-14, `nsdl-security-json-v2.yaml` and `nsdl-security-mapping-v2.yaml`, decision 0007, then `nsdl-security-json-v3.yaml` and `nsdl-security-mapping-v3.yaml`, decision 0009) and `urn:bond-platform:dataset:bse-debt-trades` maps to `bse-debt-bhavcopy-csv-v1.yaml` (since 2026-10-12, `bse-debt-bhavcopy-csv-v2.yaml` and `bse-debt-bhavcopy-mapping-v2.yaml`, decision 0004). `data.event_type` and each file's `job_id` are validated as neutral source metadata and used for routing/traceability; they do not select separate contracts. Filenames identify the ISIN or trade-date context only and never select field mappings. There is no per-file `processing_contract` field. Agreed (2026-10-02): processing is two-stage with two contracts per dataset. The dataset URN selects the stage-1 source-to-canonical contract (`nsdl-security-json-v1.yaml`, `bse-debt-bhavcopy-csv-v1.yaml`), which owns extraction, normalization, and validation into canonical records with snake_case canonical field names. Each has one stage-2 canonical-to-internal-model mapping contract (`nsdl-security-mapping-v1.yaml`, `bse-debt-bhavcopy-mapping-v1.yaml`) that names its `sourceContract`, consumes only validated canonical values, and owns targets, persistence policy, and lineage. Both contract versions are pinned at job admission. The standalone YAML files are authoritative over the illustrative snippets in section 6.
+- Select the processor-owned YAML contract from the CloudEvent `dataschema` URN. In v1, `urn:bond-platform:dataset:nsdl-security` maps to the single `nsdl-security-json-v1.yaml` contract (since 2026-10-14, `nsdl-security-json-v2.yaml` and `nsdl-security-mapping-v2.yaml`, decision 0007, then `nsdl-security-json-v3.yaml` and `nsdl-security-mapping-v3.yaml`, decision 0009, then `nsdl-security-json-v4.yaml` and `nsdl-security-mapping-v4.yaml`, decision 0010) and `urn:bond-platform:dataset:bse-debt-trades` maps to `bse-debt-bhavcopy-csv-v1.yaml` (since 2026-10-12, `bse-debt-bhavcopy-csv-v2.yaml` and `bse-debt-bhavcopy-mapping-v2.yaml`, decision 0004). `data.event_type` and each file's `job_id` are validated as neutral source metadata and used for routing/traceability; they do not select separate contracts. Filenames identify the ISIN or trade-date context only and never select field mappings. There is no per-file `processing_contract` field. Agreed (2026-10-02): processing is two-stage with two contracts per dataset. The dataset URN selects the stage-1 source-to-canonical contract (`nsdl-security-json-v1.yaml`, `bse-debt-bhavcopy-csv-v1.yaml`), which owns extraction, normalization, and validation into canonical records with snake_case canonical field names. Each has one stage-2 canonical-to-internal-model mapping contract (`nsdl-security-mapping-v1.yaml`, `bse-debt-bhavcopy-mapping-v1.yaml`) that names its `sourceContract`, consumes only validated canonical values, and owns targets, persistence policy, and lineage. Both contract versions are pinned at job admission. The standalone YAML files are authoritative over the illustrative snippets in section 6.
 - All selected payload fields are optional. Unselected fields do not contribute mapped data.
 
 Persist the supplied manifest and its source-file references; resolve `LastModified` and available version/checksum metadata from the objects for the previously agreed precedence rules. Reuse stable manifest inputs during retries. Do not add unlisted objects discovered under related prefixes. The manifest may list any number of JSON files, including multiple files that contribute to the same collection such as `security_cash_flows`; process each listed file with the single dataset contract selected by `dataschema`, using `job_id` only to preserve source traceability. Append/deduplicate normalized outputs under the existing ISIN rules. The filename ISIN must also equal the manifest's `inputs.isin_code` after the same normalization; a difference fails the request with `INVALID_SOURCE_FILENAME` (implementation choice 2026-10-03, as no separate code is defined). An empty normalized filename identifier cannot satisfy the mandatory source-identity requirement; agreed outcome: the whole request is `FAILED` with `INVALID_SOURCE_FILENAME` (for example `_ratings.json`) and no business-data changes, consistent with the mixed-ISIN rule.
@@ -586,7 +586,7 @@ These paths identify the selected source data; internal names are in section 15 
 | Source section | Selected paths |
 |---|---|
 | Issuer/security details | `$.isin`, `$.issuerName`, `$.issuerTypeOwner`, `$.instrumentType` |
-| Instrument dates and face value | `$.instrumentsVo.instruments.allotmentDate`, `$.instrumentsVo.instruments.redemptionDate`, `$.instrumentsVo.instruments.issuePrice` |
+| Instrument dates and face value | `$.instrumentsVo.instruments.allotmentDate`, `$.instrumentsVo.instruments.redemptionDate`, `$.instrumentsVo.instruments.issuePrice`, and since decision 0010 `$.instrumentsVo.instruments.totalIssueSize` and `$.instrumentsVo.instruments.seniorityRepayment` |
 | Asset cover | `$.instrumentsVo.assetCover.securedFlag`, `$.instrumentsVo.assetCover.assetCvge`, `$.instrumentsVo.assetCover.assetCvrPercent`; `$.instrumentsVo.assetCover.assetList[*]`: `assetType`, `securityDetails`, `remarks` |
 | Coupon | `$.coupensVo.couponDetails.couponRate`, `$.coupensVo.couponDetails.couponType` |
 | Payment schedule | Contract-defined paths, including the sample `$.coupensVo.cashFlowScheduleDetails.cashFlowSchedule[*]`: `cashFlowsEvent`, `recordDate`, `dueDate`, `amountPayable`, `paymentDate`, `newFaceVal` |
@@ -895,6 +895,8 @@ Agreed v1 presentation: while `collateral_status` is `Secured`, the read API ret
 | `allotmentDate` | `allotment_date` | Main instrument `allotmentDate` |
 | `redemptionDate` | `redemption_date` | Scheduled `redemptionDate`; retain this name rather than maturity date |
 | `originalFaceValue` | `original_face_value` | Instrument `issuePrice`; exact non-negative decimal, JSON number or grouped numeric string |
+| `totalIssueSize` | `total_issue_size` | Instrument `totalIssueSize`, in crore rupees as NSDL gives it; exact non-negative decimal (decision 0010) |
+| `seniorityRepayment` | `seniority_repayment` | Instrument `seniorityRepayment`, such as `Senior` or `Subordinate Tier 1` (decision 0010) |
 | `collateralStatus` | `collateral_status` | `securedFlag` |
 | `assetCoverageBasis` | `asset_coverage_basis` | `assetCvge` |
 | `assetCoverage.value` | `asset_coverage_value` | Exact percentage value |
@@ -1268,7 +1270,7 @@ Agreed (2026-10-13, decision 0006). `GET /v1/metrics` returns six counts of secu
 | Field | Counts ISINs where |
 |---|---|
 | `securitiesCount` | the ISIN is known, whatever else is stored |
-| `securitiesCountWithoutDetails` | the 12 detail fields of section 15.3 are null (a coupon rate from either source is a detail), and there is no cash flow, listing, rating, or collateral asset; daily market summaries are not details |
+| `securitiesCountWithoutDetails` | the 14 detail fields of section 15.3 (12 before decision 0010) are null (a coupon rate from either source is a detail), and there is no cash flow, listing, rating, or collateral asset; daily market summaries are not details |
 | `securitiesCountWithoutCashFlows` | there is no cash flow |
 | `securitiesCountWithoutCurrentRatings` | there is no rating with source category `CURRENT`; earlier ratings do not count |
 | `securitiesCountWithoutCouponRate` | there is no coupon rate from any source |
@@ -1343,6 +1345,8 @@ CREATE TABLE securities_data.securities (
   coupon_rate_trade_date DATE,                                                      -- V7
   details_request_count  INTEGER NOT NULL DEFAULT 0 CHECK (details_request_count >= 0),  -- V8
   details_requested_at   TIMESTAMPTZ,                                                -- V8
+  total_issue_size       NUMERIC CHECK (total_issue_size >= 0),                      -- V11
+  seniority_repayment    TEXT,                                                       -- V11
   coupon_type            TEXT,
   listing_status         TEXT,
   field_sources          JSONB NOT NULL DEFAULT '{}',

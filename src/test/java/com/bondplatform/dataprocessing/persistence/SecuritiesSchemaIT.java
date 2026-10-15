@@ -78,7 +78,9 @@ class SecuritiesSchemaIT extends PostgresIntegrationTest {
             "coupon_rate_source text",
             "coupon_rate_trade_date date",
             "details_request_count integer NOT NULL DEFAULT 0",
-            "details_requested_at timestamp with time zone");
+            "details_requested_at timestamp with time zone",
+            "total_issue_size numeric",
+            "seniority_repayment text");
     assertThat(schema.indexes(SCHEMA, "securities"))
         .containsExactly(
             "CREATE UNIQUE INDEX securities_pkey ON securities_data.securities"

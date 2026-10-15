@@ -52,17 +52,21 @@ class SecurityFieldMapperTest {
 
     assertThat(values(scalars))
         .containsExactlyInAnyOrderEntriesOf(
-            Map.of(
-                "issuerName", new SecurityValue.Text("ADITYA BIRLA HOUSING FINANCE LIMITED"),
-                "issuerOwnershipType", new SecurityValue.Text("Non PSU"),
-                "instrumentType", new SecurityValue.Text("Debentures"),
-                "allotmentDate", new SecurityValue.Date(LocalDate.of(2019, 6, 10)),
-                "redemptionDate", new SecurityValue.Date(LocalDate.of(2029, 6, 8)),
-                "originalFaceValue", new SecurityValue.Decimal(new BigDecimal("1000000")),
-                "collateralStatus", new SecurityValue.Text("Unsecured"),
-                "couponRate", new SecurityValue.Percentage(Percent.parse("8.94")),
-                "couponType", new SecurityValue.Text("Simple"),
-                "listingStatus", new SecurityValue.Text("Listed")));
+            Map.ofEntries(
+                Map.entry(
+                    "issuerName", new SecurityValue.Text("ADITYA BIRLA HOUSING FINANCE LIMITED")),
+                Map.entry("issuerOwnershipType", new SecurityValue.Text("Non PSU")),
+                Map.entry("instrumentType", new SecurityValue.Text("Debentures")),
+                Map.entry("allotmentDate", new SecurityValue.Date(LocalDate.of(2019, 6, 10))),
+                Map.entry("redemptionDate", new SecurityValue.Date(LocalDate.of(2029, 6, 8))),
+                Map.entry(
+                    "originalFaceValue", new SecurityValue.Decimal(new BigDecimal("1000000"))),
+                Map.entry("totalIssueSize", new SecurityValue.Decimal(new BigDecimal("200"))),
+                Map.entry("seniorityRepayment", new SecurityValue.Text("Subordinate Tier 1")),
+                Map.entry("collateralStatus", new SecurityValue.Text("Unsecured")),
+                Map.entry("couponRate", new SecurityValue.Percentage(Percent.parse("8.94"))),
+                Map.entry("couponType", new SecurityValue.Text("Simple")),
+                Map.entry("listingStatus", new SecurityValue.Text("Listed"))));
   }
 
   // U-MAP-03: each value keeps its own file and JSONPath
@@ -99,7 +103,7 @@ class SecurityFieldMapperTest {
     MappingContract contract =
         new MappingContract(
             NsdlContract.PINNED.mapping().id(),
-            "nsdl-security-json-v3",
+            "nsdl-security-json-v4",
             new MappingContract.RecordMapping(
                 InternalModel.SECURITIES, Map.of("issuer_name", "issuer")),
             List.of());

@@ -35,6 +35,7 @@ public record SecurityView(
   /**
    * The security's own fields; a percentage is {@code null} as a whole when it has no value.
    *
+   * @param totalIssueSize the total issue size in crore rupees
    * @param couponRate the coupon rate in percentage points
    * @param assetCoverage the asset coverage in percentage points
    */
@@ -46,6 +47,8 @@ public record SecurityView(
       @Nullable LocalDate allotmentDate,
       @Nullable LocalDate redemptionDate,
       @Nullable BigDecimal originalFaceValue,
+      @Nullable BigDecimal totalIssueSize,
+      @Nullable String seniorityRepayment,
       @Nullable BigDecimal couponRate,
       @Nullable String couponType,
       @Nullable String listingStatus,

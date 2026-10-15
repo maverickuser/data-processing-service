@@ -49,7 +49,7 @@ class LoadManifestTest {
           .load(
               List.of(
                   new ContractPair("bse-debt-bhavcopy-csv-v2", "bse-debt-bhavcopy-mapping-v2"),
-                  new ContractPair("nsdl-security-json-v3", "nsdl-security-mapping-v3")));
+                  new ContractPair("nsdl-security-json-v4", "nsdl-security-mapping-v4")));
 
   private final List<Long> requestedLimits = new ArrayList<>();
   private final List<List<ManifestFile>> saved = new ArrayList<>();

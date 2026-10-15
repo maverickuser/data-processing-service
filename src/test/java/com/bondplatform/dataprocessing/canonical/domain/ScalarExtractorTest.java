@@ -23,6 +23,8 @@ class ScalarExtractorTest {
           "allotment_date",
           "redemption_date",
           "original_face_value",
+          "total_issue_size",
+          "seniority_repayment",
           "collateral_status",
           "asset_coverage_basis",
           "asset_coverage",
@@ -46,7 +48,7 @@ class ScalarExtractorTest {
                 "instrument_type", "Debentures"));
   }
 
-  // U-JSON-01 (scalars), U-JSON-11
+  // U-JSON-01 (scalars), U-JSON-11, U-JSON-17
   @Test
   void instrumentDetailsSampleYieldsDatesFaceValueAndCollateral() {
     List<JsonCanonicalField> fields = extract("INE831R08076_instrument-details.json");
@@ -57,6 +59,8 @@ class ScalarExtractorTest {
                 "allotment_date", "2019-06-10",
                 "redemption_date", "2029-06-08",
                 "original_face_value", "1000000",
+                "total_issue_size", "200",
+                "seniority_repayment", "Subordinate Tier 1",
                 "collateral_status", "Unsecured"));
     assertThat(field(fields, "asset_coverage").presence()).isEqualTo(FieldPresence.NULL);
     assertThat(field(fields, "asset_coverage").validationStatus())

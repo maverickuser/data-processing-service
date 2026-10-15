@@ -21,7 +21,7 @@ class ContractStartupIT {
   void startsWithValidContractPair() {
     runner
         .withPropertyValues(
-            PREFIX + "source=nsdl-security-json-v3", PREFIX + "mapping=nsdl-security-mapping-v3")
+            PREFIX + "source=nsdl-security-json-v4", PREFIX + "mapping=nsdl-security-mapping-v4")
         .run(context -> assertThat(context.getBean(ContractRegistry.class).datasets()).hasSize(1));
   }
 
@@ -38,7 +38,7 @@ class ContractStartupIT {
   @Test
   void failsWhenThePairHasNoMapping() {
     runner
-        .withPropertyValues(PREFIX + "source=nsdl-security-json-v3")
+        .withPropertyValues(PREFIX + "source=nsdl-security-json-v4")
         .run(
             context ->
                 assertThat(context)
@@ -63,13 +63,13 @@ class ContractStartupIT {
   void failsWhenThePairIsInconsistent() {
     runner
         .withPropertyValues(
-            PREFIX + "source=bse-debt-bhavcopy-csv-v2", PREFIX + "mapping=nsdl-security-mapping-v3")
+            PREFIX + "source=bse-debt-bhavcopy-csv-v2", PREFIX + "mapping=nsdl-security-mapping-v4")
         .run(
             context ->
                 assertThat(context)
                     .getFailure()
                     .rootCause()
-                    .hasMessageContaining("bse-debt-bhavcopy-csv-v2 with nsdl-security-mapping-v3")
+                    .hasMessageContaining("bse-debt-bhavcopy-csv-v2 with nsdl-security-mapping-v4")
                     .hasMessageContaining("is paired with"));
   }
 }

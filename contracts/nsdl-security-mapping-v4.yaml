@@ -10,9 +10,10 @@
 # v2 (decision 0007): both NSDL cash-flow lists fill security_cash_flows, told apart by the
 # sourceCategory constant. A payment identical in both lists is stored once.
 # v3 (decision 0009) only follows nsdl-security-json-v3; the mapping is unchanged.
+# v4 (decision 0010) maps total_issue_size and seniority_repayment to the security.
 id: nsdl-security-mapping
-version: v3
-sourceContract: nsdl-security-json-v3
+version: v4
+sourceContract: nsdl-security-json-v4
 
 security:
   target: securities_data.securities
@@ -23,6 +24,8 @@ security:
     allotment_date: allotmentDate
     redemption_date: redemptionDate
     original_face_value: originalFaceValue
+    total_issue_size: totalIssueSize       # crore rupees, as NSDL gives it
+    seniority_repayment: seniorityRepayment
     collateral_status: collateralStatus
     asset_coverage_basis: assetCoverageBasis
     asset_coverage: assetCoverage          # { value, unit: PERCENT }

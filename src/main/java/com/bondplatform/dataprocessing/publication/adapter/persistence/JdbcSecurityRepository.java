@@ -72,7 +72,9 @@ public class JdbcSecurityRepository implements SecurityRepository {
               "assetCoverage", FieldType.PERCENT, "asset_coverage_value", "asset_coverage_unit"),
           new Column("couponRate", FieldType.PERCENT, "coupon_rate_value", "coupon_rate_unit"),
           new Column("couponType", FieldType.TEXT, "coupon_type", null),
-          new Column("listingStatus", FieldType.TEXT, "listing_status", null));
+          new Column("listingStatus", FieldType.TEXT, "listing_status", null),
+          new Column("totalIssueSize", FieldType.DECIMAL, "total_issue_size", null),
+          new Column("seniorityRepayment", FieldType.TEXT, "seniority_repayment", null));
 
   /** Locks in ISIN order, the same order {@link #INSERT_MISSING} takes, so it cannot deadlock. */
   static final String LOCK =

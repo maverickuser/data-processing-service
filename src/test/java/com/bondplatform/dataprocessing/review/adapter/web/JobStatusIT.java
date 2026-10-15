@@ -369,8 +369,8 @@ class JobStatusIT extends PostgresIntegrationTest {
             job,
             attempt,
             Isin.of("INE831R08076"),
-            "nsdl-security-json-v3",
-            "nsdl-security-mapping-v3"),
+            "nsdl-security-json-v4",
+            "nsdl-security-mapping-v4"),
         run,
         List.of(
             JsonEvidence.read(

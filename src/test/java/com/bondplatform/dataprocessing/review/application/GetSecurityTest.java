@@ -102,6 +102,8 @@ class GetSecurityTest {
                     null,
                     null,
                     null,
+                    null,
+                    null,
                     collateralStatus,
                     null,
                     null,

@@ -282,7 +282,7 @@ components:
         firstRecordedAt: { type: string, format: date-time }
     Security:
       type: object
-      required: [isin, issuerName, issuerOwnershipType, instrumentType, allotmentDate, redemptionDate, originalFaceValue, couponRate, couponType, listingStatus, collateralStatus, assetCoverageBasis, assetCoverage, collateralAssets, currentRatings, ratingHistory, listings, cashFlows, createdAt, updatedAt]
+      required: [isin, issuerName, issuerOwnershipType, instrumentType, allotmentDate, redemptionDate, originalFaceValue, totalIssueSize, seniorityRepayment, couponRate, couponType, listingStatus, collateralStatus, assetCoverageBasis, assetCoverage, collateralAssets, currentRatings, ratingHistory, listings, cashFlows, createdAt, updatedAt]
       properties:
         isin: { type: string }
         issuerName: { type: [string, 'null'] }
@@ -291,6 +291,8 @@ components:
         allotmentDate: { type: [string, 'null'], format: date }
         redemptionDate: { type: [string, 'null'], format: date }
         originalFaceValue: { type: [number, 'null'], description: NSDL instrument issuePrice. }
+        totalIssueSize: { type: [number, 'null'], description: NSDL instrument totalIssueSize, in crore rupees. }
+        seniorityRepayment: { type: [string, 'null'], description: NSDL instrument seniorityRepayment. }
         couponRate:
           oneOf: [{ $ref: '#/components/schemas/Percent' }, { type: 'null' }]
         couponType: { type: [string, 'null'] }

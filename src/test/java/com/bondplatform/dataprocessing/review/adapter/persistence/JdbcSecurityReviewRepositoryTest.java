@@ -70,6 +70,8 @@ class JdbcSecurityReviewRepositoryTest {
     when(row.getObject("allotment_date", LocalDate.class)).thenReturn(LocalDate.of(2019, 6, 10));
     when(row.getObject("redemption_date", LocalDate.class)).thenReturn(LocalDate.of(2029, 6, 8));
     when(row.getBigDecimal("original_face_value")).thenReturn(new BigDecimal("1000000"));
+    when(row.getBigDecimal("total_issue_size")).thenReturn(new BigDecimal("200"));
+    when(row.getString("seniority_repayment")).thenReturn("Subordinate Tier 1");
     when(row.getBigDecimal("coupon_rate_value")).thenReturn(new BigDecimal("8.94"));
     when(row.getString("coupon_type")).thenReturn("Simple");
     when(row.getString("listing_status")).thenReturn("Listed");
@@ -93,6 +95,8 @@ class JdbcSecurityReviewRepositoryTest {
                 LocalDate.of(2019, 6, 10),
                 LocalDate.of(2029, 6, 8),
                 new BigDecimal("1000000"),
+                new BigDecimal("200"),
+                "Subordinate Tier 1",
                 new BigDecimal("8.94"),
                 "Simple",
                 "Listed",
