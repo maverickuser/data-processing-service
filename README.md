@@ -6,5 +6,5 @@ Status: design complete, implementation not started. See [implementation status]
 
 - Contributors and coding agents start with [AGENTS.md](AGENTS.md).
 - Design: [low-level design](docs/specs/structured-file-processing-lld.md).
-- Plan: [implementation plan](docs/plans/data-processing-service-implementation-plan.md).
+- Plan: [implementation plan](docs/plans/completed/data-processing-service-implementation-plan.md).
 - All documents: [documentation map](docs/README.md).

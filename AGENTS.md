@@ -19,10 +19,10 @@ It does not download source files, and it does not expose any write operation on
 ## Reading order
 
 1. `docs/README.md` — documentation map and which file is authoritative for what.
-2. `docs/specs/structured-file-processing-lld.md` — the design. It is the source of truth for behaviour. Sections 17.5 and 20–22 override earlier sections where they differ. `docs/decisions/` explains each change made after the plan; every record also updates the LLD.
+2. `docs/specs/structured-file-processing-lld.md` — the design. It is the source of truth for behaviour, and its sections agree with each other; a contradiction is a defect to fix, not resolved by section order. `docs/decisions/` explains each change made after the plan; every record also updates the LLD.
 3. `contracts/*.yaml` — the four processing contracts (two stages per dataset). They override the illustrative YAML in LLD section 6.
 4. `docs/specs/data-processing-service-openapi.yaml` (submission) and `docs/specs/data-processing-service-read-openapi.yaml` (public reads).
-5. `docs/plans/data-processing-service-implementation-plan.md` and `docs/plans/implementation-status.md` — the original build plan and verified progress since.
+5. `docs/plans/implementation-status.md` — verified progress. `docs/plans/active/` holds the plan of any change that spans several PRs; `docs/plans/completed/` holds finished plans, including the original build plan; `docs/plans/tech-debt.md` lists known gaps.
 6. `docs/plans/implementation-context-spec.md` — toolchain pins, deployment inputs, and what is still pending.
 7. `docs/engineering/java-standards.md`, `docs/engineering/testing-strategy.md`, `docs/engineering/pr-review.md` — how code is written, tested, and reviewed.
 
@@ -76,7 +76,7 @@ A documented command must never be a placeholder that returns success. All need 
 | `make test-integration` | Integration tests only (`*IT`). Database tests use Testcontainers PostgreSQL 16 and are skipped on a machine without Docker; CI requires Docker |
 | `make build` | Compile, run all tests, and package the Lambda artifact `target/data-processing-service-lambda.zip` |
 | `make check-contracts` | Validate the four YAML contracts and both OpenAPI documents (YAML and JSON equivalent) |
-| `make check-docs` | Validate documentation links |
+| `make check-docs` | Check documentation against the checkout: relative links, paths and the repository map in this file, `make` targets named in any document, and the decision-record index |
 | `make check-infra` | Terraform `fmt`, `validate`, and mocked `terraform test` in every `infra/` directory; needs Terraform 1.16.4 (`TERRAFORM=/path/to/terraform`) but no AWS credentials |
 
 Unit tests need no Docker and no AWS credentials. Database integration tests need Docker; without it they are skipped locally and still run in CI. Nothing on a pull request uses real AWS.
@@ -132,15 +132,8 @@ GitHub Actions only. `ci.yml` runs on every pull request, whatever its base bran
 
 ## Context management
 
-The repository, not the conversation, holds durable state: the implementation plan, `docs/plans/implementation-status.md`, the branch, and the PR. Shrinking the context is therefore always safe once that state is written down.
-
-- **Compact** (`/compact` in Claude Code or Codex) when the context is roughly two-thirds full, after a PR merges, or after a review pass ends. Do it between steps, never in the middle of an edit or while chasing a failing check.
-- **Keep** in the summary: the branch, its base, and the PR link; files changed and why; checks run with their result and the exact failing test or error; open review findings; and user decisions or open questions not yet recorded in the repository.
-- **Drop**: full file contents, passing test output, old command logs, superseded attempts, and documents that can simply be re-read.
-- **Purge** (`/clear` or a new session) instead of compacting when switching to an unrelated PR or stack, or when the context is mostly a dead end. Before purging, record progress in `implementation-status.md` or the PR description.
-- If a summary would lose an unrecorded decision, write it to the spec, a decision record, or the status file first.
-- After any compact or purge, re-read this file and the status file, and check the branch and `git status` before editing.
+The repository, not the conversation, holds durable state. When to compact or clear, and what a summary must keep, is in `docs/engineering/context-management.md`. After any compact or purge, re-read this file and the status file, and check the branch and `git status` before editing.
 
 ## Keeping guidance current
 
-When behaviour changes, update the LLD, the affected contract or OpenAPI file, the test-case list, and the status file in the same PR. Record substantial new decisions in `docs/decisions/`. Keep this file short.
+When behaviour changes, update the LLD, the affected contract or OpenAPI file, the test-case list, and the status file in the same PR. Record substantial new decisions in `docs/decisions/` and list them in its README. Add a known gap you leave unfixed to `docs/plans/tech-debt.md`, and remove it in the PR that fixes it. When a package or `make` target is added, renamed, or removed, update this file in the same PR; `make check-docs` fails until you do. Keep this file short. `CLAUDE.md` only imports this file, so Claude Code and other agents read the same instructions.

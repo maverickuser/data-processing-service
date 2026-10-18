@@ -1,6 +1,6 @@
 # Implementation status
 
-Factual record of progress against the [implementation plan](data-processing-service-implementation-plan.md). Update it in every PR.
+Factual record of progress against the [implementation plan](completed/data-processing-service-implementation-plan.md). Update it in every PR.
 
 Rules: a PR link is added only when the PR exists. `State` is one of `not started`, `in progress`, `in review`, `merged`. `Verified checks` lists what actually ran and passed on the merged head. Planned or mocked work is never marked deployed or live-tested.
 
