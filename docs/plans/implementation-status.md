@@ -96,7 +96,7 @@ The service is deployed at `https://processing.kagent.app`. Every merge to `main
 
 ## Test-case coverage
 
-Implemented so far: U-ARCH-01 to U-ARCH-04, U-VAL-01, U-VAL-02, U-PRES-01, U-TEXT-01, U-NUM-01 to U-NUM-05, U-DATE-01, U-CON-01 to U-CON-04, and the serialisation part of I-READ-08, I-OPS-01, I-OPS-02, I-OPS-04, I-OPS-05, I-EVT-05. Each PR row lists the cases it added.
+Each PR row lists the cases it added; `docs/engineering/testing-strategy.md` lists every required case. Checked 2026-10-18: every required case is named by a test or a PR row except three. I-ADM-07 is asserted in `infra/application/tests/application.tftest.hcl` and U-JSON-13's sample `INE0O7U07046` is used by NSDL tests, but neither names its ID. No test names I-OPS-06 (two ordering groups run concurrently; one group never overlaps).
 
 ## Reviews
 

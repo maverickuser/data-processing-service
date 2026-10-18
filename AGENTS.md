@@ -2,7 +2,7 @@
 
 This file follows the open [AGENTS.md](https://github.com/agentsmd/agents.md) convention. It is the entry point for any coding agent or new contributor. It links to detailed documents rather than repeating them.
 
-Every PR of the implementation plan is merged and the service is deployed at `https://processing.kagent.app`. Work now arrives as single change PRs on `main`, each backed by a decision record in `docs/decisions/`. Only claim a package, command, or feature exists after inspecting the checkout; `docs/plans/implementation-status.md` records what has actually been built and verified.
+Every PR of the implementation plan is merged and the service is deployed at `https://processing.kagent.app`. Work now arrives as one PR per change on `main`; each behaviour change is backed by a decision record in `docs/decisions/`. Only claim a package, command, or feature exists after inspecting the checkout; `docs/plans/implementation-status.md` records what has actually been built and verified.
 
 ## Purpose
 
@@ -10,7 +10,9 @@ A Java/Spring Boot service on AWS Lambda and API Gateway that turns files fetche
 
 - BSE debt bhavcopy CSV becomes daily market summaries per `(isin, tradeDate, exchangeName)`.
 - NSDL per-ISIN JSON files become security details, cash flows, listings, ratings, and collateral assets.
-- A trade for a previously unknown ISIN creates an ISIN-only security and emits one CloudEvent asking the fetch service for its details.
+- The bhavcopy also supplies each security's coupon rate, which takes priority over NSDL's.
+- A trade for an unknown ISIN creates an ISIN-only security and emits a CloudEvent asking the fetch service for its details. A traded security still missing a detail is asked for again, at most 3 requests in all, at least a day apart.
+- Public read APIs serve securities, daily market summaries, job status, and data-completeness metrics.
 
 It does not download source files, and it does not expose any write operation on its public API.
 
@@ -55,7 +57,7 @@ src/main/resources/db/migration Flyway migrations for securities_data and data_p
 src/test/java                   unit tests (*Test) and integration tests (*IT)
 ```
 
-The network (VPC, subnets, NAT gateway, endpoints, Lambda security groups) is not in this repository. It is owned by [cloud-platform-network](https://github.com/maverickuser/cloud-platform-network); this service's deployment calls that repository's reusable workflow and its Terraform reads the network state. Never define network resources here.
+The network (VPC, subnets, VPC endpoints, Lambda security groups; no NAT gateway, decision 0001) is not in this repository. It is owned by [cloud-platform-network](https://github.com/maverickuser/cloud-platform-network); this service's deployment calls that repository's reusable workflow and its Terraform reads the network state. Never define network resources here.
 
 Each feature package has `domain` (pure Java, no framework imports), `application` (use cases and ports), and `adapter` (web, persistence, AWS) sub-packages. Dependencies point inward: adapter → application → domain. ArchUnit tests enforce this.
 
@@ -95,6 +97,7 @@ These come from the LLD. Breaking any of them is a blocking review finding.
 - **Canonical storage.** The full canonical output of each run goes to the service's S3 bucket as JSON Lines. Only rejected records are stored in PostgreSQL.
 - **Public responses never contain** S3 buckets, keys, version IDs, presigned URLs, or upstream source URLs.
 - **Contracts are data.** YAML references a fixed set of Java rules by name. No expressions, no code loading. Unknown rule names fail startup.
+- **Migrations are additive.** The previous release keeps running against the new schema until the migration succeeds, so a migration never drops, renames, or narrows anything that release uses. A removal takes two releases (decision 0001).
 - **Applied migrations are frozen.** Never edit a merged `V*__*.sql` file, not even a comment: Flyway's checksum check fails and the deploy stops (#91). Add a new migration instead.
 
 ## Code expectations
@@ -118,21 +121,21 @@ Before editing: check the current branch, the worktree state, and `implementatio
 
 The planned build (nine stacks, plan PRs 00–48) is complete. New work is one PR per change, branched from an up-to-date `main`:
 
-- Branch names are `feat/<slug>` for a behaviour change and `fix/<slug>` for a correction.
-- A behaviour change adds a decision record in `docs/decisions/` and updates the LLD, the affected contracts and OpenAPI files, the test-case list, and the status file in the same PR. A contract change bumps the contract version.
+- Branch names are `feat/<slug>` for a behaviour change, `fix/<slug>` for a correction, and `docs/<slug>` for documentation only.
+- A behaviour change adds a decision record in `docs/decisions/` and updates the LLD, the affected contracts and OpenAPI files, the test-case list, and the status file in the same PR. Any contract change bumps the contract version. A job admitted before the release stays pinned to the old version and fails after it, so the PR says when to deploy (no job of that dataset queued) and which jobs to rerun with `force`.
 - Keep a PR to about 400 changed lines of production code. If a change needs more, split it into a stack with `gh stack` (`gh extension install github/gh-stack`): `gh stack init`, `gh stack add`, `gh stack submit`; after changing a lower layer run `gh stack rebase` then `gh stack push`; merge bottom-up with `gh stack merge`.
 - Rerun every gate on a rewritten head.
 
 ## CI and CD
 
-GitHub Actions only. `ci.yml` runs on every pull request, whatever its base branch, without AWS credentials, as staged jobs: compile, then static analysis, unit tests and coverage, and contracts and documentation; integration tests after unit tests; package last. The `ci passed` job succeeds only when every stage did and is the check required on `main`. **Every merge to `main` deploys to production** (`deploy.yml`, also runnable by hand), so a PR must be safe to release as it stands. Deployment and the manual application teardown (`destroy-application.yml`) assume an AWS role through OIDC using the `AWS_ROLE_TO_ASSUME` secret. Teardown removes only `infra/application`; the database and the S3 buckets are in other roots and are never destroyed by a workflow. Smoke tests (`smoke.yml`) run after each successful deployment, send only unsigned requests, and need no AWS credentials. Pull requests never touch real AWS.
+GitHub Actions only. `ci.yml` runs on every pull request, whatever its base branch, without AWS credentials, as staged jobs: compile, then static analysis, unit tests and coverage, and contracts and documentation; integration tests after unit tests; package last. The `ci passed` job succeeds only when every stage did and is the check required on `main`. **Every merge to `main` deploys to production** (`deploy.yml`, also runnable by hand), so a PR must be safe to release as it stands. Deployment and the manual application teardown (`destroy-application.yml`) assume an AWS role through OIDC using the `AWS_ROLE_TO_ASSUME` secret. Teardown removes only `infra/application`; it never removes the database or any S3 bucket. It does delete the SQS queues (dead-letter messages included) and the function log groups. Smoke tests (`smoke.yml`) run after each successful deployment, send only unsigned requests, and need no AWS credentials. Pull requests never touch real AWS.
 
 ## Context management
 
 The repository, not the conversation, holds durable state: the implementation plan, `docs/plans/implementation-status.md`, the branch, and the PR. Shrinking the context is therefore always safe once that state is written down.
 
 - **Compact** (`/compact` in Claude Code or Codex) when the context is roughly two-thirds full, after a PR merges, or after a review pass ends. Do it between steps, never in the middle of an edit or while chasing a failing check.
-- **Keep** in the summary: the plan PR number, branch, parent branch, and PR link; files changed and why; checks run with their result and the exact failing test or error; open review findings; and user decisions or open questions not yet recorded in the repository.
+- **Keep** in the summary: the branch, its base, and the PR link; files changed and why; checks run with their result and the exact failing test or error; open review findings; and user decisions or open questions not yet recorded in the repository.
 - **Drop**: full file contents, passing test output, old command logs, superseded attempts, and documents that can simply be re-read.
 - **Purge** (`/clear` or a new session) instead of compacting when switching to an unrelated PR or stack, or when the context is mostly a dead end. Before purging, record progress in `implementation-status.md` or the PR description.
 - If a summary would lose an unrecorded decision, write it to the spec, a decision record, or the status file first.
