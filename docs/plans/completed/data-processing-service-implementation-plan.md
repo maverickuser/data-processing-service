@@ -2,10 +2,10 @@
 
 Date: 2026-10-02
 Repository: https://github.com/maverickuser/data-processing-service
-Source of truth: [Structured File Processing LLD](../specs/structured-file-processing-lld.md)
-Implementation inputs: [Implementation Context Specification](implementation-context-spec.md)
-Standards: [Java standards](../engineering/java-standards.md), [testing strategy](../engineering/testing-strategy.md), [PR review policy](../engineering/pr-review.md)
-Progress: [implementation status](implementation-status.md)
+Source of truth: [Structured File Processing LLD](../../specs/structured-file-processing-lld.md)
+Implementation inputs: [Implementation Context Specification](../implementation-context-spec.md)
+Standards: [Java standards](../../engineering/java-standards.md), [testing strategy](../../engineering/testing-strategy.md), [PR review policy](../../engineering/pr-review.md)
+Progress: [implementation status](../implementation-status.md)
 
 ## Objective and boundaries
 
@@ -114,7 +114,7 @@ Rules:
 - `make test-unit` and `make coverage-check`: unit line coverage strictly greater than 95% over all authored production code. Exactly 95% fails. Only generated code is excluded.
 - `make test-integration` green for the adapters present. Needs Docker, not AWS.
 - `make check-contracts` and `make check-docs`.
-- The PR description lists its test-case IDs from the [catalogue](../engineering/testing-strategy.md), and `implementation-status.md` is updated.
+- The PR description lists its test-case IDs from the [catalogue](../../engineering/testing-strategy.md), and `implementation-status.md` is updated.
 
 ## Target package and class design
 

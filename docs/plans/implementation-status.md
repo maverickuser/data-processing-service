@@ -1,6 +1,6 @@
 # Implementation status
 
-Factual record of progress against the [implementation plan](data-processing-service-implementation-plan.md). Update it in every PR.
+Factual record of progress against the [implementation plan](completed/data-processing-service-implementation-plan.md). Update it in every PR.
 
 Rules: a PR link is added only when the PR exists. `State` is one of `not started`, `in progress`, `in review`, `merged`. `Verified checks` lists what actually ran and passed on the merged head. Planned or mocked work is never marked deployed or live-tested.
 
@@ -89,6 +89,7 @@ Last updated: 2026-10-18.
 | — | F JSON and enrichment | `feat/issue-size-seniority` | merged (fa1dd66) | [#90](https://github.com/maverickuser/data-processing-service/pull/90) | `make lint`, `make coverage-check`, `make check-contracts`, `make check-docs` (local, JDK 25); database ITs run in CI | Owner request 2026-10-15 (decision 0010): NSDL contracts v4 read `totalIssueSize` and `seniorityRepayment`; V11 adds `total_issue_size` and `seniority_repayment` to `securities`; the read API shows both. Existing securities are filled by forced NSDL reruns after deploy. Tests U-JSON-17, I-JSON-11, I-READ-12 |
 | — | F JSON and enrichment | `fix/restore-v10-migration` | merged (d98c49f) | [#91](https://github.com/maverickuser/data-processing-service/pull/91) | Deploy run 38689507082 and smoke run 38690505192 passed at `d98c49f` | #90 also rewrote a comment in the already-applied V10 migration, so Flyway's checksum check failed and deploy run 38687702151 stopped before promotion. V10 restored byte for byte |
 | — | — | `docs/agents-md-current` | in review | [#92](https://github.com/maverickuser/data-processing-service/pull/92) | `make check-docs` (local) | `AGENTS.md` describes the finished, deployed service: single-PR workflow with decision records, every merge to `main` deploys, applied migrations are frozen, teardown keeps storage. Deployment section below brought up to date |
+| — | — | `docs/harness-engineering` | in review | [#93](https://github.com/maverickuser/data-processing-service/pull/93) | `make check-docs` (local, 18 link-check tests) | Docs only, merged with `[skip ci]` so it does not deploy. `make check-docs` also checks AGENTS.md paths and repository map, `make` targets, and the decision index; LLD sections 8–14 made consistent with section 23 and the override rule removed; finished plan moved to `plans/completed/`, plus `plans/active/` and `plans/tech-debt.md`; `CLAUDE.md` imports `AGENTS.md` |
 
 ## Deployment
 
