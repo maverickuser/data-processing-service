@@ -4,7 +4,7 @@ Factual record of progress against the [implementation plan](data-processing-ser
 
 Rules: a PR link is added only when the PR exists. `State` is one of `not started`, `in progress`, `in review`, `merged`. `Verified checks` lists what actually ran and passed on the merged head. Planned or mocked work is never marked deployed or live-tested.
 
-Last updated: 2026-10-14.
+Last updated: 2026-10-18.
 
 | PR | Stack | Branch | State | PR link | Verified checks | Notes |
 |---|---|---|---|---|---|---|
@@ -86,11 +86,13 @@ Last updated: 2026-10-14.
 | — | F JSON and enrichment | `feat/interest-cash-flows` | merged (07b9a51) | [#87](https://github.com/maverickuser/data-processing-service/pull/87) | `make lint`, `make coverage-check` (97.98%), `make check-contracts`, `make check-docs` (local, JDK 25); database ITs run in CI | Owner request 2026-10-14 (decision 0007): NSDL contracts v2 read `interestCashFlowSchedule[*]` as `interest_cash_flows` with the same fields, mapped to cash flows with `sourceCategory` `INTEREST` (scheduled list `SCHEDULE`). `CashFlow.SourceCategory`; V9 adds `security_cash_flows.source_category`; inserts use `ON CONFLICT DO NOTHING` so an identical entry in both lists is stored once. Read API cash flows show `sourceCategory`. LLD 13.2, 13.6, 22.1. Tests: U-JSON-15, I-JSON-09 |
 | — | F JSON and enrichment | `feat/rerequest-missing-details` | merged (6d5ab9b) | [#88](https://github.com/maverickuser/data-processing-service/pull/88) | `make lint`, `make coverage-check` (97.98%), `make check-docs` (local, JDK 25); database ITs run in CI | Owner request 2026-10-14 (decision 0008): a traded security is requested again while it lacks a coupon rate, cash flows, current ratings, or a collateral status (first request plus two retries, a day apart); the monthly refresh of decision 0005 is removed. `LockedSecurity` carries three presence flags read in the lock statement; `DetailsRequestPolicy` rewritten. LLD 14.1, 14.4. Tests: U-DETAILS-01, U-DETAILS-04, I-DETAILS-02 redefined |
 | — | F JSON and enrichment | `fix/interest-cash-flow-amount` | merged (cbe1d73) | [#89](https://github.com/maverickuser/data-processing-service/pull/89) | `make lint`, `make coverage-check`, `make check-contracts`, `make check-docs` (local, JDK 25); database ITs run in CI | Owner request 2026-10-14 (decision 0009): NSDL contracts v3 read an interest entry's amount from `amountRedeem`; V10 deletes interest cash flows stored without an amount so a forced rerun stores them again. Tests U-JSON-16, I-JSON-10 |
-| — | F JSON and enrichment | `feat/issue-size-seniority` | in review | — | `make lint`, `make coverage-check`, `make check-contracts`, `make check-docs` (local, JDK 25); database ITs run in CI | Owner request 2026-10-15 (decision 0010): NSDL contracts v4 read `totalIssueSize` and `seniorityRepayment`; V11 adds `total_issue_size` and `seniority_repayment` to `securities`; the read API shows both. Existing securities are filled by forced NSDL reruns after deploy. Tests U-JSON-17, I-JSON-11, I-READ-12 |
+| — | F JSON and enrichment | `feat/issue-size-seniority` | merged (fa1dd66) | [#90](https://github.com/maverickuser/data-processing-service/pull/90) | `make lint`, `make coverage-check`, `make check-contracts`, `make check-docs` (local, JDK 25); database ITs run in CI | Owner request 2026-10-15 (decision 0010): NSDL contracts v4 read `totalIssueSize` and `seniorityRepayment`; V11 adds `total_issue_size` and `seniority_repayment` to `securities`; the read API shows both. Existing securities are filled by forced NSDL reruns after deploy. Tests U-JSON-17, I-JSON-11, I-READ-12 |
+| — | F JSON and enrichment | `fix/restore-v10-migration` | merged (d98c49f) | [#91](https://github.com/maverickuser/data-processing-service/pull/91) | Deploy run 38689507082 and smoke run 38690505192 passed at `d98c49f` | #90 also rewrote a comment in the already-applied V10 migration, so Flyway's checksum check failed and deploy run 38687702151 stopped before promotion. V10 restored byte for byte |
+| — | — | `docs/agents-md-current` | in review | — | `make check-docs` (local) | `AGENTS.md` describes the finished, deployed service: single-PR workflow with decision records, every merge to `main` deploys, applied migrations are frozen, teardown keeps storage. Deployment section below brought up to date |
 
 ## Deployment
 
-Nothing is deployed. No AWS resources have been created by this repository.
+The service is deployed at `https://processing.kagent.app`. Every merge to `main` runs `deploy.yml`, and `smoke.yml` runs after each successful deployment. Latest: deploy run 38689507082 and smoke run 38690505192 passed at `d98c49f` on 2026-10-15.
 
 ## Test-case coverage
 
