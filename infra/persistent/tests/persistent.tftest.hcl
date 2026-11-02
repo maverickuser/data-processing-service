@@ -87,6 +87,34 @@ run "database_is_private_encrypted_and_iam_authenticated" {
   }
 }
 
+run "database_restores_from_the_given_snapshot" {
+  command = plan
+
+  variables {
+    restore_snapshot_identifier = "data-processing-service-final"
+  }
+
+  assert {
+    condition     = aws_db_instance.database.snapshot_identifier == "data-processing-service-final"
+    error_message = "The database is created from the snapshot the deploy workflow passes."
+  }
+
+  assert {
+    condition     = aws_db_instance.database.deletion_protection && aws_db_instance.database.manage_master_user_password && aws_db_instance.database.iam_database_authentication_enabled
+    error_message = "A restored database keeps deletion protection, the RDS-managed secret, and IAM authentication."
+  }
+}
+
+run "restore_snapshot_identifier_is_validated" {
+  command = plan
+
+  variables {
+    restore_snapshot_identifier = "Not A Snapshot"
+  }
+
+  expect_failures = [var.restore_snapshot_identifier]
+}
+
 run "database_admits_only_the_processing_functions" {
   command = plan
 

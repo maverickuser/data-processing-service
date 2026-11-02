@@ -65,6 +65,10 @@ resource "aws_db_instance" "database" {
   db_name        = "data_processing"
   port           = 5432
 
+  # A restore keeps the snapshot's data, database name, and master username; the provider then turns
+  # on the RDS-managed master password and applies the settings below.
+  snapshot_identifier = var.restore_snapshot_identifier
+
   username                    = "processing_master"
   manage_master_user_password = true
 
@@ -98,5 +102,7 @@ resource "aws_db_instance" "database" {
 
   lifecycle {
     prevent_destroy = true
+    # The snapshot matters only at creation. Changing it later would replace the database.
+    ignore_changes = [snapshot_identifier]
   }
 }

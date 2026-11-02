@@ -31,6 +31,8 @@ Outputs read by the application root: `database_address`, `database_port`, `data
 
 A destroy takes the final snapshot `data-processing-service-final`; delete or rename an older snapshot of that name first. Destroying it takes three deliberate steps: remove `prevent_destroy`, turn off deletion protection, then destroy. No workflow does this.
 
+When the database is not in persistent state, the deploy workflow runs `scripts/choose_database_source.sh`. If the snapshot `data-processing-service-final` is available it passes it as `restore_snapshot_identifier`, so the database comes back with its data instead of empty; without the snapshot the database starts empty. It refuses to deploy when a database of that name exists outside state (import it) or the snapshot is not `available` yet. The snapshot is kept after a restore, so remove or copy it to another name before the next teardown ([decision 0011](../docs/decisions/0011-restore-database-from-final-snapshot.md)).
+
 ## Application
 
 Inputs: `hosted_zone_id`, `deployment_commit` (full SHA) and `package_sha256` (base64) of the package at `releases/{commit}/data-processing-service-lambda.zip` in the package bucket, and optionally `alert_email`. The fetch service's queue and bucket are plain inputs with their deployed names as defaults (`security_details_queue_name`, `source_bucket`, `source_key_prefix`), so this root applies before the fetch service. It reads the persistent state (`persistent/terraform.tfstate`) and the shared network.
