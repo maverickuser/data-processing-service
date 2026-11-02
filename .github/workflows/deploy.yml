@@ -158,6 +158,18 @@ jobs:
         run: |
           set -euo pipefail
           terraform -chdir=infra/persistent init -input=false -lockfile=readonly -backend-config="bucket=$STATE_BUCKET" -backend-config="key=persistent/terraform.tfstate" -backend-config="region=$AWS_REGION" -backend-config="use_lockfile=true"
+          # A database torn down earlier comes back from its final snapshot instead of empty.
+          : > "$RUNNER_TEMP/persistent-state.txt"
+          if probe="$(aws s3api head-object --bucket "$STATE_BUCKET" --key persistent/terraform.tfstate 2>&1)"; then
+            terraform -chdir=infra/persistent state list > "$RUNNER_TEMP/persistent-state.txt"
+          elif ! grep -q '(404)' <<<"$probe"; then
+            echo "::error::Unable to inspect persistent state: $probe"
+            exit 1
+          fi
+          snapshot="$(bash scripts/choose_database_source.sh "$RUNNER_TEMP/persistent-state.txt")"
+          if [ -n "$snapshot" ]; then
+            export TF_VAR_restore_snapshot_identifier="$snapshot"
+          fi
           terraform -chdir=infra/persistent apply -input=false -auto-approve -lock-timeout=10m
       - name: Apply application without exposing an unmigrated first release
         env:

@@ -65,6 +65,24 @@ elif args[:2] == ["lambda", "update-alias"]:
     moved[function] = args[args.index("--function-version") + 1]
     aliases.write_text(json.dumps(moved), encoding="utf-8")
     print("{}")
+elif args[:2] == ["rds", "describe-db-instances"]:
+    status = os.environ.get("DB_INSTANCE", "missing")
+    if status == "missing":
+        print("An error occurred (DBInstanceNotFound) when calling the DescribeDBInstances operation", file=sys.stderr)
+        raise SystemExit(254)
+    if status == "denied":
+        print("An error occurred (AccessDenied) when calling the DescribeDBInstances operation", file=sys.stderr)
+        raise SystemExit(254)
+    print(status)
+elif args[:2] == ["rds", "describe-db-snapshots"]:
+    status = os.environ.get("DB_SNAPSHOT", "available")
+    if status == "missing":
+        print("An error occurred (DBSnapshotNotFound) when calling the DescribeDBSnapshots operation", file=sys.stderr)
+        raise SystemExit(254)
+    if status == "denied":
+        print("An error occurred (AccessDenied) when calling the DescribeDBSnapshots operation", file=sys.stderr)
+        raise SystemExit(254)
+    print(status)
 else:
     raise SystemExit("Unexpected AWS call: " + " ".join(args))
 """
@@ -112,6 +130,44 @@ class ReleaseScriptsTest(unittest.TestCase):
         result = self.run_script("check_network_endpoint.sh")
         self.assertEqual(result.returncode, 0)
         self.assertIn("::warning::", result.stdout)
+
+    def choose_database_source(self, *state):
+        state_list = Path(self.directory.name) / "persistent-state.txt"
+        state_list.write_text("".join(f"{address}\n" for address in state), encoding="utf-8")
+        return self.run_script("choose_database_source.sh", state_list)
+
+    def test_new_database_is_restored_from_the_final_snapshot(self):
+        result = self.choose_database_source("aws_s3_bucket.canonical")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "data-processing-service-final\n")
+        self.assertIn("--snapshot-type manual", self.calls.read_text(encoding="utf-8"))
+
+    def test_without_a_final_snapshot_the_database_starts_empty(self):
+        self.environment["DB_SNAPSHOT"] = "missing"
+        result = self.choose_database_source()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "")
+
+    def test_a_database_in_state_is_never_restored(self):
+        result = self.choose_database_source("aws_s3_bucket.canonical", "aws_db_instance.database")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "")
+        self.assertFalse(self.calls.exists())
+
+    def test_restore_refusals(self):
+        for variable, value in (
+            ("DB_INSTANCE", "available"),
+            ("DB_INSTANCE", "denied"),
+            ("DB_SNAPSHOT", "creating"),
+            ("DB_SNAPSHOT", "denied"),
+        ):
+            with self.subTest(variable=variable, value=value):
+                self.environment[variable] = value
+                result = self.choose_database_source()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(result.stdout, "")
+                self.assertIn("::error::", result.stderr)
+                self.environment.pop(variable)
 
     def write_outputs(self, versions):
         outputs = Path(self.directory.name) / "outputs.json"

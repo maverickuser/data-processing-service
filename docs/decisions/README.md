@@ -16,6 +16,7 @@ File name: `NNNN-short-title.md`, numbered from `0001`. Each number is used once
 - [0008 — Request details again while any counted detail is missing; no monthly refresh](0008-rerequest-any-missing-detail.md)
 - [0009 — An interest cash flow's amount comes from amountRedeem](0009-interest-cash-flow-amount.md)
 - [0010 — Store each security's total issue size and seniority in repayment](0010-issue-size-and-seniority.md)
+- [0011 — A recreated database starts from its final snapshot](0011-restore-database-from-final-snapshot.md)
 
 ## Template
 

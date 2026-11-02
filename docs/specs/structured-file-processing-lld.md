@@ -1303,7 +1303,7 @@ Agreed 2026-10-02. Accepted business data in `securities_data` is retained indef
 | `rejected_records`, `validation_issues` | PostgreSQL | 1 year, then deleted by a weekly scheduled cleanup |
 | Delivered `outbox_events` | PostgreSQL | Deleted 30 days after successful delivery; undelivered events are never purged |
 
-After the one-year cleanup a job still reports its stored `errorCount` and counts, while the error preview and error list return no entries; the rejected records remain in the run's canonical file. RDS automated daily backups are retained for 7 days with deletion protection enabled.
+After the one-year cleanup a job still reports its stored `errorCount` and counts, while the error preview and error list return no entries; the rejected records remain in the run's canonical file. RDS automated daily backups are retained for 7 days with deletion protection enabled. A database teardown takes the final snapshot `data-processing-service-final`; when the database is created again, the deploy workflow restores it from that snapshot (decision 0011).
 
 ### 21.2 Deployment sizing and network layout
 
